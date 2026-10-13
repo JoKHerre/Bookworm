@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import Header from "./components/Header";
+import "./App.css";
 
 function App() {
   const [message, setMessage] = useState("");
@@ -15,10 +17,13 @@ function App() {
   }, []);
 
   return (
+    <>
+    <Header></Header>
     <div>
       <h1>Bookworm</h1>
       <p>{message}</p>
     </div>
+    </>
   );
 }
 
