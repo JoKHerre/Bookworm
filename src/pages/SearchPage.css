@@ -1,0 +1,104 @@
+.search-page {
+  padding: 20px;
+  background: #f5efe3;
+  color: #33382a;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.search-intro {
+  margin-bottom: 30px;
+}
+
+.book-search-form {
+  display: flex;
+  gap: 10px;
+}
+
+.book-search-form input {
+  padding: 10px;
+  flex: 1;
+}
+
+.book-search-form button {
+  padding: 10px;
+  background: #4f5b2a;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 0;
+}
+
+.book-card {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: #fffdf8;
+  border: 1px solid #d8c9a8;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.book-card-cover {
+  position: absolute;
+  inset: 0;
+}
+
+.book-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.book-card-info {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 12px;
+  color: #fff;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.65) 40%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.book-card:hover .book-card-info,
+.book-card:focus-visible .book-card-info {
+  opacity: 1;
+}
+
+.book-card-info h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.book-author {
+  font-size: 12px;
+  color: #b8b6b4;
+  margin: 0;
+}
+
+.search-message {
+  color: #666;
+}

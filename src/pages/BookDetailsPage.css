@@ -1,0 +1,117 @@
+/* Whole page */
+.book-details {
+  min-height: 100vh;
+  padding: 20px;
+  background: #f5efe3;
+  color: #33382a;
+  box-sizing: border-box;
+}
+
+/* Back button */
+.back-button {
+  padding: 8px 12px;
+  background: #4f5b2a;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+/* Cover on the left, information on the right */
+.book-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 30px;
+  margin: 25px 0;
+}
+
+/* Book cover (details page only) */
+.book-details .book-cover {
+  width: 220px;
+  height: auto;
+  flex-shrink: 0;
+  display: block;
+  border: 1px solid #d8c9a8;
+}
+
+/* Book information */
+.book-details .book-info {
+  flex: 1;
+  min-width: 0;
+  padding: 20px;
+  background: #fffdf8;
+  border: 1px solid #d8c9a8;
+}
+
+.book-details .book-info h1 {
+  margin-top: 0;
+  color: #4f5b2a;
+}
+
+.book-details .book-author {
+  font-size: 18px;
+}
+
+.book-details-author {
+  font-size: 18px;
+  color: #33382a;
+  margin: 4px 0;
+}
+
+.book-details-title {
+  margin: 0 0 8px;
+  color: #4f5b2a;
+  font-size: 28px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.book-year {
+  color: #666;
+}
+
+/* Summary */
+.book-summary {
+  margin-top: 25px;
+}
+
+.book-summary h2,
+.book-genres h2 {
+  color: #4f5b2a;
+}
+
+.book-summary p {
+  line-height: 1.6;
+}
+
+/* Genres and subjects */
+.book-genres {
+  margin-top: 25px;
+}
+
+.genre-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.genre-tag {
+  padding: 6px 10px;
+  background: #e5dccb;
+  border: 1px solid #d8c9a8;
+}
+
+/* Smaller screens */
+@media (max-width: 600px) {
+  .book-header {
+    flex-direction: column;
+  }
+
+  .book-details .book-cover {
+    width: 180px;
+  }
+
+  .book-details .book-info {
+    box-sizing: border-box;
+    width: 100%;
+  }
+}
