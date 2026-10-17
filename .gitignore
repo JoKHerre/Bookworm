@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Nix / local Postgres
+.pgdata
+.direnv
+result
+
+# Secrets
+.env

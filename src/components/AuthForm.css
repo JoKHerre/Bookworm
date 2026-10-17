@@ -1,0 +1,114 @@
+.auth-page {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: var(--cream);
+  color: var(--olive);
+  text-align: left;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 40px 32px;
+  background: #fffaf0;
+  border: 1px solid var(--tan);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px -12px rgba(79, 91, 42, 0.25);
+}
+
+.auth-card h2 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  color: var(--olive);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-field input {
+  font: inherit;
+  font-weight: 400;
+  padding: 11px 14px;
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.auth-field input::placeholder {
+  color: var(--olive);
+  opacity: 0.45;
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(184, 137, 45, 0.25);
+}
+
+.auth-submit {
+  margin-top: 6px;
+  padding: 12px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--cream);
+  background: var(--olive);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: #3f4922;
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.auth-submit:focus-visible,
+.auth-toggle:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.auth-toggle {
+  padding: 4px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--olive);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--gold);
+  text-underline-offset: 3px;
+}
+
+.auth-toggle:hover {
+  color: var(--gold);
+}
+
+.auth-error {
+  color: #c0392b;
+  font-size: 0.9rem;
+  margin: 0;
+}
