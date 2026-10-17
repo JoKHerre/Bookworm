@@ -1,23 +1,16 @@
-import { useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
+import { AuthForm } from "./components/AuthForm";
 
 function App() {
-  const [message, setMessage] = useState("");
+  const { user, loading, logout } = useAuth();
 
-  useEffect(() => {
-    fetch("/api/test")
-      .then((response) => response.json())
-      .then((data) => {
-        setMessage(data.message);
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-      });
-  }, []);
+  if (loading) return <p>Loading</p>
+  if (!user) return <AuthForm />;
 
   return (
     <div>
       <h1>Bookworm</h1>
-      <p>{message}</p>
+      <button onClick={logout}>Log Out</button>
     </div>
   );
 }

@@ -1,8 +1,9 @@
-import { type User, type Session, users } from "./schema.ts"
+import { type Session, users } from "./schema.ts"
 import { db } from "./index.ts"
 import { sessions } from "./schema.ts"
 import { randomBytes, hash } from "node:crypto"
-import { eq } from "drizzle-orm"
+import { eq, lt } from "drizzle-orm"
+import type { PublicUser } from "../../../shared/auth.ts"
 
 // 20 random bytes = 160 bits of randomness, encoded URL/cookie-safe.
 export function generateSessionToken(): string {
@@ -47,10 +48,13 @@ export async function validateSessionToken(token: string): Promise<SessionValida
   return {session, user}
 }
 
+export async function deleteExpiredSessions(): Promise<void> {
+  await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+}
+
 export async function invalidateSession(sessionId: string): Promise<void>{
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 }
 
-export type SessionUser = Pick<User, 'id' | 'email'>;
 
-export type SessionValidationResult = {session: Session, user: SessionUser} | {session: null, user: null};
+export type SessionValidationResult = {session: Session, user: PublicUser} | {session: null, user: null};
