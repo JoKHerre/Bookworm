@@ -5,6 +5,7 @@ import { loadSession } from './auth/middleware.ts';
 import { authRouter } from './routes/auth.ts';
 import { deleteExpiredSessions } from './db/session.ts';
 import cookieParser from 'cookie-parser';
+import { booksRouter } from './routes/books.ts';
 
 const app: Express = express();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 app.use(cookieParser())
 app.use(loadSession);
 app.use('/api/auth', authRouter);
+app.use('/api/books', booksRouter);
 
 app.get('/api/test', (req: Request, res: Response) => {
  res.json({message: "Hello from express"})

@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import type { ComponentProps } from "react";
 import BookCard, { type Book } from "../components/BookCard";
+import BookDetailsPage from "./BookDetailsPage";
 import "./SearchPage.css";
 
 interface SearchResponse {
@@ -7,19 +9,19 @@ interface SearchResponse {
   total: number;
 }
 
-interface SearchPageProps {
-  onBookSelect: (book: Book) => void;
-  onBack: () => void;
-}
+type SearchFormEvent = Parameters<
+  NonNullable<ComponentProps<"form">["onSubmit"]>
+>[0];
 
-function SearchPage({ onBookSelect, onBack }: SearchPageProps) {
+function SearchPage() {
   const [query, setQuery] = useState("");
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null);
 
-  async function handleSearch(event: FormEvent<HTMLFormElement>) {
+  async function handleSearch(event: SearchFormEvent) {
     event.preventDefault();
 
     if (!query.trim()) {
@@ -32,6 +34,7 @@ function SearchPage({ onBookSelect, onBack }: SearchPageProps) {
     setLoading(true);
     setError("");
     setSearched(true);
+    setSelectedBookKey(null);
 
     try {
       const response = await fetch(
@@ -53,18 +56,23 @@ function SearchPage({ onBookSelect, onBack }: SearchPageProps) {
     }
   }
 
+  if (selectedBookKey) {
+    return (
+      <BookDetailsPage 
+        bookKey={selectedBookKey}
+        onBack={() => setSelectedBookKey(null)}
+      />
+    )
+  }
+
   const booksWithCovers = books.filter((book) => book.cover_i);
 
   return (
     <main className="search-page">
-      {/* <button className="back-button" onClick={onBack}>
-        Back
-      </button> */}
-
       <section className="search-intro">
-
         <form className="book-search-form" onSubmit={handleSearch}>
           <input
+            type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search by title or author..."
@@ -82,9 +90,7 @@ function SearchPage({ onBookSelect, onBack }: SearchPageProps) {
       {loading && <p className="search-message">Searching for books...</p>}
 
       {!loading && !error && searched && booksWithCovers.length === 0 && (
-        <p className="search-message">
-          No results.
-        </p>
+        <p className="search-message">No results.</p>
       )}
 
       <section className="book-grid">
@@ -92,7 +98,7 @@ function SearchPage({ onBookSelect, onBack }: SearchPageProps) {
           <BookCard
             key={book.key}
             book={book}
-            onClick={() => onBookSelect(book)}
+            onClick={() => {setSelectedBookKey(book.key)}}
           />
         ))}
       </section>

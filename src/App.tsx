@@ -1,5 +1,7 @@
 import { useAuth } from "./AuthContext";
 import { AuthForm } from "./components/AuthForm";
+import "./pages/SearchPage"
+import SearchPage from "./pages/SearchPage";
 
 function App() {
   const { user, loading, logout } = useAuth();
@@ -11,6 +13,7 @@ function App() {
     <div>
       <h1>Bookworm</h1>
       <button onClick={logout}>Log Out</button>
+      <SearchPage></SearchPage>
     </div>
   );
 }
