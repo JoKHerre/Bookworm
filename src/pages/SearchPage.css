@@ -1,50 +1,114 @@
 .search-page {
-  padding: 20px;
-  background: #f5efe3;
-  color: #33382a;
+  flex: 1;
+  padding: 40px 20px;
+  background: var(--cream);
+  color: var(--olive);
   min-height: 100vh;
   box-sizing: border-box;
 }
 
 .search-intro {
   margin-bottom: 30px;
+  max-width: 1200px;
+  margin-inline: auto;
 }
 
 .book-search-form {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+  width: 100%;
+  /* font: inherit;
+  padding: 12px 16px;
+  flex: 1;
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s; */
+}
+
+.search-form-inner {
+  display: flex;
+  gap: 12px;
+  width: 100%;
 }
 
 .book-search-form input {
-  padding: 10px;
-  flex: 1;
+  font: inherit;
+  padding: 12px 16px;
+  flex: 1; 
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.book-search-form input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--accent-border);
+  
 }
 
 .book-search-form button {
-  padding: 10px;
-  background: #4f5b2a;
-  color: white;
+  font: inherit;
+  font-weight: 600;
+  padding: 12px 24px;
+  color: var(--cream);
+  background: var(--olive);
   border: none;
+  border-radius: 10px;
   cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.book-search-form button:hover {
+  background: #3f4922;
+}
+
+.book-search-form button:active {
+  transform: translateY(1px);
+}
+
+.book-search-form button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .book-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
+  gap: 24px;
   padding: 0;
+  max-width: 1200px;
+  margin-inline: auto;
 }
 
 .book-card {
   position: relative;
   aspect-ratio: 2 / 3;
   overflow: hidden;
-  background: #fffdf8;
-  border: 1px solid #d8c9a8;
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  border-radius: 12px;
   cursor: pointer;
   padding: 0;
   text-align: left;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+
+.book-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.book-card:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
 
 .book-card-cover {
   position: absolute;
@@ -65,12 +129,12 @@
   flex-direction: column;
   justify-content: flex-end;
   padding: 12px;
-  color: #fff;
+  color: var(--cream);
   background: linear-gradient(
     to top,
-    rgba(0, 0, 0, 0.9) 0%,
-    rgba(0, 0, 0, 0.65) 40%,
-    rgba(0, 0, 0, 0) 100%
+    rgba(30, 35, 15, 0.95) 0%,
+    rgba(30, 35, 15, 0.6) 50%,
+    rgba(30, 35, 15, 0) 100%
   );
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -83,7 +147,7 @@
 }
 
 .book-card-info h2 {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   margin: 0 0 4px;
   line-height: 1.2;
@@ -95,10 +159,13 @@
 
 .book-author {
   font-size: 12px;
-  color: #b8b6b4;
+  color: var(--tan);
   margin: 0;
 }
 
 .search-message {
-  color: #666;
+  color: var(--olive);
+  opacity: 0.7;
+  text-align: center;
+  margin-top: 40px;
 }

@@ -71,17 +71,20 @@ function SearchPage() {
     <main className="search-page">
       <section className="search-intro">
         <form className="book-search-form" onSubmit={handleSearch}>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by title or author..."
-            aria-label="Search by title or author"
-          />
+          <div className="search-form-inner">
 
-          <button type="submit" disabled={loading}>
-            {loading ? "Searching..." : "Search"}
-          </button>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by title or author..."
+              aria-label="Search by title or author"
+              />
+
+            <button type="submit" disabled={loading}>
+              {loading ? "Searching..." : "Search"}
+            </button>
+          </div>
         </form>
       </section>
 
