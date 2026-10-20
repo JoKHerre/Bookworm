@@ -1,21 +1,6 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
-import { type Credentials, type PublicUser } from "../shared/auth";
-
-type AuthContextValue = {
-  user: PublicUser | null;
-  loading: boolean;
-  login: (credentials: Credentials) => Promise<void>;
-  register: (credentials: Credentials) => Promise<void>;
-  logout: () => Promise<void>;
-};
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+import { useEffect, useState, type ReactNode } from "react";
+import { type PublicUser } from "../shared/auth";
+import { AuthContext, type AuthContextValue } from "./useAuth";
 
 async function post(url: string, body: unknown): Promise<PublicUser> {
   const res = await fetch(url, {
@@ -57,10 +42,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return <AuthContext value={value}>{children}</AuthContext>;
-}
-
-export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside an AuthProvider");
-  return context;
 }
