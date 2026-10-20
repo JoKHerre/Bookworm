@@ -1,4 +1,4 @@
-import { useAuth } from "./AuthContext";
+import { useAuth } from "./useAuth";
 import { AuthForm } from "./components/AuthForm";
 import SearchPage from "./pages/SearchPage";
 import Header from "./components/Header";
