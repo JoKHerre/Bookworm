@@ -1,133 +1,140 @@
-import { Router } from 'express';
+import { Router, type Response } from "express";
+import {
+  bookDetailsQuery,
+  bookSearchQuery,
+  type BookDetails,
+  type BookSearchResponse,
+  type BookSearchResult,
+  type BooksError,
+} from "../../../shared/books.ts";
 
 interface OpenLibraryResponse {
-  docs?: {
-    key: string;
-    title: string;
-    author_name?: string[];
-    first_publish_year?: number;
-    cover_i?: number;
-  }[];
+  docs?: BookSearchResult[];
   numFound?: number;
 }
 
 export const booksRouter: Router = Router();
 
-booksRouter.get('/search', async (req, res) => {
-  const query = req.query.q;
+booksRouter.get(
+  "/search",
+  async (req, res: Response<BookSearchResponse | BooksError>) => {
+    const parsed = bookSearchQuery.safeParse(req.query);
 
-  if (typeof query !== 'string' || !query.trim()) {
-    res.status(400).json({
-      error: 'Please enter a book title or author'
-    });
-    return;
-  }
-
-  try {
-    const url = new URL('https://openlibrary.org/search.json');
-
-    url.searchParams.set('q', query.trim());
-    url.searchParams.set(
-      'fields',
-      'key,title,author_name,first_publish_year,cover_i'
-    );
-    url.searchParams.set('limit', '20');
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      res.status(502).json({
-        error: 'Failed to retrieve books from Open Library'
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid search query",
       });
       return;
     }
 
-    const data = (await response.json()) as OpenLibraryResponse;
+    const query = parsed.data.q;
 
-    res.json({
-      books: data.docs ?? [],
-      total: data.numFound ?? 0
-    });
-  } catch (error) {
-    console.error('Book search error:', error);
+    try {
+      const url = new URL("https://openlibrary.org/search.json");
 
-    res.status(500).json({
-      error: 'Something went wrong while searching for books'
-    });
-  }
-});
+      url.searchParams.set("q", query);
+      url.searchParams.set(
+        "fields",
+        "key,title,author_name,first_publish_year,cover_i",
+      );
+      url.searchParams.set("limit", "20");
 
-booksRouter.get('/details', async (req, res) => {
-  const key = req.query.key;
+      const response = await fetch(url);
 
-  if (
-    typeof key !== 'string' ||
-    !/^\/works\/OL\d+W$/.test(key)
-  ) {
-    res.status(400).json({
-      error: 'Invalid book key'
-    });
-    return;
-  }
+      if (!response.ok) {
+        res.status(502).json({
+          error: "Failed to retrieve books from Open Library",
+        });
+        return;
+      }
 
-  try {
-    const response = await fetch(
-      `https://openlibrary.org${key}.json`
-    );
+      const data = (await response.json()) as OpenLibraryResponse;
 
-    if (!response.ok) {
-      res.status(404).json({
-        error: 'Book not found'
+      res.json({
+        books: data.docs ?? [],
+        total: data.numFound ?? 0,
+      });
+    } catch (error) {
+      console.error("Book search error:", error);
+
+      res.status(500).json({
+        error: "Something went wrong while searching for books",
+      });
+    }
+  },
+);
+
+booksRouter.get(
+  "/details",
+  async (req, res: Response<BookDetails | BooksError>) => {
+    const parsed = bookDetailsQuery.safeParse(req.query);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid book key",
       });
       return;
     }
 
-    const data = await response.json() as {
-      key: string;
-      title: string;
-      description?: string | { value: string };
-      authors?: { author: { key: string } }[];
-      first_publish_date?: string;
-      covers?: number[];
-      subjects?: string[];
-    };
+    const key = parsed.data.key;
 
-    const authors = await Promise.all(
-      (data.authors ?? []).slice(0, 5).map(async (entry) => {
-        try {
-          const authorResponse = await fetch(
-            `https://openlibrary.org${entry.author.key}.json`
-          );
+    try {
+      const response = await fetch(`https://openlibrary.org${key}.json`);
 
-          if (!authorResponse.ok) {
+      if (!response.ok) {
+        res.status(404).json({
+          error: "Book not found",
+        });
+        return;
+      }
+
+      const data = (await response.json()) as {
+        key: string;
+        title: string;
+        description?: string | { value: string };
+        authors?: { author: { key: string } }[];
+        first_publish_date?: string;
+        covers?: number[];
+        subjects?: string[];
+      };
+
+      const authors = await Promise.all(
+        (data.authors ?? []).slice(0, 5).map(async (entry) => {
+          try {
+            const authorResponse = await fetch(
+              `https://openlibrary.org${entry.author.key}.json`,
+            );
+
+            if (!authorResponse.ok) {
+              return null;
+            }
+
+            const author = (await authorResponse.json()) as {
+              name?: string;
+            };
+
+            return author.name ?? null;
+          } catch {
             return null;
           }
+        }),
+      );
 
-          const author = await authorResponse.json() as {
-            name?: string;
-          };
+      res.json({
+        key: data.key,
+        title: data.title,
+        description: data.description,
+        authors: authors.filter((name) => name !== null),
+        first_publish_date: data.first_publish_date,
+        covers: data.covers,
+        subjects: data.subjects,
+      });
+    } catch (error) {
+      console.error("Book details error:", error);
 
-          return author.name ?? null;
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    res.json({
-      key: data.key,
-      title: data.title,
-      description: data.description,
-      authors: authors.filter((name) => name !== null),
-      first_publish_date: data.first_publish_date,
-      covers: data.covers,
-      subjects: data.subjects
-    });
-  } catch (error) {
-    console.error('Book details error:', error);
-
-    res.status(500).json({
-      error: 'Something went wrong while loading book details'
-    });
-  }
-});
+      res.status(500).json({
+        error: "Something went wrong while loading book details",
+      });
+    }
+  },
+);

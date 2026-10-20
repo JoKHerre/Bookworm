@@ -92,7 +92,7 @@ pnpm dev:all
 ```
 
 - Frontend: <http://localhost:5173>
-- API: <http://localhost:3001> 
+- API: <http://localhost:3001>
 
 ## Database schema
 
@@ -108,22 +108,22 @@ pnpm --dir server db:push
 
 From the repo root:
 
-| Command           | Description                                  |
-| ----------------- | -------------------------------------------- |
-| `pnpm dev:all`    | Run the backend and frontend together        |
-| `pnpm dev`        | Run only the Vite dev server                 |
-| `pnpm dev:server` | Run only the Express server                  |
-| `pnpm build`      | Build the frontend into `dist/`              |
-| `pnpm preview`    | Preview the production build                 |
-| `pnpm lint`       | Run ESLint                                   |
-| `pnpm typecheck`  | Type-check the frontend and backend          |
+| Command           | Description                           |
+| ----------------- | ------------------------------------- |
+| `pnpm dev:all`    | Run the backend and frontend together |
+| `pnpm dev`        | Run only the Vite dev server          |
+| `pnpm dev:server` | Run only the Express server           |
+| `pnpm build`      | Build the frontend into `dist/`       |
+| `pnpm preview`    | Preview the production build          |
+| `pnpm lint`       | Run ESLint                            |
+| `pnpm typecheck`  | Type-check the frontend and backend   |
 
 From `server/` (or `pnpm --dir server <script>` from the root):
 
-| Command          | Description                                  |
-| ---------------- | -------------------------------------------- |
-| `pnpm dev`       | Run the API, restarting on file changes      |
-| `pnpm start`     | Run the API without watching                 |
-| `pnpm typecheck` | Type-check the backend                       |
-| `pnpm db:push`   | Sync the database with `schema.ts`           |
-| `pnpm db:studio` | Open Drizzle Studio to browse the database   |
+| Command          | Description                                |
+| ---------------- | ------------------------------------------ |
+| `pnpm dev`       | Run the API, restarting on file changes    |
+| `pnpm start`     | Run the API without watching               |
+| `pnpm typecheck` | Type-check the backend                     |
+| `pnpm db:push`   | Sync the database with `schema.ts`         |
+| `pnpm db:studio` | Open Drizzle Studio to browse the database |

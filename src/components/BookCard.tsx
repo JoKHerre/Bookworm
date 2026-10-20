@@ -1,22 +1,14 @@
-export interface Book {
-  key: string;
-  title: string;
-  author_name?: string[];
-  first_publish_year?: number;
-  cover_i?: number;
-  edition_count?: number;
-}
+import type { BookSearchResult } from "../../shared/books";
 
 interface BookCardProps {
-  book: Book;
+  book: BookSearchResult;
   onClick: () => void;
 }
 
 function BookCard({ book, onClick }: BookCardProps) {
   if (!book.cover_i) return null;
 
-  const coverUrl =
-    `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`;
+  const coverUrl = `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`;
 
   return (
     <button
@@ -27,7 +19,7 @@ function BookCard({ book, onClick }: BookCardProps) {
       <div className="book-card-cover">
         <img src={coverUrl} alt={`Cover of ${book.title}`} />
       </div>
-      
+
       <div className="book-card-info">
         <h2>{book.title}</h2>
         <p className="book-author">

@@ -1,15 +1,6 @@
 import { useEffect, useState } from "react";
+import type { BookDetails } from "../../shared/books";
 import "./BookDetailsPage.css";
-
-interface BookDetails {
-  key: string;
-  title: string;
-  description?: string | { value: string };
-  authors?: string[];
-  first_publish_date?: string;
-  covers?: number[];
-  subjects?: string[];
-}
 
 interface BookDetailsPageProps {
   bookKey: string;
@@ -29,7 +20,7 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
 
       try {
         const response = await fetch(
-          `/api/books/details?key=${encodeURIComponent(bookKey)}`
+          `/api/books/details?key=${encodeURIComponent(bookKey)}`,
         );
 
         if (!response.ok) {
@@ -102,7 +93,6 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
           <p className="book-details-author">
             {book.authors?.join(", ") || "Unknown author"}
           </p>
-
         </div>
       </section>
 

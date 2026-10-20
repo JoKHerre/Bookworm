@@ -36,19 +36,20 @@
 .book-search-form input {
   font: inherit;
   padding: 12px 16px;
-  flex: 1; 
+  flex: 1;
   color: var(--olive);
   background: var(--cream);
   border: 1.5px solid var(--tan);
   border-radius: 10px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .book-search-form input:focus {
   outline: none;
   border-color: var(--gold);
   box-shadow: 0 0 0 3px var(--accent-border);
-  
 }
 
 .book-search-form button {
@@ -60,7 +61,9 @@
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.05s;
+  transition:
+    background 0.15s,
+    transform 0.05s;
 }
 
 .book-search-form button:hover {
@@ -96,7 +99,9 @@
   padding: 0;
   text-align: left;
   box-shadow: var(--shadow);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .book-card:hover {
@@ -108,7 +113,6 @@
   outline: 3px solid var(--gold);
   outline-offset: 2px;
 }
-
 
 .book-card-cover {
   position: absolute;

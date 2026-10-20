@@ -1,27 +1,19 @@
 import { useState } from "react";
 import type { ComponentProps } from "react";
-import BookCard, { type Book } from "../components/BookCard";
+import type { BookSearchResponse, BookSearchResult } from "../../shared/books";
+import BookCard from "../components/BookCard";
 import BookDetailsPage from "./BookDetailsPage";
 import "./SearchPage.css";
 
-interface SearchResponse {
-  books: Book[];
-  total: number;
-}
-
-type SearchFormEvent = Parameters<
-  NonNullable<ComponentProps<"form">["onSubmit"]>
->[0];
-
 function SearchPage() {
   const [query, setQuery] = useState("");
-  const [books, setBooks] = useState<Book[]>([]);
+  const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
   const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null);
 
-  async function handleSearch(event: SearchFormEvent) {
+  async function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!query.trim()) {
@@ -38,14 +30,14 @@ function SearchPage() {
 
     try {
       const response = await fetch(
-        `/api/books/search?q=${encodeURIComponent(query.trim())}`
+        `/api/books/search?q=${encodeURIComponent(query.trim())}`,
       );
 
       if (!response.ok) {
         throw new Error("Search failed.");
       }
 
-      const data: SearchResponse = await response.json();
+      const data: BookSearchResponse = await response.json();
       setBooks(data.books ?? []);
     } catch (err) {
       console.error("Book search error:", err);
@@ -58,11 +50,11 @@ function SearchPage() {
 
   if (selectedBookKey) {
     return (
-      <BookDetailsPage 
+      <BookDetailsPage
         bookKey={selectedBookKey}
         onBack={() => setSelectedBookKey(null)}
       />
-    )
+    );
   }
 
   const booksWithCovers = books.filter((book) => book.cover_i);
@@ -72,14 +64,13 @@ function SearchPage() {
       <section className="search-intro">
         <form className="book-search-form" onSubmit={handleSearch}>
           <div className="search-form-inner">
-
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search by title or author..."
               aria-label="Search by title or author"
-              />
+            />
 
             <button type="submit" disabled={loading}>
               {loading ? "Searching..." : "Search"}
@@ -101,7 +92,9 @@ function SearchPage() {
           <BookCard
             key={book.key}
             book={book}
-            onClick={() => {setSelectedBookKey(book.key)}}
+            onClick={() => {
+              setSelectedBookKey(book.key);
+            }}
           />
         ))}
       </section>

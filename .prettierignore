@@ -1,0 +1,6 @@
+dist
+.pgdata
+.direnv
+pnpm-lock.yaml
+package-lock.json
+server/pnpm-lock.yaml
