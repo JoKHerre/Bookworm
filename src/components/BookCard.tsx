@@ -1,4 +1,5 @@
 import type { BookSearchResult } from "../../shared/books";
+import "./BookCard.css";
 
 interface BookCardProps {
   book: BookSearchResult;
@@ -6,26 +7,34 @@ interface BookCardProps {
 }
 
 function BookCard({ book, onClick }: BookCardProps) {
-  if (!book.cover_i) return null;
-
-  const coverUrl = `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`;
+  const coverUrl = book.cover_i
+    ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`
+    : null;
 
   return (
     <button
       className="book-card"
       onClick={onClick}
-      aria-label={`View details for ${book.title}`}
+      aria-label={`View details for ${book.title} by ${
+        book.author_name?.join(", ") || "Unknown author"
+      }`}
     >
       <div className="book-card-cover">
-        <img src={coverUrl} alt={`Cover of ${book.title}`} />
+        {coverUrl ? (
+          <img src={coverUrl} alt="" />
+        ) : (
+          <div className="book-card-placeholder" aria-hidden="true" />
+        )}
       </div>
 
-      <div className="book-card-info">
+      <div className="book-card-info" aria-hidden="true">
         <h2>{book.title}</h2>
         <p className="book-author">
           {book.author_name?.join(", ") || "Unknown author"}
         </p>
-        {book.first_publish_year && <p>{book.first_publish_year}</p>}
+        {book.first_publish_year && (
+          <p className="book-year">{book.first_publish_year}</p>
+        )}
       </div>
     </button>
   );
