@@ -1,0 +1,140 @@
+.book-details {
+  flex: 1;
+  min-height: 100vh;
+  padding: 40px 24px;
+  background: var(--cream);
+  color: var(--olive);
+  box-sizing: border-box;
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+.back-button {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 20px;
+  color: var(--olive);
+  background: transparent;
+  border: 1.5px solid var(--olive);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.back-button:hover {
+  background: var(--olive);
+  color: var(--cream);
+}
+
+.back-button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.book-header {
+  display: flex;
+  align-items: stretch;
+  gap: 40px;
+  margin: 32px 0;
+}
+
+.book-details .book-cover {
+  width: 240px;
+  height: auto;
+  flex-shrink: 0;
+  display: block;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px -12px var(--shadow);
+  /* box-shadow: 0 12px 32px -12px rgba(79, 91, 42, 0.25);  */
+}
+
+.book-details .book-info {
+  flex: 1;
+  min-width: 0;
+  padding: 32px;
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.book-details-title {
+  margin: 0 0 8px;
+  color: var(--olive);
+  font-size: 32px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.book-details-author {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--gold);
+  margin: 0 0 8px;
+}
+
+.book-year {
+  color: var(--olive);
+  opacity: 0.6;
+  font-size: 14px;
+}
+
+.book-summary {
+  margin-top: 40px;
+}
+
+.book-summary h2,
+.book-genres h2 {
+  color: var(--olive);
+  font-size: 24px;
+  border-bottom: 1.5px solid var(--tan);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.book-summary p {
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+.book-genres {
+  margin-top: 40px;
+}
+
+.genre-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.genre-tag {
+  padding: 6px 14px;
+  background: var(--cream);
+  color: var(--olive);
+  border: 1px solid var(--tan);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@media (max-width: 600px) {
+  .book-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .book-details .book-cover {
+    width: 200px;
+  }
+
+  .book-details .book-info {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 24px;
+  }
+}

@@ -2,10 +2,9 @@ import { useState } from "react";
 import { useAuth } from "../AuthContext";
 import "./AuthForm.css";
 
-
 export function AuthForm() {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,20 +13,21 @@ export function AuthForm() {
 
     const form = new FormData(e.currentTarget);
 
-    const email = String(form.get('email'));
-    const password = String(form.get('password'));
+    const email = String(form.get("email"));
+    const password = String(form.get("password"));
 
     setSubmitting(true);
     setError(null);
     try {
-      await (mode === "login" ? login({ email, password }) : register({ email, password }));
+      await (mode === "login"
+        ? login({ email, password })
+        : register({ email, password }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSubmitting(false);
     }
   }
-
 
   //JANK NONSENSE REFACTOR LATER
   const isLogin = mode === "login";
@@ -39,7 +39,13 @@ export function AuthForm() {
 
         <label className="auth-field">
           <span>Email</span>
-          <input name="email" type="email" autoComplete="email" placeholder="you@example.com" required />
+          <input
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            required
+          />
         </label>
 
         <label className="auth-field">
@@ -54,13 +60,21 @@ export function AuthForm() {
           />
         </label>
 
-        {error && <p className="auth-error" role="alert">{error}</p>}
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
 
-        <button className="auth-submit"type="submit" disabled={submitting}>
+        <button className="auth-submit" type="submit" disabled={submitting}>
           {submitting ? "Please Wait" : isLogin ? "Log in" : "Register"}
         </button>
 
-        <button className="auth-toggle" type="button" onClick={() => setMode(isLogin ? "register" : "login")}>
+        <button
+          className="auth-toggle"
+          type="button"
+          onClick={() => setMode(isLogin ? "register" : "login")}
+        >
           {isLogin ? "Need an account? Sign Up" : "Have an account? Log in"}
         </button>
       </form>

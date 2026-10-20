@@ -1,15 +1,19 @@
-import type { Response } from 'express';
+import type { Response } from "express";
 
-export const SESSION_COOKIE = 'session';
+export const SESSION_COOKIE = "session";
 
 const securityOptions = {
   httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  path: '/',
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
 };
 
-export function setSessionCookie(res: Response, token: string, expiresAt: Date) {
+export function setSessionCookie(
+  res: Response,
+  token: string,
+  expiresAt: Date,
+) {
   res.cookie(SESSION_COOKIE, token, { ...securityOptions, expires: expiresAt });
 }
 

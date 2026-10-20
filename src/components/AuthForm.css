@@ -44,7 +44,9 @@
   background: var(--cream);
   border: 1.5px solid var(--tan);
   border-radius: 10px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .auth-field input::placeholder {
@@ -68,7 +70,9 @@
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.05s;
+  transition:
+    background 0.15s,
+    transform 0.05s;
 }
 
 .auth-submit:hover:not(:disabled) {
