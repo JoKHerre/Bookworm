@@ -1,4 +1,11 @@
-import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -25,5 +32,26 @@ export const sessions = pgTable(
   (t) => [index("session_user_id_idx").on(t.userId)],
 );
 
+export const savedBooks = pgTable(
+  "saved_books",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bookKey: text("book_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("saved_books_user_book_unique").on(
+      table.userId,
+      table.bookKey,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+export type SavedBook = typeof savedBooks.$inferSelect;
