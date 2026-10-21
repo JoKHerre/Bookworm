@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { assertTestDatabaseUrl, createTestBookKey } from "../../test-utils.ts";
+import {
+  assertTestDatabaseUrl,
+  createTestBookKey,
+  eq,
+} from "../server/test-utils.ts";
 
 assertTestDatabaseUrl();
 
 // import postgres connection, schema, and drizzle eq helper
-const [{ db, pool }, { savedBooks, users }, { eq }] = await Promise.all([
-  import("./index.ts"),
-  import("./schema.ts"),
-  import("drizzle-orm"),
+const [{ db, pool }, { savedBooks, users }] = await Promise.all([
+  import("../server/src/db/index.ts"),
+  import("../server/src/db/schema.ts"),
 ]);
 
 // trackers

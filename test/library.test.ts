@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import cookieParser from "cookie-parser";
-import express, {
-  type NextFunction,
-  type Request,
-  type Response,
-} from "express";
+import type { NextFunction, Request, Response } from "express";
 import type { Server } from "node:http";
-import { assertTestDatabaseUrl, createTestBookKey } from "../../test-utils.ts";
+import {
+  assertTestDatabaseUrl,
+  cookieParser,
+  createTestBookKey,
+  eq,
+  express,
+} from "../server/test-utils.ts";
 
 assertTestDatabaseUrl();
 
@@ -18,14 +19,12 @@ const [
   { createSession, generateSessionToken },
   { loadSession },
   { libraryRouter },
-  { eq },
 ] = await Promise.all([
-  import("../db/index.ts"),
-  import("../db/schema.ts"),
-  import("../db/session.ts"),
-  import("../auth/middleware.ts"),
-  import("./library.ts"),
-  import("drizzle-orm"),
+  import("../server/src/db/index.ts"),
+  import("../server/src/db/schema.ts"),
+  import("../server/src/db/session.ts"),
+  import("../server/src/auth/middleware.ts"),
+  import("../server/src/routes/library.ts"),
 ]);
 
 // trackers
