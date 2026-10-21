@@ -3,12 +3,13 @@ import z from "zod";
 import { db } from "../db/index.ts"; // postgresql connection
 import { savedBooks } from "../db/schema.ts"; // saved books table definition
 import { requireAuth } from "../auth/middleware.ts"; // existing login check
+import { openLibraryWorkKey } from "../../../shared/books.ts";
 
 // define expected shape of request body for saving a book
 // bookKey format using regex, reject extra fields (such as a userid) with .strict(), etc
 const saveBookBody = z
   .object({
-    bookKey: z.string().regex(/^\/works\/OL\d+W$/),
+    bookKey: openLibraryWorkKey,
   })
   .strict();
 
