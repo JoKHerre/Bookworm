@@ -1,26 +1,8 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
+import { assertTestDatabaseUrl, createTestBookKey } from "../../test-utils.ts";
 
-// read db connection
-const databaseUrl = process.env.DATABASE_URL;
-
-// ensure that databaseUrl is not missing, invalid, or pointing to anything other than bookworm_test
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL must point to the bookworm_test database.");
-}
-
-let databaseName: string;
-try {
-  databaseName = new URL(databaseUrl).pathname.slice(1);
-} catch {
-  throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL.");
-}
-
-if (databaseName !== "bookworm_test") {
-  throw new Error(
-    `Refusing to run database tests against '${databaseName}'. Use bookworm_test.`,
-  );
-}
+assertTestDatabaseUrl();
 
 // import postgres connection, schema, and drizzle eq helper
 const [{ db, pool }, { savedBooks, users }, { eq }] = await Promise.all([
@@ -32,7 +14,6 @@ const [{ db, pool }, { savedBooks, users }, { eq }] = await Promise.all([
 // trackers
 const createdUserIds = new Set<number>();
 let emailCounter = 0;
-let bookCounter = 0;
 
 // insert a user with a unique email and a placeholder password hash, then return new user's ID
 async function createTestUser() {
@@ -46,12 +27,6 @@ async function createTestUser() {
   assert.ok(user, "Expected PostgreSQL to create a test user");
   createdUserIds.add(user.id);
   return user;
-}
-
-// generate a unique book key
-function createTestBookKey() {
-  bookCounter += 1;
-  return `/works/OL${Date.now()}${process.pid}${bookCounter}W`;
 }
 
 // post-test cleanup: delete any remaining test users and close the postgres connection pool

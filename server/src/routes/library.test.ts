@@ -7,25 +7,9 @@ import express, {
   type Response,
 } from "express";
 import type { Server } from "node:http";
+import { assertTestDatabaseUrl, createTestBookKey } from "../../test-utils.ts";
 
-// ensure that databaseUrl is not missing, invalid, or pointing to anything other than bookworm_test
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL must point to the bookworm_test database.");
-}
-
-let databaseName: string;
-try {
-  databaseName = new URL(databaseUrl).pathname.slice(1);
-} catch {
-  throw new Error("DATABASE_URL must be a valid PostgreSQL connection URL.");
-}
-
-if (databaseName !== "bookworm_test") {
-  throw new Error(
-    `Refusing to run route tests against '${databaseName}'. Use bookworm_test.`,
-  );
-}
+assertTestDatabaseUrl();
 
 // load db connection, schema, session helpers, library router, and drizzle eq helper
 const [
@@ -47,7 +31,6 @@ const [
 // trackers
 const createdUserIds = new Set<number>();
 let emailCounter = 0;
-let bookCounter = 0;
 let server: Server;
 let baseUrl: string;
 
@@ -66,12 +49,6 @@ async function createSignedInUser() {
   const token = generateSessionToken();
   await createSession(token, user.id);
   return { id: user.id, token };
-}
-
-// generate a unique book key
-function createTestBookKey() {
-  bookCounter += 1;
-  return `/works/OL${Date.now()}${process.pid}${bookCounter}W`;
 }
 
 // send a POST request to /api/library
