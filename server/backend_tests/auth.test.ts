@@ -55,11 +55,10 @@ function me(token?: string) {
   return fetch(`${baseUrl}/api/auth/me`, { headers });
 }
 
-// pull the session token out of a Set-Cookie header (empty string if cleared)
 function sessionToken(res: globalThis.Response): string {
   const header = res.headers
     .getSetCookie()
-    .find((c) => c.startsWith("session="));
+    .findLast((c) => c.startsWith("session="));
   assert.ok(header, "Expected a session Set-Cookie header");
   return header.split(";")[0]!.slice("session=".length);
 }
