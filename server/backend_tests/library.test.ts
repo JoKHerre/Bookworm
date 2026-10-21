@@ -8,7 +8,7 @@ import {
   createTestBookKey,
   eq,
   express,
-} from "../server/test-utils.ts";
+} from "./test-utils.ts";
 
 assertTestDatabaseUrl();
 
@@ -20,11 +20,11 @@ const [
   { loadSession },
   { libraryRouter },
 ] = await Promise.all([
-  import("../server/src/db/index.ts"),
-  import("../server/src/db/schema.ts"),
-  import("../server/src/db/session.ts"),
-  import("../server/src/auth/middleware.ts"),
-  import("../server/src/routes/library.ts"),
+  import("../src/db/index.ts"),
+  import("../src/db/schema.ts"),
+  import("../src/db/session.ts"),
+  import("../src/auth/middleware.ts"),
+  import("../src/routes/library.ts"),
 ]);
 
 // trackers

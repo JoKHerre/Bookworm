@@ -43,7 +43,7 @@ Serves the user story COL-01 (add a book to a personal library). This task creat
 
 ## Tests
 
-Test file: `test/schema.test.ts`. It uses Node's built-in test runner (`node:test`) and assertions (`node:assert/strict`), so no additional test dependency is needed. The tests import the existing database connection and the `savedBooks` and `users` table definitions. They create uniquely named temporary users, perform direct database operations, and clean up the users afterward. No API endpoint or UI element is in scope.
+Test file: `server/backend_tests/schema.test.ts`. It uses Node's built-in test runner (`node:test`) and assertions (`node:assert/strict`), so no additional test dependency is needed. The tests import the existing database connection and the `savedBooks` and `users` table definitions. They create uniquely named temporary users, perform direct database operations, and clean up the users afterward. No API endpoint or UI element is in scope.
 
 Run the tests against a separate PostgreSQL database named `bookworm_test`; do not run them against the regular or production database. PostgreSQL 16 or newer is supported (the project's README lists this prerequisite). Start one PostgreSQL server on port `5432` before continuing; if another version is already running there, it can be used as long as it is version 16 or newer.
 
@@ -71,7 +71,7 @@ From the repository root, apply the schema to the test database and run the test
 
 ```sh
 DATABASE_URL=postgres://bookworm:bookworm@localhost:5432/bookworm_test pnpm --dir server db:push
-DATABASE_URL=postgres://bookworm:bookworm@localhost:5432/bookworm_test node --test test/schema.test.ts
+DATABASE_URL=postgres://bookworm:bookworm@localhost:5432/bookworm_test node --test server/backend_tests/schema.test.ts
 ```
 
 The test file refuses to run unless `DATABASE_URL` points to a database named `bookworm_test`, so it cannot accidentally run against the team's regular database.
