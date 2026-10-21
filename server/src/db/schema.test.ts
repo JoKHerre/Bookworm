@@ -60,7 +60,8 @@ after(async () => {
     for (const userId of createdUserIds) {
       await db.delete(users).where(eq(users.id, userId));
     }
-  } finally {  // still attempt to close pool
+  } finally {
+    // still attempt to close pool
     await pool.end();
   }
 });
@@ -92,7 +93,7 @@ test("COL-01-T-4 creates the saved-books table", async () => {
   const columns = new Map(
     result.rows.map((column) => [column.column_name, column]),
   );
-  
+
   // check that the expected columns are present
   assert.deepEqual([...columns.keys()].sort(), [
     "book_key",
@@ -130,10 +131,10 @@ test("COL-01-T-4 creates the saved-books table", async () => {
 test("COL-01-T-4 requires an existing user", async () => {
   // try inserting a row with a non-existent user ID (-1) and expect a foreign key violation (error code 23503)
   await assert.rejects(
-    pool.query(
-      "INSERT INTO saved_books (user_id, book_key) VALUES ($1, $2)",
-      [-1, createTestBookKey()],
-    ),
+    pool.query("INSERT INTO saved_books (user_id, book_key) VALUES ($1, $2)", [
+      -1,
+      createTestBookKey(),
+    ]),
     (error) => hasPostgresErrorCode(error, "23503"),
   );
 });
@@ -186,11 +187,10 @@ test("COL-01-T-4 rejects a duplicate for one user", async () => {
 
   // insert row into table
   await db.insert(savedBooks).values(book);
-  
+
   // try insert again and expect a unique violation (error code 23505)
-  await assert.rejects(
-    db.insert(savedBooks).values(book),
-    (error) => hasPostgresErrorCode(error, "23505"),
+  await assert.rejects(db.insert(savedBooks).values(book), (error) =>
+    hasPostgresErrorCode(error, "23505"),
   );
 });
 

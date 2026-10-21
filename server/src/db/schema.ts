@@ -45,10 +45,7 @@ export const savedBooks = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("saved_books_user_book_unique").on(
-      table.userId,
-      table.bookKey,
-    ),
+    uniqueIndex("saved_books_user_book_unique").on(table.userId, table.bookKey),
   ],
 );
 
