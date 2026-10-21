@@ -6,6 +6,7 @@
     "dev": "node --env-file-if-exists=.env --watch src/index.ts",
     "start": "node --env-file-if-exists=.env src/index.ts",
     "typecheck": "tsc",
+    "test": "node --test \"backend_tests/*.test.ts\"",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
