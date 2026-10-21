@@ -77,7 +77,12 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: server/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            server/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install server dependencies
         run: pnpm install --frozen-lockfile
