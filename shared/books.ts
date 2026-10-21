@@ -1,5 +1,9 @@
 import z from "zod";
 
+export const openLibraryWorkKey = z
+  .string({ error: "Invalid book key" })
+  .regex(/^\/works\/OL\d+W$/, "Invalid book key");
+
 // GET /api/books/search?q=...
 
 export const bookSearchQuery = z.object({
@@ -31,9 +35,7 @@ export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
 // GET /api/books/details?key=/works/OL...W
 
 export const bookDetailsQuery = z.object({
-  key: z
-    .string({ error: "Invalid book key" })
-    .regex(/^\/works\/OL\d+W$/, "Invalid book key"),
+  key: openLibraryWorkKey,
 });
 
 export type BookDetailsQuery = z.infer<typeof bookDetailsQuery>;
