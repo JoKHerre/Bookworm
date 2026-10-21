@@ -14,7 +14,7 @@ Serves COL-01 (add a book to a personal library). This task creates the backend 
 
 ## Specs
 
-- Add our endpoint, `POST /api/library` in `server/src/routes/library.ts`, and mount the router from `server/src/index.ts` at `/api/library`.
+- Add our endpoint, `POST /api/library` in new file, `server/src/routes/library.ts`, and mount the router from `server/src/index.ts` at `/api/library`.
 - Input: JSON body `{ "bookKey": "/works/OL123W" }`. `bookKey` must be a string matching the existing Open Library work-key format: `^/works/OL\d+W$`. A user ID should not be accepted in the request body.
 - Authentication state: the route will use the existing `loadSession` and `requireAuth` middleware to check whether the request has a valid login session. If there is no valid session, should return HTTP code 401 with `{ "error": "Not logged in" }`, and should not create a saved-book row.
 - Successful output/state: for an authenticated request with a valid book key not already saved by that user (as no duplicate books allowed), should insert one row into `saved_books` using the authenticated user's ID from `res.locals.user`. Should then return HTTP code 201 with the created row's `id`, `userId`, `bookKey`, and `createdAt`.
