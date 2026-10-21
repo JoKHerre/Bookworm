@@ -45,7 +45,7 @@ Serves COL-01 (add a book to a personal library). This task creates the backend 
 
 Add `server/src/routes/library.test.ts` using Node's built-in `node:test` runner and `node:assert/strict`; no additional test dependency is needed. The tests start a temporary Express server that mounts the real library router behind the existing JSON parser, cookie parser, and `loadSession` middleware. Create temporary users and sessions in the test database, send HTTP requests to the temporary server, assert the response and database state, then delete the users and close the server and database pool.
 
-Use the separate PostgreSQL database `bookworm_test` from COL-01-T-4. The test file must refuse to run unless `DATABASE_URL` names `bookworm_test`. From the repository root, apply the schema if needed and run the route tests:
+Use Node.js 24 or newer and the separate PostgreSQL database `bookworm_test` described in COL-01-T-4. Start PostgreSQL and make sure `bookworm_test` exists before running the tests. The test file refuses to run unless `DATABASE_URL` names `bookworm_test`. From the repository root, apply the schema if needed, then run the route tests:
 
 ```sh
 DATABASE_URL=postgres://bookworm:bookworm@localhost:5432/bookworm_test pnpm --dir server db:push

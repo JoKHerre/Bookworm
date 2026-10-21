@@ -43,8 +43,7 @@ Serves the user story COL-01 (add a book to a personal library). This task creat
 
 ## Tests
 
-How to run the tests:
-Add `server/src/db/schema.test.ts` using Node's built-in test runner (`node:test`) and assertions (`node:assert/strict`). Our repository requires Node.js 24 or newer, so no additional test dependency is needed. Import the existing database connection and the `savedBooks` and `users` table definitions. Tests should create uniquely named temporary users, perform direct database operations, and clean up the users afterward. No API endpoint or UI element is in scope.
+Test file: `server/src/db/schema.test.ts`. It uses Node's built-in test runner (`node:test`) and assertions (`node:assert/strict`), so no additional test dependency is needed. The tests import the existing database connection and the `savedBooks` and `users` table definitions. They create uniquely named temporary users, perform direct database operations, and clean up the users afterward. No API endpoint or UI element is in scope.
 
 Run the tests against a separate PostgreSQL database named `bookworm_test`; do not run them against the regular or production database. PostgreSQL 16 or newer is supported (the project's README lists this prerequisite). Start one PostgreSQL server on port `5432` before continuing; if another version is already running there, it can be used as long as it is version 16 or newer.
 
