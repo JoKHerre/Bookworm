@@ -11,6 +11,8 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);  // used to control save button's availability
+  const [saveMessage, setSaveMessage] = useState("");  // used to display message to user after attempting to save a book
 
   useEffect(() => {
     async function getBookDetails() {
@@ -39,6 +41,41 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
 
     getBookDetails();
   }, [bookKey]);
+
+  // function to handle saving a book to the user's personal library
+  async function handleSave() {
+    // set saving state to true and clear any previous save message
+    setSaving(true);
+    setSaveMessage("");
+
+    try {
+      // send POST request with the bookKey to /api/library
+      const response = await fetch("/api/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookKey }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      // interpret response status + show appropriate message to user through saveMessage
+      if (response.status === 201) {  // success
+        setSaveMessage("Book saved to your library.");
+      } else if (response.status === 409) {  // duplicate conflict
+        setSaveMessage("This book is already in your library.");
+      } else if (response.status === 401) {  // unauthorized user
+        setSaveMessage("Please sign in to save books to your library.");
+      } else {  // other error: generic error msg
+        setSaveMessage(data.error ?? "Could not save this book. Please try again.");
+      }
+    } catch {  // network or other error: generic error msg
+      setSaveMessage("Could not save this book. Please try again.");
+    } finally {
+      // re-enable save button after request is complete, by setting saving to false
+      setSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -93,6 +130,12 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
           <p className="book-details-author">
             {book.authors?.join(", ") || "Unknown author"}
           </p>
+          
+          {/* Button to save book to personal library */}
+          <button type="button" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save to My Library"}
+          </button>
+          {saveMessage && <p role="status">{saveMessage}</p>}
         </div>
       </section>
 
