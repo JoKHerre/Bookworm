@@ -1,18 +1,17 @@
 import type { MouseEvent } from "react"; // type for mouse click event on an html element
 import "./Header.css";
 
+export type AppPage = "discover" | "personal-library";
+
 // define the props the Header component expects to receive: current page, navigation function
 interface HeaderProps {
-  page: "discover" | "personal-library";
-  onNavigate: (page: "discover" | "personal-library") => void;
+  page: AppPage;
+  onNavigate: (page: AppPage) => void;
 }
 
 function Header({ page, onNavigate }: HeaderProps) {
   // helper: switch page when user clicks a link
-  function navigate(
-    event: MouseEvent<HTMLAnchorElement>,
-    target: "discover" | "personal-library",
-  ) {
+  function navigate(event: MouseEvent<HTMLAnchorElement>, target: AppPage) {
     event.preventDefault();
     onNavigate(target);
   }

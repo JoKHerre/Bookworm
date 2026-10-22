@@ -70,12 +70,6 @@
     padding: 16px 20px;
   }
 
-  .header-search {
-    order: 3;
-    flex-basis: 100%;
-    max-width: none;
-  }
-
   .main-nav {
     gap: 14px;
   }
@@ -96,9 +90,5 @@
 
   .main-nav a {
     font-size: 0.85rem;
-  }
-
-  .header-search button {
-    padding: 10px 12px;
   }
 }
