@@ -2,14 +2,12 @@ import { useState } from "react";
 import { useAuth } from "./useAuth";
 import { AuthForm } from "./components/AuthForm";
 import SearchPage from "./pages/SearchPage";
-import Header from "./components/Header";
+import Header, { type AppPage } from "./components/Header";
 import PersonalLibraryPage from "./pages/PersonalLibraryPage";
-
-type Page = "discover" | "personal-library";
 
 function App() {
   const { user, loading, logout } = useAuth();
-  const [page, setPage] = useState<Page>("discover");
+  const [page, setPage] = useState<AppPage>("discover");
 
   if (loading) return <p>Loading</p>;
   if (!user) return <AuthForm />;

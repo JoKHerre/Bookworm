@@ -24,8 +24,8 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
   const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
   const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
   const [error, setError] = useState(""); // message to display in case of error loading the saved books
-  const [loadAttempt, setLoadAttempt] = useState(0);  // counter to trigger reloading the saved books when the user clicks "Try again"
-  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null);  // for clicking on a book to view detail view
+  const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
+  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null); // for clicking on a book to view detail view
 
   useEffect(() => {
     let isCurrentRequest = true;

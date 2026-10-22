@@ -5,7 +5,7 @@ import "./BookDetailsPage.css";
 interface BookDetailsPageProps {
   bookKey: string;
   onBack: () => void;
-  backLabel?: string;  // optional prop to customize the back button label
+  backLabel?: string; // optional prop to customize the back button label
 }
 
 function BookDetailsPage({
