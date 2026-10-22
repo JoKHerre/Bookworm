@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { BookDetails } from "../../shared/books";
+import BookDetailsPage from "./BookDetailsPage";
 import "./PersonalLibraryPage.css";
 
 // define props the PersonalLibraryPage component expects to receive: a function to navigate to the Discover page
@@ -20,10 +21,11 @@ interface PersonalLibraryBook extends SavedBook {
 }
 
 function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
-  const [books, setBooks] = useState<PersonalLibraryBook[]>([]);  // the saved books
-  const [loading, setLoading] = useState(true);  // whether the list of saved books is currently loading
-  const [error, setError] = useState("");  // message to display in case of error loading the saved books
-  const [loadAttempt, setLoadAttempt] = useState(0);  
+  const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
+  const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
+  const [error, setError] = useState(""); // message to display in case of error loading the saved books
+  const [loadAttempt, setLoadAttempt] = useState(0);  // counter to trigger reloading the saved books when the user clicks "Try again"
+  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null);  // for clicking on a book to view detail view
 
   useEffect(() => {
     let isCurrentRequest = true;
@@ -49,7 +51,8 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
         // read response, treat it as an object containing an array of SavedBook's, called "books"
         const data = (await response.json()) as { books: SavedBook[] };
         const booksWithDetails = await Promise.all(
-          data.books.map(async (savedBook) => {  // for each SavedBook
+          data.books.map(async (savedBook) => {
+            // for each SavedBook
             try {
               // fetch book's details (title, author, etc) using bookKey
               const detailsResponse = await fetch(
@@ -99,6 +102,17 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
       isCurrentRequest = false;
     };
   }, [loadAttempt]);
+
+  // if a book is selected, shows its BookDetailsPage and set the var back to null when user clicks back
+  if (selectedBookKey) {
+    return (
+      <BookDetailsPage
+        bookKey={selectedBookKey}
+        backLabel="Back to My Personal Library"
+        onBack={() => setSelectedBookKey(null)}
+      />
+    );
+  }
 
   return (
     <div className="personal-library-shell">
@@ -166,8 +180,18 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
                         aria-hidden="true"
                       />
                     )}
+                    {/* select book to view details */}
                     <div className="personal-library-book-details">
-                      <h3>{title}</h3>
+                      <h3>
+                        <button
+                          className="personal-library-book-title"
+                          type="button"
+                          aria-label={`View details for ${title}`}
+                          onClick={() => setSelectedBookKey(bookKey)}
+                        >
+                          {title}
+                        </button>
+                      </h3>
                       <p>
                         {details?.authors.join(", ") || "Author unavailable"}
                       </p>

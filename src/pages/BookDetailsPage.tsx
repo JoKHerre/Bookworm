@@ -5,9 +5,14 @@ import "./BookDetailsPage.css";
 interface BookDetailsPageProps {
   bookKey: string;
   onBack: () => void;
+  backLabel?: string;  // optional prop to customize the back button label
 }
 
-function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
+function BookDetailsPage({
+  bookKey,
+  onBack,
+  backLabel = "Back to Search",
+}: BookDetailsPageProps) {
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -88,7 +93,7 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
     return (
       <main className="book-details">
         <button className="back-button" onClick={onBack}>
-          Back to Search
+          {backLabel}
         </button>
         <p>Loading book details...</p>
       </main>
@@ -99,7 +104,7 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
     return (
       <main className="book-details">
         <button className="back-button" onClick={onBack}>
-          Back to Search
+          {backLabel}
         </button>
         <p>{error || "Book not found."}</p>
       </main>
@@ -118,7 +123,7 @@ function BookDetailsPage({ bookKey, onBack }: BookDetailsPageProps) {
   return (
     <main className="book-details">
       <button className="back-button" onClick={onBack}>
-        Back to Search
+        {backLabel}
       </button>
 
       {/* Book cover and basic information */}
