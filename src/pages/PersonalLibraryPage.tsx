@@ -25,8 +25,6 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
 
           {/* No saved books yet; show a "Discover Books" button that takes user to the Discover (aka search) page */}
           <div className="personal-library-empty-state">
-            <div className="personal-library-book-stack" aria-hidden="true">
-            </div>
             <h3>Your library is ready for its first book</h3>
             <p>Explore books and save the ones you’re interested in.</p>
             <button type="button" onClick={onGoToDiscover}>Discover books</button>
