@@ -77,6 +77,34 @@
   margin: 0 0 8px;
 }
 
+.save-library-button {
+  align-self: center;
+  margin-top: 16px;
+  padding: 11px 18px;
+  border: 1px solid var(--olive);
+  border-radius: 8px;
+  background: var(--olive);
+  color: var(--cream);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.save-library-button:hover:not(:disabled) {
+  background: var(--olive-hover);
+}
+
+.save-library-button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.save-library-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .book-year {
   color: var(--olive);
   opacity: 0.6;
