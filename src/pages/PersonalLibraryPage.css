@@ -2,11 +2,7 @@
   min-height: calc(100svh - 76px);
   flex: 1;
   background:
-    radial-gradient(
-      ellipse at 90% 10%,
-      rgba(184, 137, 45, 0.09),
-      transparent 30%
-    ),
+    radial-gradient(ellipse at 90% 10%, var(--gold-wash), transparent 30%),
     var(--cream);
   color: var(--olive);
   text-align: left;
@@ -61,13 +57,13 @@
 
 .personal-library-books-heading p {
   margin: 4px 0 0;
-  color: rgba(79, 91, 42, 0.62);
+  color: var(--olive-text-muted);
   font-size: 0.78rem;
 }
 
 .personal-library-message {
   padding: 32px 0;
-  color: rgba(79, 91, 42, 0.72);
+  color: var(--olive-text-secondary);
   font-size: 0.86rem;
 }
 
@@ -93,7 +89,7 @@
 .personal-library-empty-state p {
   max-width: 390px;
   margin: 7px 0 18px;
-  color: rgba(79, 91, 42, 0.68);
+  color: var(--olive-text-soft);
   font-size: 0.8rem;
 }
 
@@ -131,7 +127,7 @@
 .personal-library-book-card {
   min-width: 0;
   padding: 12px;
-  background: rgba(255, 250, 240, 0.72);
+  background: var(--cream-card);
 }
 
 .personal-library-book-cover {
@@ -139,7 +135,7 @@
   width: 100%;
   height: 210px;
   object-fit: contain;
-  background: rgba(216, 201, 168, 0.22);
+  background: var(--tan-cover);
 }
 
 .personal-library-book-cover--placeholder {
@@ -147,10 +143,10 @@
     linear-gradient(
       140deg,
       transparent 48%,
-      rgba(79, 91, 42, 0.08) 49% 51%,
+      var(--olive-placeholder-mark) 49% 51%,
       transparent 52%
     ),
-    rgba(216, 201, 168, 0.22);
+    var(--tan-cover);
 }
 
 .personal-library-book-details h3 {
@@ -164,14 +160,14 @@
 
 .personal-library-book-details p {
   margin: 0;
-  color: rgba(79, 91, 42, 0.72);
+  color: var(--olive-text-secondary);
   font-size: 0.76rem;
   line-height: 1.4;
 }
 
 .personal-library-book-details .personal-library-book-key {
   margin-top: 6px;
-  color: rgba(79, 91, 42, 0.52);
+  color: var(--olive-text-faint);
   font-size: 0.68rem;
   overflow-wrap: anywhere;
 }
