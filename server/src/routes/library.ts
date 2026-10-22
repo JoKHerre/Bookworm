@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { eq } from "drizzle-orm";
 import z from "zod";
 import { db } from "../db/index.ts"; // postgresql connection
 import { savedBooks } from "../db/schema.ts"; // saved books table definition
@@ -15,6 +16,22 @@ const saveBookBody = z
 
 // create an express router for library-related endpoints
 export const libraryRouter: Router = Router();
+
+// define GET /api/library endpoint for retrieving a user's saved books
+libraryRouter.get("/", requireAuth, async (_req, res) => {  // run requireAuth before handler to reject unauthenticated requests
+  // from the saved_books table, for each row belonging to the user, get the id, bookKey, and createdAt fields
+  const books = await db
+    .select({
+      id: savedBooks.id,
+      bookKey: savedBooks.bookKey,
+      createdAt: savedBooks.createdAt,
+    })
+    .from(savedBooks)
+    .where(eq(savedBooks.userId, res.locals.user!.id));
+
+  // return the array of saved books as json  
+  res.json({ books });
+});
 
 // define the POST /api/library endpoint for saving a book to the user's library
 libraryRouter.post("/", requireAuth, async (req, res) => {
