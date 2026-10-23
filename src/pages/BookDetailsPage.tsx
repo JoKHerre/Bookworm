@@ -8,23 +8,32 @@ import { getBookDetails, getBookISBNs } from "../booksApi";
 import "./BookDetailsPage.css";
 
 interface BookDetailsPageProps {
-  searchBook: BookSearchResult;
+  bookKey: string;
+  searchBook?: BookSearchResult;
   onBack: () => void;
+  backLabel?: string;
 }
 
-function BookDetailsPage({ searchBook, onBack }: BookDetailsPageProps) {
-  const bookKey = searchBook.key;
+function BookDetailsPage({
+  bookKey,
+  searchBook,
+  onBack,
+  backLabel = "Back to Search",
+}: BookDetailsPageProps) {
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isbns, setISBNs] = useState<BookISBNs | null>(null);
   const [isbnError, setISBNError] = useState<string | null>(null);
 
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
 
-    getBookDetails(bookKey, signal)
+    getBookDetails(bookKey, signal, !searchBook?.author_name?.length)
       .then((data) => {
         if (!signal.aborted) setBook(data);
       })
@@ -40,7 +49,7 @@ function BookDetailsPage({ searchBook, onBack }: BookDetailsPageProps) {
       });
 
     return () => controller.abort();
-  }, [bookKey]);
+  }, [bookKey, searchBook]);
 
   useEffect(() => {
     if (loading || !book) return;
@@ -62,17 +71,59 @@ function BookDetailsPage({ searchBook, onBack }: BookDetailsPageProps) {
     return () => controller.abort();
   }, [bookKey, loading, book]);
 
+  // function to handle saving a book to the user's personal library
+  async function handleSave() {
+    // set saving state to true and clear any previous save message
+    setSaving(true);
+    setSaveMessage("");
+
+    try {
+      // send POST request with the bookKey to /api/library
+      const response = await fetch("/api/library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookKey }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+
+      // interpret response status + show appropriate message to user through saveMessage
+      if (response.status === 201) {
+        // success
+        setSaveMessage("Book saved to your library.");
+      } else if (response.status === 409) {
+        // duplicate conflict
+        setSaveMessage("This book is already in your library.");
+      } else if (response.status === 401) {
+        // unauthorized user
+        setSaveMessage("Please sign in to save books to your library.");
+      } else {
+        // other error: generic error msg
+        setSaveMessage(
+          data.error ?? "Could not save this book. Please try again.",
+        );
+      }
+    } catch {
+      // network or other error: generic error msg
+      setSaveMessage("Could not save this book. Please try again.");
+    } finally {
+      // re-enable save button after request is complete, by setting saving to false
+      setSaving(false);
+    }
+  }
+
   const summary =
     typeof book?.description === "string"
       ? book.description
       : book?.description?.value;
 
-  const coverId = book?.covers?.[0] ?? searchBook.cover_i;
+  const coverId = book?.covers?.[0] ?? searchBook?.cover_i;
   const coverUrl = coverId
     ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`
     : null;
 
-  const title = book?.title ?? searchBook.title;
+  const title = book?.title ?? searchBook?.title ?? "Book details";
 
   const isbn13List = isbns?.isbn_13 ?? [];
   const isbn10List = isbns?.isbn_10 ?? [];
@@ -81,7 +132,7 @@ function BookDetailsPage({ searchBook, onBack }: BookDetailsPageProps) {
   return (
     <main className="book-details" aria-busy={loading}>
       <button className="back-button" onClick={onBack}>
-        Back to Search
+        {backLabel}
       </button>
 
       <section className="book-header">
@@ -97,8 +148,19 @@ function BookDetailsPage({ searchBook, onBack }: BookDetailsPageProps) {
           <h1 className="book-details-title">{title}</h1>
 
           <p className="book-details-author">
-            {searchBook.author_name?.join(", ") || "Unknown author"}
+            {searchBook?.author_name?.join(", ") ||
+              book?.authors.join(", ") ||
+              "Unknown author"}
           </p>
+          <button
+            className="save-library-button"
+            type="button"
+            onClick={handleSave}
+            disabled={saving || loading || !book}
+          >
+            {saving ? "Saving..." : "Save to My Library"}
+          </button>
+          {saveMessage && <p role="status">{saveMessage}</p>}
         </div>
       </section>
 

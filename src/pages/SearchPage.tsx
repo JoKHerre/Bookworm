@@ -65,6 +65,7 @@ function SearchPage() {
     return (
       <BookDetailsPage
         key={selectedBook.key}
+        bookKey={selectedBook.key}
         searchBook={selectedBook}
         onBack={() => setSelectedBook(null)}
       />

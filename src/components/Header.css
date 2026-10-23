@@ -1,27 +1,31 @@
 .site-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 24px;
-  padding: 16px 32px;
-  background-color: var(--cream);
-  border-bottom: 1px solid var(--beige);
-  color: var(--olive);
+  padding: 16px clamp(18px, 4vw, 48px);
+  background-color: var(--olive);
+  color: var(--cream);
   box-sizing: border-box;
   width: 100%;
 }
 
+/* Bookworm logo on left of header*/
 .site-logo {
-  color: var(--olive);
-  font-size: 1.7rem;
+  color: var(--cream);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
   font-weight: bold;
   text-decoration: none;
   white-space: nowrap;
 }
 
+/* when hovering on the Bookworm logo, make it gold colored */
 .site-logo:hover {
-  color: var(--gold);
+  color: var(--gold-light);
 }
 
+/* arrange navigation links */
 .main-nav {
   display: flex;
   align-items: center;
@@ -29,8 +33,9 @@
   margin-left: auto;
 }
 
+/* style of navigation links */
 .main-nav a {
-  color: var(--olive);
+  color: rgba(245, 239, 227, 0.82);
   font-size: 0.95rem;
   font-weight: 500;
   text-decoration: none;
@@ -38,8 +43,24 @@
   transition: color 0.2s ease;
 }
 
+/* navigation link hover color */
 .main-nav a:hover {
-  color: var(--gold);
+  color: var(--gold-light);
+}
+
+/* style for currently selected nav link */
+.main-nav a[aria-current="page"] {
+  color: var(--cream);
+  text-decoration: underline;
+  text-decoration-color: var(--gold);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 7px;
+}
+
+/* adds visible outline to components, when user tabs to different links using keyboard */
+.site-header a:focus-visible {
+  outline: 3px solid var(--gold-light);
+  outline-offset: 4px;
 }
 
 @media (max-width: 900px) {
@@ -47,12 +68,6 @@
     flex-wrap: wrap;
     gap: 16px;
     padding: 16px 20px;
-  }
-
-  .header-search {
-    order: 3;
-    flex-basis: 100%;
-    max-width: none;
   }
 
   .main-nav {
@@ -66,7 +81,7 @@
   }
 
   .site-logo {
-    font-size: 1.4rem;
+    font-size: 1.35rem;
   }
 
   .main-nav {
@@ -75,9 +90,5 @@
 
   .main-nav a {
     font-size: 0.85rem;
-  }
-
-  .header-search button {
-    padding: 10px 12px;
   }
 }

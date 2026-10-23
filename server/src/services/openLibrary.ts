@@ -3,6 +3,7 @@ import type z from "zod";
 import {
   openLibrarySearchResponse,
   openLibraryWork,
+  openLibraryAuthor,
   openLibraryEditionsResponse,
 } from "../../../shared/openLibrary.ts";
 
@@ -114,12 +115,34 @@ export async function getISBNsForWork(workKey: string): Promise<BookISBNs> {
   };
 }
 
-export async function getBookDetails(workKey: string): Promise<BookDetails> {
+export async function getBookDetails(
+  workKey: string,
+  includeAuthors = true,
+): Promise<BookDetails> {
   const key = openLibraryWorkKey.parse(workKey);
   const work = await getWork(key);
 
+  // Search already supplies author names; saved books still need them resolved.
+  const authors = includeAuthors
+    ? await Promise.all(
+        (work.authors ?? []).slice(0, 5).map(async ({ author }) => {
+          try {
+            const data = await fetchOpenLibrary(
+              `${author.key}.json`,
+              openLibraryAuthor,
+            );
+            return data.name;
+          } catch (error) {
+            console.error(`Failed to retrieve author ${author.key}:`, error);
+            return undefined;
+          }
+        }),
+      )
+    : [];
+
   return {
     key: work.key,
+    authors: authors.filter((name): name is string => Boolean(name)),
     title: work.title,
     description: work.description,
     first_publish_date: work.first_publish_date,

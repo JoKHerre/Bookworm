@@ -48,7 +48,8 @@ booksRouter.get("/details", async (req, res: Response<BookDetails | BooksError>)
   }
 
   try {
-    const book = await getBookDetails(parsed.data.key);
+    const includeAuthors = parsed.data.includeAuthors !== "false";
+    const book = await getBookDetails(parsed.data.key, includeAuthors);
     res.json(book);
   } catch (error) {
     console.error("Book details error:", error);

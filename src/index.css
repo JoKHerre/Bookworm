@@ -2,7 +2,18 @@
   --cream: #f5efe3;
   --olive: #4f5b2a;
   --gold: #b8892d;
+  --gold-light: #e4cf9f;
   --tan: #d8c9a8;
+  --olive-hover: #3f4921;
+
+  --gold-wash: rgba(184, 137, 45, 0.09);
+  --olive-text-secondary: rgba(79, 91, 42, 0.72);
+  --olive-text-muted: rgba(79, 91, 42, 0.62);
+  --olive-text-soft: rgba(79, 91, 42, 0.68);
+  --olive-text-faint: rgba(79, 91, 42, 0.52);
+  --olive-placeholder-mark: rgba(79, 91, 42, 0.08);
+  --cream-card: rgba(255, 250, 240, 0.72);
+  --tan-cover: rgba(216, 201, 168, 0.22);
 
   --text: var(--olive);
   --text-h: var(--olive);

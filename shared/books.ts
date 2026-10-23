@@ -36,12 +36,14 @@ export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
 
 export const bookDetailsQuery = z.object({
   key: openLibraryWorkKey,
+  includeAuthors: z.enum(["true", "false"]).optional(),
 });
 
 export type BookDetailsQuery = z.infer<typeof bookDetailsQuery>;
 
 export const bookDetails = z.object({
   key: z.string(),
+  authors: z.array(z.string()),
   title: z.string(),
   description: z
     .union([z.string(), z.object({ value: z.string() })])

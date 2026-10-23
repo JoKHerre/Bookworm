@@ -39,8 +39,16 @@ export function searchBooks(query: string, signal: AbortSignal) {
   );
 }
 
-export function getBookDetails(key: string, signal: AbortSignal) {
-  return get<BookDetails>("details", new URLSearchParams({ key }), signal);
+export function getBookDetails(
+  key: string,
+  signal: AbortSignal,
+  includeAuthors = true,
+) {
+  return get<BookDetails>(
+    "details",
+    new URLSearchParams({ key, includeAuthors: String(includeAuthors) }),
+    signal,
+  );
 }
 
 export function getBookISBNs(key: string, signal: AbortSignal) {

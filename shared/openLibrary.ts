@@ -9,6 +9,9 @@ export const openLibrarySearchResponse = z.object({
 });
 
 export const openLibraryWork = z.object({
+  authors: z
+    .array(z.object({ author: z.object({ key: z.string() }) }))
+    .optional(),
   key: z.string(),
   title: z.string(),
   description: z
@@ -28,4 +31,8 @@ export const openLibraryEdition = z.object({
 export const openLibraryEditionsResponse = z.object({
   size: z.number(),
   entries: z.array(openLibraryEdition),
+});
+
+export const openLibraryAuthor = z.object({
+  name: z.string().optional(),
 });
