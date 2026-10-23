@@ -195,6 +195,29 @@
   overflow-wrap: anywhere;
 }
 
+.personal-library-book-remove {
+  min-height: 34px;
+  margin-top: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--olive);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--olive);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.personal-library-book-remove:hover {
+  background: var(--tan);
+}
+
+.personal-library-book-remove:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
 @media (max-width: 760px) {
   .personal-library-page {
     width: min(100% - 32px, 1120px);

@@ -199,6 +199,13 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
                         <p className="personal-library-book-key">{bookKey}</p>
                       )}
                     </div>
+                    <button
+                      className="personal-library-book-remove"
+                      type="button"
+                      aria-label={`Remove ${title} from my library`}
+                    >
+                      Remove
+                    </button>
                   </li>
                 );
               })}
