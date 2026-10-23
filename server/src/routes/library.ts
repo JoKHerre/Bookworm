@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import z from "zod";
 import { db } from "../db/index.ts"; // postgresql connection
 import { savedBooks } from "../db/schema.ts"; // saved books table definition
@@ -32,6 +32,41 @@ libraryRouter.get("/", requireAuth, async (_req, res) => {
 
   // return the array of saved books as json
   res.json({ books });
+});
+
+// define DELETE /api/library/:id endpoint for removing a saved book from the user's library
+libraryRouter.delete("/:id", requireAuth, async (req, res) => {
+  // requireAuth to check authentication/signed-in first before processing
+
+  // accept only positive postgresql integer IDs; Number() alone would also accept decimals and exponents.
+  // check that id param is a string of digits only first 
+ const idParam = req.params.id;
+  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
+    res.status(400).json({ error: "Invalid saved book ID" });
+    return;
+  }
+
+  // then convert to actual number, and check that it's a safe integer within postgresql's valid int range
+  const id = Number(idParam);
+  if (!Number.isSafeInteger(id) || id < 1 || id > 2_147_483_647) {
+    res.status(400).json({ error: "Invalid saved book ID" });
+    return;
+  }
+
+  // from the saved_books table, delete the row with this book id and user id, and return the deleted row's id if success
+  const [deletedBook] = await db
+    .delete(savedBooks)
+    .where(and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)))
+    .returning({ id: savedBooks.id });
+
+  // delete attempt unsuccessful: 404 row not found  
+  if (!deletedBook) {
+    res.status(404).json({ error: "Book not found in your library" });
+    return;
+  }
+
+  // delete successful: return 204
+  res.status(204).end();
 });
 
 // define the POST /api/library endpoint for saving a book to the user's library
