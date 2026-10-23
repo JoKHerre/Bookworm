@@ -47,7 +47,6 @@
   display: block;
   border-radius: 12px;
   box-shadow: 0 12px 32px -12px var(--shadow);
-  /* box-shadow: 0 12px 32px -12px rgba(79, 91, 42, 0.25);  */
 }
 
 .book-details .book-info {
@@ -88,7 +87,8 @@
 }
 
 .book-summary h2,
-.book-genres h2 {
+.book-genres h2,
+.book-isbns h2 {
   color: var(--olive);
   font-size: 24px;
   border-bottom: 1.5px solid var(--tan);
@@ -121,6 +121,43 @@
   font-weight: 500;
 }
 
+.book-isbns {
+  margin-top: 40px;
+}
+
+.book-isbns summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.book-isbns summary:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.isbn-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.isbn-group h3 {
+  margin-bottom: 8px;
+}
+
+.isbn-group ul {
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 24px;
+}
+
+.isbn-group li {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 600px) {
   .book-header {
     flex-direction: column;
@@ -136,5 +173,10 @@
     box-sizing: border-box;
     width: 100%;
     padding: 24px;
+  }
+
+  .isbn-columns {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 }
