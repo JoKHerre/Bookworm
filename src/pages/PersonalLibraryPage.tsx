@@ -3,6 +3,9 @@ import type { BookDetails } from "../../shared/books";
 import BookDetailsPage from "./BookDetailsPage";
 import "./PersonalLibraryPage.css";
 
+const SESSION_EXPIRED_MESSAGE =
+  "Your session has expired. Please sign in again.";
+
 // define props the PersonalLibraryPage component expects to receive: a function to navigate to the Discover page
 interface PersonalLibraryPageProps {
   onGoToDiscover: () => void;
@@ -33,6 +36,9 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
 
   // remove a book:
   async function removeBook(id: number, title: string) {
+    const genericRemovalError = `Could not remove “${title}” from your library. Please try again.`;
+    let requestError = "";
+
     // clear any previous removal error msg + add book's id to set of books being removed
     setRemovalError("");
     setRemovingBookIds((currentIds) => new Set(currentIds).add(id));
@@ -43,24 +49,20 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
 
       // handle error status codes with error messages to display to user
       if (response.status === 401) {
-        throw new Error("Your session has expired. Please sign in again.");
+        requestError = SESSION_EXPIRED_MESSAGE;
+      } else if (response.status === 404) {
+        requestError = `Could not find “${title}” in your library to remove.`;
+      } else if (!response.ok) {
+        requestError = genericRemovalError;
+      } else {
+        // successful DELETE: update the visible list by filtering out the removed book
+        setBooks((currentBooks) =>
+          currentBooks.filter((book) => book.id !== id),
+        );
       }
-      if (response.status === 404) {
-        throw new Error(`Could not find “${title}” in your library to remove.`);
-      }
-      if (!response.ok) {
-        throw new Error(`Could not remove “${title}” from your library.`);
-      }
-
-      // successful DELETE: update the visible list by filtering out the removed book
-      setBooks((currentBooks) => currentBooks.filter((book) => book.id !== id));
-    } catch (removeError) {
-      // display the error message thrown from try block, or a generic msg
-      setRemovalError(
-        removeError instanceof Error
-          ? removeError.message
-          : `Could not remove “${title}” from your library. Please try again.`,
-      );
+    } catch {
+      // Network failures should use a friendly message instead of a browser error.
+      requestError = genericRemovalError;
     } finally {
       // remove the book's id from the set of books being removed, regardless of success or failure
       setRemovingBookIds((currentIds) => {
@@ -69,6 +71,8 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
         return nextIds;
       });
     }
+
+    if (requestError) setRemovalError(requestError);
   }
 
   useEffect(() => {
@@ -86,7 +90,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
 
         // interprets error status codes and sets error msg to display to user
         if (response.status === 401) {
-          throw new Error("Your session has expired. Please sign in again.");
+          throw new Error(SESSION_EXPIRED_MESSAGE);
         }
         if (!response.ok) {
           throw new Error("Could not load your personal library.");

@@ -14,6 +14,9 @@ const saveBookBody = z
   })
   .strict();
 
+const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
+const MAX_POSTGRES_INTEGER = 2_147_483_647;
+
 // create an express router for library-related endpoints
 export const libraryRouter: Router = Router();
 
@@ -36,30 +39,29 @@ libraryRouter.get("/", requireAuth, async (_req, res) => {
 
 // define DELETE /api/library/:id endpoint for removing a saved book from the user's library
 libraryRouter.delete("/:id", requireAuth, async (req, res) => {
-  // requireAuth to check authentication/signed-in first before processing
-
-  // accept only positive postgresql integer IDs; Number() alone would also accept decimals and exponents.
-  // check that id param is a string of digits only first 
- const idParam = req.params.id;
+  // Validate the path parameter before converting it to a PostgreSQL integer.
+  const idParam = req.params.id;
   if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
-    res.status(400).json({ error: "Invalid saved book ID" });
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
     return;
   }
 
-  // then convert to actual number, and check that it's a safe integer within postgresql's valid int range
+  // Reject unsafe values and numbers outside PostgreSQL's positive integer range.
   const id = Number(idParam);
-  if (!Number.isSafeInteger(id) || id < 1 || id > 2_147_483_647) {
-    res.status(400).json({ error: "Invalid saved book ID" });
+  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
     return;
   }
 
-  // from the saved_books table, delete the row with this book id and user id, and return the deleted row's id if success
+  // Delete only a row owned by the signed-in user; return its ID if one was deleted.
   const [deletedBook] = await db
     .delete(savedBooks)
-    .where(and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)))
+    .where(
+      and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
+    )
     .returning({ id: savedBooks.id });
 
-  // delete attempt unsuccessful: 404 row not found  
+  // delete attempt unsuccessful: 404 row not found in library
   if (!deletedBook) {
     res.status(404).json({ error: "Book not found in your library" });
     return;
