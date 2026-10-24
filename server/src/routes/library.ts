@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import z from "zod";
 import { db } from "../db/index.ts"; // postgresql connection
 import { savedBooks } from "../db/schema.ts"; // saved books table definition
@@ -13,6 +13,9 @@ const saveBookBody = z
     bookKey: openLibraryWorkKey,
   })
   .strict();
+
+const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
+const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 // create an express router for library-related endpoints
 export const libraryRouter: Router = Router();
@@ -32,6 +35,40 @@ libraryRouter.get("/", requireAuth, async (_req, res) => {
 
   // return the array of saved books as json
   res.json({ books });
+});
+
+// define DELETE /api/library/:id endpoint for removing a saved book from the user's library
+libraryRouter.delete("/:id", requireAuth, async (req, res) => {
+  // Validate the path parameter before converting it to a PostgreSQL integer.
+  const idParam = req.params.id;
+  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
+    return;
+  }
+
+  // Reject unsafe values and numbers outside PostgreSQL's positive integer range.
+  const id = Number(idParam);
+  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
+    return;
+  }
+
+  // Delete only a row owned by the signed-in user; return its ID if one was deleted.
+  const [deletedBook] = await db
+    .delete(savedBooks)
+    .where(
+      and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
+    )
+    .returning({ id: savedBooks.id });
+
+  // delete attempt unsuccessful: 404 row not found in library
+  if (!deletedBook) {
+    res.status(404).json({ error: "Book not found in your library" });
+    return;
+  }
+
+  // delete successful: return 204
+  res.status(204).end();
 });
 
 // define the POST /api/library endpoint for saving a book to the user's library
