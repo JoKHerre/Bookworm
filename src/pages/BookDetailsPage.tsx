@@ -24,7 +24,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const state = location.state as BookDetailsLocationState | null;
   const searchBook =
     state?.searchBook?.key === bookKey ? state.searchBook : undefined;
-  
+
   function onBack() {
     if (location.key === "default") {
       navigate("/search");
