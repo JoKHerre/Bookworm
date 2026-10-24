@@ -63,6 +63,25 @@ async function postBook(body: unknown, token?: string) {
   });
 }
 
+async function createSavedBook(token: string) {
+  const bookKey = createTestBookKey();
+  const response = await postBook({ bookKey }, token);
+  assert.equal(response.status, 201);
+  const savedBook = (await response.json()) as { id: number };
+  return { bookKey, id: savedBook.id };
+}
+
+// send a DELETE request to /api/library/:id
+async function deleteBook(id: number | string, token?: string) {
+  const headers = new Headers();
+  if (token) headers.set("cookie", `session=${token}`);
+
+  return fetch(`${baseUrl}/api/library/${id}`, {
+    method: "DELETE",
+    headers,
+  });
+}
+
 // return all rows in saved_books for a given bookKey
 async function rowsForBook(bookKey: string) {
   return db.select().from(savedBooks).where(eq(savedBooks.bookKey, bookKey));
@@ -236,4 +255,75 @@ test("COL-01-T-3 allows different users to save the same book", async () => {
     rows.map((row) => row.userId).sort(),
     [firstUser.id, secondUser.id].sort(),
   );
+});
+
+test("COL-03 removes a saved book from its owner's library", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+  const response = await deleteBook(savedBook.id, user.token);
+
+  assert.equal(response.status, 204);
+  assert.equal(await response.text(), "");
+  assert.equal((await rowsForBook(savedBook.bookKey)).length, 0);
+});
+
+test("COL-03 rejects an unauthenticated removal and preserves the row", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+
+  const response = await deleteBook(savedBook.id);
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Not logged in" });
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.userId, user.id);
+});
+
+test("COL-03 does not let a user remove another user's saved book", async () => {
+  const requester = await createSignedInUser();
+  const owner = await createSignedInUser();
+  const savedBook = await createSavedBook(owner.token);
+
+  const response = await deleteBook(savedBook.id, requester.token);
+
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
+    error: "Book not found in your library",
+  });
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.userId, owner.id);
+});
+
+test("COL-03 rejects invalid IDs without changing the library", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+
+  for (const invalidId of ["abc", "0", "-1", "1.5", "2147483648"]) {
+    const response = await deleteBook(invalidId, user.token);
+    assert.equal(response.status, 400, `Expected ${invalidId} to be rejected`);
+    assert.deepEqual(await response.json(), {
+      error: "Invalid saved book ID",
+    });
+  }
+
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.id, savedBook.id);
+});
+
+test("COL-03 returns not found for a missing row and repeated removal", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+
+  const firstResponse = await deleteBook(savedBook.id, user.token);
+  assert.equal(firstResponse.status, 204);
+
+  const repeatedResponse = await deleteBook(savedBook.id, user.token);
+  assert.equal(repeatedResponse.status, 404);
+  assert.deepEqual(await repeatedResponse.json(), {
+    error: "Book not found in your library",
+  });
+  assert.equal((await rowsForBook(savedBook.bookKey)).length, 0);
 });

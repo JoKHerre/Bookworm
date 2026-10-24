@@ -1,75 +1,78 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import type { BookSearchResult } from "../../shared/books";
 import { searchBooks } from "../booksApi";
 import BookCard from "../components/BookCard";
-import BookDetailsPage from "./BookDetailsPage";
+import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
 type ViewMode = "grid" | "list";
 
 function SearchPage() {
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const submittedQuery = searchParams.get("q") ?? "";
+  const navigate = useNavigate();
+
   const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [total, setTotal] = useState(0);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [searched, setSearched] = useState(false);
-  const [selectedBook, setSelectedBook] = useState<BookSearchResult | null>(
-    null,
-  );
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const searched = submittedQuery !== "";
+  const visibleBooks = searched ? books : [];
+  const visibleError = searched ? error : "";
+  const visibleLoading = searched && loading;
 
-  const request = useRef<AbortController | null>(null);
-  useEffect(() => () => request.current?.abort(), []);
+  useEffect(() => {
+    if (!submittedQuery) return;
 
-  async function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    request.current?.abort();
     const controller = new AbortController();
-    request.current = controller;
+    const { signal } = controller;
 
-    if (!query.trim()) {
-      setLoading(false);
+    async function search() {
+      setLoading(true);
       setError("");
-      setBooks([]);
-      setTotal(0);
-      setSearched(false);
-      return;
+
+      try {
+        const data = await searchBooks(submittedQuery, signal);
+        if (!signal.aborted) {
+          setBooks(data.books);
+          setTotal(data.total);
+        }
+      } catch (err) {
+        if (signal.aborted) return;
+        setError(
+          err instanceof Error ? err.message : "Unable to search for books",
+        );
+        setBooks([]);
+        setTotal(0);
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
     }
 
-    setLoading(true);
-    setError("");
-    setSearched(true);
-    setSelectedBook(null);
+    void search();
+    return () => controller.abort();
+  }, [submittedQuery, searchAttempt]);
 
-    try {
-      const data = await searchBooks(query.trim(), controller.signal);
-      if (!controller.signal.aborted) {
-        setBooks(data.books);
-        setTotal(data.total);
-      }
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      setError(
-        err instanceof Error ? err.message : "Unable to search for books",
-      );
-      setBooks([]);
-      setTotal(0);
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
+  function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const trimmed = String(formData.get("q") ?? "").trim();
+    if (trimmed === submittedQuery) {
+      setSearchAttempt((attempt) => attempt + 1);
+    } else {
+      setSearchParams(trimmed ? { q: trimmed } : {});
     }
   }
 
-  if (selectedBook) {
-    return (
-      <BookDetailsPage
-        key={selectedBook.key}
-        bookKey={selectedBook.key}
-        searchBook={selectedBook}
-        onBack={() => setSelectedBook(null)}
-      />
-    );
+  function viewBook(book: BookSearchResult) {
+    const state: BookDetailsLocationState = {
+      backLabel: "Back to Search",
+      searchBook: book,
+    };
+    void navigate(bookDetailsPath(book.key), { state });
   }
 
   return (
@@ -79,32 +82,40 @@ function SearchPage() {
           <div className="search-form-inner">
             <input
               type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              key={submittedQuery}
+              name="q"
+              defaultValue={submittedQuery}
               placeholder="Search by title or author..."
               aria-label="Search by title or author"
             />
 
-            <button type="submit" disabled={loading}>
-              {loading ? "Searching..." : "Search"}
+            <button type="submit" disabled={visibleLoading}>
+              {visibleLoading ? "Searching..." : "Search"}
             </button>
           </div>
         </form>
       </section>
 
-      {error && <p className="search-message search-message--error">{error}</p>}
-
-      {loading && <p className="search-message">Searching for books...</p>}
-
-      {!loading && !error && searched && books.length === 0 && (
-        <p className="search-message">No results.</p>
+      {visibleError && (
+        <p className="search-message search-message--error">{visibleError}</p>
       )}
 
-      {!loading && !error && books.length > 0 && (
+      {visibleLoading && (
+        <p className="search-message">Searching for books...</p>
+      )}
+
+      {!visibleLoading &&
+        !visibleError &&
+        searched &&
+        visibleBooks.length === 0 && (
+          <p className="search-message">No results.</p>
+        )}
+
+      {!visibleLoading && !visibleError && visibleBooks.length > 0 && (
         <>
           <div className="search-results-toolbar">
             <p className="search-results-count">
-              Showing {books.length} of {total}{" "}
+              Showing {visibleBooks.length} of {total}{" "}
               {total === 1 ? "result" : "results"}
             </p>
 
@@ -135,22 +146,22 @@ function SearchPage() {
 
           {viewMode === "grid" ? (
             <section className="book-grid" aria-label="Book search results">
-              {books.map((book) => (
+              {visibleBooks.map((book) => (
                 <BookCard
                   key={book.key}
                   book={book}
-                  onClick={() => setSelectedBook(book)}
+                  onClick={() => viewBook(book)}
                 />
               ))}
             </section>
           ) : (
             <section className="book-list" aria-label="Book search results">
-              {books.map((book) => (
+              {visibleBooks.map((book) => (
                 <button
                   key={book.key}
                   type="button"
                   className="book-list-item"
-                  onClick={() => setSelectedBook(book)}
+                  onClick={() => viewBook(book)}
                   aria-label={`View details for ${book.title} by ${
                     book.author_name?.join(", ") || "Unknown author"
                   }`}

@@ -57,8 +57,27 @@
   text-underline-offset: 7px;
 }
 
+/* log out button, styled to match the nav links */
+.main-nav .nav-auth-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(245, 239, 227, 0.82);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.main-nav .nav-auth-button:hover {
+  color: var(--gold-light);
+}
+
 /* adds visible outline to components, when user tabs to different links using keyboard */
-.site-header a:focus-visible {
+.site-header a:focus-visible,
+.site-header button:focus-visible {
   outline: 3px solid var(--gold-light);
   outline-offset: 4px;
 }
@@ -88,7 +107,8 @@
     gap: 12px;
   }
 
-  .main-nav a {
+  .main-nav a,
+  .main-nav .nav-auth-button {
     font-size: 0.85rem;
   }
 }

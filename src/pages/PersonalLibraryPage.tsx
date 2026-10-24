@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
-import BookDetailsPage from "./BookDetailsPage";
+import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
-// define props the PersonalLibraryPage component expects to receive: a function to navigate to the Discover page
-interface PersonalLibraryPageProps {
-  onGoToDiscover: () => void;
-}
+const SESSION_EXPIRED_MESSAGE =
+  "Your session has expired. Please sign in again.";
 
 // define the shape of a saved book object as returned by the server
 interface SavedBook {
@@ -20,16 +19,62 @@ interface PersonalLibraryBook extends SavedBook {
   details: BookDetails | null;
 }
 
-function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
+function PersonalLibraryPage() {
+  const navigate = useNavigate();
   const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
   const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
   const [error, setError] = useState(""); // message to display in case of error loading the saved books
+  const [removalError, setRemovalError] = useState(""); // message to display if removing a book fails
+  const [removingBookIds, setRemovingBookIds] = useState<Set<number>>(
+    () => new Set(),
+  ); // saved-book rows whose removal requests are in progress
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
-  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null); // for clicking on a book to view detail view
+
+  // remove a book:
+  async function removeBook(id: number, title: string) {
+    const genericRemovalError = `Could not remove “${title}” from your library. Please try again.`;
+    let requestError = "";
+
+    // clear any previous removal error msg + add book's id to set of books being removed
+    setRemovalError("");
+    setRemovingBookIds((currentIds) => new Set(currentIds).add(id));
+
+    try {
+      // send DELETE request to server
+      const response = await fetch(`/api/library/${id}`, { method: "DELETE" });
+
+      // handle error status codes with error messages to display to user
+      if (response.status === 401) {
+        requestError = SESSION_EXPIRED_MESSAGE;
+      } else if (response.status === 404) {
+        requestError = `Could not find “${title}” in your library to remove.`;
+      } else if (!response.ok) {
+        requestError = genericRemovalError;
+      } else {
+        // successful DELETE: update the visible list by filtering out the removed book
+        setBooks((currentBooks) =>
+          currentBooks.filter((book) => book.id !== id),
+        );
+      }
+    } catch {
+      // Network failures should use a friendly message instead of a browser error.
+      requestError = genericRemovalError;
+    } finally {
+      // remove the book's id from the set of books being removed, regardless of success or failure
+      setRemovingBookIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(id);
+        return nextIds;
+      });
+    }
+
+    if (requestError) setRemovalError(requestError);
+  }
 
   useEffect(() => {
     let isCurrentRequest = true;
 
+    // loading the personal library: fetch list of saved books, then fetch details for each book
     async function loadPersonalLibrary() {
       // set loading to true and clear any previous error message
       setLoading(true);
@@ -41,7 +86,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
 
         // interprets error status codes and sets error msg to display to user
         if (response.status === 401) {
-          throw new Error("Your session has expired. Please sign in again.");
+          throw new Error(SESSION_EXPIRED_MESSAGE);
         }
         if (!response.ok) {
           throw new Error("Could not load your personal library.");
@@ -103,16 +148,11 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
     };
   }, [loadAttempt]);
 
-  // if a book is selected, shows its BookDetailsPage and set the var back to null when user clicks back
-  if (selectedBookKey) {
-    return (
-      <BookDetailsPage
-        key={selectedBookKey}
-        bookKey={selectedBookKey}
-        backLabel="Back to My Personal Library"
-        onBack={() => setSelectedBookKey(null)}
-      />
-    );
+  function viewBook(bookKey: string) {
+    const state: BookDetailsLocationState = {
+      backLabel: "Back to My Personal Library",
+    };
+    void navigate(bookDetailsPath(bookKey), { state });
   }
 
   return (
@@ -137,6 +177,12 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
             </div>
           </div>
 
+          {removalError && (
+            <p className="personal-library-removal-error" role="alert">
+              {removalError}
+            </p>
+          )}
+
           {/* display loading msg, error + try again button if failure, empty state if no saved books, or the list of saved books */}
           {loading ? (
             <p className="personal-library-message" role="status">
@@ -157,7 +203,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
             <div className="personal-library-empty-state">
               <h3>Your library is ready for its first book</h3>
               <p>Explore books and save the ones you’re interested in.</p>
-              <button type="button" onClick={onGoToDiscover}>
+              <button type="button" onClick={() => void navigate("/search")}>
                 Discover books
               </button>
             </div>
@@ -166,6 +212,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
               {books.map(({ id, bookKey, details }) => {
                 const title = details?.title ?? "Book details unavailable";
                 const coverId = details?.covers?.[0];
+                const isRemoving = removingBookIds.has(id);
 
                 return (
                   <li className="personal-library-book-card" key={id}>
@@ -188,7 +235,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
                           className="personal-library-book-title"
                           type="button"
                           aria-label={`View details for ${title}`}
-                          onClick={() => setSelectedBookKey(bookKey)}
+                          onClick={() => viewBook(bookKey)}
                         >
                           {title}
                         </button>
@@ -200,6 +247,16 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
                         <p className="personal-library-book-key">{bookKey}</p>
                       )}
                     </div>
+                    <button
+                      className="personal-library-book-remove"
+                      type="button"
+                      aria-label={`${isRemoving ? "Removing" : "Remove"} ${title} from my library`}
+                      aria-busy={isRemoving}
+                      disabled={isRemoving}
+                      onClick={() => void removeBook(id, title)}
+                    >
+                      {isRemoving ? "Removing…" : "Remove"}
+                    </button>
                   </li>
                 );
               })}

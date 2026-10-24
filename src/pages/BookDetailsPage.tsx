@@ -1,33 +1,45 @@
 import { useEffect, useState } from "react";
-import type {
-  BookISBNs,
-  BookDetails,
-  BookSearchResult,
-} from "../../shared/books";
+import { useLocation, useNavigate, useParams } from "react-router";
+import type { BookISBNs, BookDetails } from "../../shared/books";
 import { getBookDetails, getBookISBNs } from "../booksApi";
+import type { AuthLocationState, BookDetailsLocationState } from "../routes";
+import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
 
-interface BookDetailsPageProps {
-  bookKey: string;
-  searchBook?: BookSearchResult;
-  onBack: () => void;
-  backLabel?: string;
+function BookDetailsPage() {
+  const params = useParams();
+  const bookKey = `/${params["*"] ?? ""}`;
+
+  // Reset the BookDetailsContent component whenever the bookKey changes.
+  return <BookDetailsContent key={bookKey} bookKey={bookKey} />;
 }
 
-function BookDetailsPage({
-  bookKey,
-  searchBook,
-  onBack,
-  backLabel = "Back to Search",
-}: BookDetailsPageProps) {
+function BookDetailsContent({ bookKey }: { bookKey: string }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const backLabel =
+    (location.state as BookDetailsLocationState | null)?.backLabel ?? "Back";
+
+  const state = location.state as BookDetailsLocationState | null;
+  const searchBook =
+    state?.searchBook?.key === bookKey ? state.searchBook : undefined;
+  
+  function onBack() {
+    if (location.key === "default") {
+      navigate("/search");
+    } else {
+      navigate(-1);
+    }
+  }
+
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false); // used to control save button's availability
+  const [saveMessage, setSaveMessage] = useState(""); // used to display message to user after attempting to save a book
   const [isbns, setISBNs] = useState<BookISBNs | null>(null);
   const [isbnError, setISBNError] = useState<string | null>(null);
-
-  const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,6 +82,11 @@ function BookDetailsPage({
 
     return () => controller.abort();
   }, [bookKey, loading, book]);
+
+  function goToLogin() {
+    const state: AuthLocationState = { from: location };
+    void navigate("/login", { state, replace: true });
+  }
 
   // function to handle saving a book to the user's personal library
   async function handleSave() {
@@ -152,14 +169,24 @@ function BookDetailsPage({
               book?.authors.join(", ") ||
               "Unknown author"}
           </p>
-          <button
-            className="save-library-button"
-            type="button"
-            onClick={handleSave}
-            disabled={saving || loading || !book}
-          >
-            {saving ? "Saving..." : "Save to My Library"}
-          </button>
+          {user ? (
+            <button
+              className="save-library-button"
+              type="button"
+              onClick={handleSave}
+              disabled={saving || loading || !book}
+            >
+              {saving ? "Saving..." : "Save to My Library"}
+            </button>
+          ) : (
+            <button
+              className="save-library-button"
+              type="button"
+              onClick={goToLogin}
+            >
+              Log in to save
+            </button>
+          )}
           {saveMessage && <p role="status">{saveMessage}</p>}
         </div>
       </section>
