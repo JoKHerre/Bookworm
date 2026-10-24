@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
-import BookDetailsPage from "./BookDetailsPage";
+import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
 const SESSION_EXPIRED_MESSAGE =
   "Your session has expired. Please sign in again.";
-
-// define props the PersonalLibraryPage component expects to receive: a function to navigate to the Discover page
-interface PersonalLibraryPageProps {
-  onGoToDiscover: () => void;
-}
 
 // define the shape of a saved book object as returned by the server
 interface SavedBook {
@@ -23,7 +19,8 @@ interface PersonalLibraryBook extends SavedBook {
   details: BookDetails | null;
 }
 
-function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
+function PersonalLibraryPage() {
+  const navigate = useNavigate();
   const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
   const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
   const [error, setError] = useState(""); // message to display in case of error loading the saved books
@@ -32,7 +29,6 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
     () => new Set(),
   ); // saved-book rows whose removal requests are in progress
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
-  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null); // for clicking on a book to view detail view
 
   // remove a book:
   async function removeBook(id: number, title: string) {
@@ -152,15 +148,11 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
     };
   }, [loadAttempt]);
 
-  // if a book is selected, shows its BookDetailsPage and set the var back to null when user clicks back
-  if (selectedBookKey) {
-    return (
-      <BookDetailsPage
-        bookKey={selectedBookKey}
-        backLabel="Back to My Personal Library"
-        onBack={() => setSelectedBookKey(null)}
-      />
-    );
+  function viewBook(bookKey: string) {
+    const state: BookDetailsLocationState = {
+      backLabel: "Back to My Personal Library",
+    };
+    void navigate(bookDetailsPath(bookKey), { state });
   }
 
   return (
@@ -211,7 +203,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
             <div className="personal-library-empty-state">
               <h3>Your library is ready for its first book</h3>
               <p>Explore books and save the ones you’re interested in.</p>
-              <button type="button" onClick={onGoToDiscover}>
+              <button type="button" onClick={() => void navigate("/search")}>
                 Discover books
               </button>
             </div>
@@ -243,7 +235,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
                           className="personal-library-book-title"
                           type="button"
                           aria-label={`View details for ${title}`}
-                          onClick={() => setSelectedBookKey(bookKey)}
+                          onClick={() => viewBook(bookKey)}
                         >
                           {title}
                         </button>

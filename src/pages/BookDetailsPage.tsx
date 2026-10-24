@@ -1,18 +1,27 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
 import type { BookDetails } from "../../shared/books";
+import type { AuthLocationState, BookDetailsLocationState } from "../routes";
+import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
 
-interface BookDetailsPageProps {
-  bookKey: string;
-  onBack: () => void;
-  backLabel?: string; // optional prop to customize the back button label
-}
+function BookDetailsPage() {
+  const params = useParams();
+  const bookKey = `/${params["*"] ?? ""}`;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const backLabel =
+    (location.state as BookDetailsLocationState | null)?.backLabel ?? "Back";
 
-function BookDetailsPage({
-  bookKey,
-  onBack,
-  backLabel = "Back to Search",
-}: BookDetailsPageProps) {
+  function onBack() {
+    if (location.key === "default") {
+      navigate("/search");
+    } else {
+      navigate(-1);
+    }
+  }
+
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,6 +55,11 @@ function BookDetailsPage({
 
     getBookDetails();
   }, [bookKey]);
+
+  function goToLogin() {
+    const state: AuthLocationState = { from: location };
+    void navigate("/login", { state, replace: true });
+  }
 
   // function to handle saving a book to the user's personal library
   async function handleSave() {
@@ -144,14 +158,24 @@ function BookDetailsPage({
           </p>
 
           {/* Button to save book to personal library */}
-          <button
-            className="save-library-button"
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Saving..." : "Save to My Library"}
-          </button>
+          {user ? (
+            <button
+              className="save-library-button"
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Saving..." : "Save to My Library"}
+            </button>
+          ) : (
+            <button
+              className="save-library-button"
+              type="button"
+              onClick={goToLogin}
+            >
+              Log in to save
+            </button>
+          )}
           {saveMessage && <p role="status">{saveMessage}</p>}
         </div>
       </section>
