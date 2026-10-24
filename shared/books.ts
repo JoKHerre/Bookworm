@@ -36,23 +36,31 @@ export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
 
 export const bookDetailsQuery = z.object({
   key: openLibraryWorkKey,
+  includeAuthors: z.enum(["true", "false"]).optional(),
 });
 
 export type BookDetailsQuery = z.infer<typeof bookDetailsQuery>;
 
 export const bookDetails = z.object({
   key: z.string(),
+  authors: z.array(z.string()),
   title: z.string(),
   description: z
     .union([z.string(), z.object({ value: z.string() })])
     .optional(),
-  authors: z.array(z.string()),
   first_publish_date: z.string().optional(),
   covers: z.array(z.number()).optional(),
   subjects: z.array(z.string()).optional(),
 });
 
 export type BookDetails = z.infer<typeof bookDetails>;
+
+export const bookISBNs = z.object({
+  isbn_13: z.array(z.string()),
+  isbn_10: z.array(z.string()),
+});
+
+export type BookISBNs = z.infer<typeof bookISBNs>;
 
 // Error body returned by any books route on failure
 

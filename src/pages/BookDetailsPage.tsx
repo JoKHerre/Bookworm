@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import type { BookDetails } from "../../shared/books";
+import type { BookISBNs, BookDetails } from "../../shared/books";
+import { getBookDetails, getBookISBNs } from "../booksApi";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
@@ -8,11 +9,21 @@ import "./BookDetailsPage.css";
 function BookDetailsPage() {
   const params = useParams();
   const bookKey = `/${params["*"] ?? ""}`;
+
+  // Reset the BookDetailsContent component whenever the bookKey changes.
+  return <BookDetailsContent key={bookKey} bookKey={bookKey} />;
+}
+
+function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const backLabel =
     (location.state as BookDetailsLocationState | null)?.backLabel ?? "Back";
+
+  const state = location.state as BookDetailsLocationState | null;
+  const searchBook =
+    state?.searchBook?.key === bookKey ? state.searchBook : undefined;
 
   function onBack() {
     if (location.key === "default") {
@@ -27,34 +38,50 @@ function BookDetailsPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false); // used to control save button's availability
   const [saveMessage, setSaveMessage] = useState(""); // used to display message to user after attempting to save a book
+  const [isbns, setISBNs] = useState<BookISBNs | null>(null);
+  const [isbnError, setISBNError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function getBookDetails() {
-      setLoading(true);
-      setError("");
-      setBook(null);
+    const controller = new AbortController();
+    const { signal } = controller;
 
-      try {
-        const response = await fetch(
-          `/api/books/details?key=${encodeURIComponent(bookKey)}`,
-        );
-
-        if (!response.ok) {
-          throw new Error("Could not find this book.");
+    getBookDetails(bookKey, signal, !searchBook?.author_name?.length)
+      .then((data) => {
+        if (!signal.aborted) setBook(data);
+      })
+      .catch((err) => {
+        if (!signal.aborted) {
+          setError(
+            err instanceof Error ? err.message : "Unable to load book details",
+          );
         }
+      })
+      .finally(() => {
+        if (!signal.aborted) setLoading(false);
+      });
 
-        const data: BookDetails = await response.json();
-        setBook(data);
-      } catch (error) {
-        console.error("Error loading book:", error);
-        setError("Could not load this book. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    }
+    return () => controller.abort();
+  }, [bookKey, searchBook]);
 
-    getBookDetails();
-  }, [bookKey]);
+  useEffect(() => {
+    if (loading || !book) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    getBookISBNs(bookKey, signal)
+      .then((data) => {
+        if (!signal.aborted) setISBNs(data);
+      })
+      .catch((err) => {
+        if (!signal.aborted) {
+          setISBNError(
+            err instanceof Error ? err.message : "Unable to load ISBNs",
+          );
+        }
+      });
+
+    return () => controller.abort();
+  }, [bookKey, loading, book]);
 
   function goToLogin() {
     const state: AuthLocationState = { from: location };
@@ -103,67 +130,51 @@ function BookDetailsPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main className="book-details">
-        <button className="back-button" onClick={onBack}>
-          {backLabel}
-        </button>
-        <p>Loading book details...</p>
-      </main>
-    );
-  }
-
-  if (error || !book) {
-    return (
-      <main className="book-details">
-        <button className="back-button" onClick={onBack}>
-          {backLabel}
-        </button>
-        <p>{error || "Book not found."}</p>
-      </main>
-    );
-  }
-
   const summary =
-    typeof book.description === "string"
+    typeof book?.description === "string"
       ? book.description
-      : book.description?.value;
+      : book?.description?.value;
 
-  const coverUrl = book.covers?.[0]
-    ? `https://covers.openlibrary.org/b/id/${book.covers[0]}-L.jpg`
+  const coverId = book?.covers?.[0] ?? searchBook?.cover_i;
+  const coverUrl = coverId
+    ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg`
     : null;
 
+  const title = book?.title ?? searchBook?.title ?? "Book details";
+
+  const isbn13List = isbns?.isbn_13 ?? [];
+  const isbn10List = isbns?.isbn_10 ?? [];
+  const totalIsbns = isbn13List.length + isbn10List.length;
+
   return (
-    <main className="book-details">
+    <main className="book-details" aria-busy={loading}>
       <button className="back-button" onClick={onBack}>
         {backLabel}
       </button>
 
-      {/* Book cover and basic information */}
       <section className="book-header">
         {coverUrl && (
           <img
             className="book-cover"
             src={coverUrl}
-            alt={`Cover of ${book.title}`}
+            alt={`Cover of ${title}`}
           />
         )}
 
         <div className="book-info">
-          <h1 className="book-details-title">{book.title}</h1>
+          <h1 className="book-details-title">{title}</h1>
 
           <p className="book-details-author">
-            {book.authors?.join(", ") || "Unknown author"}
+            {searchBook?.author_name?.join(", ") ||
+              book?.authors.join(", ") ||
+              "Unknown author"}
           </p>
-
-          {/* Button to save book to personal library */}
           {user ? (
             <button
               className="save-library-button"
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || loading || !book}
             >
               {saving ? "Saving..." : "Save to My Library"}
             </button>
@@ -180,28 +191,72 @@ function BookDetailsPage() {
         </div>
       </section>
 
-      {/* Book summary */}
-      <section className="book-summary">
-        <h2>Summary</h2>
-        <p>{summary || "No summary available."}</p>
-      </section>
+      {error && <p role="alert">{error}</p>}
 
-      {/* Book genres and subjects */}
-      <section className="book-genres">
-        <h2>Genres</h2>
+      {book && (
+        <>
+          <section className="book-summary">
+            <h2>Summary</h2>
+            <p>{summary || "No summary available."}</p>
+          </section>
 
-        {book.subjects && book.subjects.length > 0 ? (
-          <div className="genre-list">
-            {book.subjects.slice(0, 10).map((subject) => (
-              <span className="genre-tag" key={subject}>
-                {subject}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p>No genres or subjects available.</p>
-        )}
-      </section>
+          <section className="book-genres">
+            <h2>Genres</h2>
+
+            {book.subjects && book.subjects.length > 0 ? (
+              <div className="genre-list">
+                {book.subjects.slice(0, 10).map((subject) => (
+                  <span className="genre-tag" key={subject}>
+                    {subject}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p>No genres or subjects available.</p>
+            )}
+          </section>
+        </>
+      )}
+
+      {book && (
+        <section className="book-isbns">
+          <h2>ISBNs</h2>
+          <details>
+            <summary>Show all{isbns ? ` (${totalIsbns})` : ""}</summary>
+
+            {isbnError ? (
+              <p role="alert">{isbnError}</p>
+            ) : !isbns ? (
+              <p role="status">Loading ISBNs...</p>
+            ) : totalIsbns > 0 ? (
+              <div className="isbn-columns">
+                {isbn13List.length > 0 && (
+                  <div className="isbn-group">
+                    <h3>ISBN-13 ({isbn13List.length})</h3>
+                    <ul>
+                      {isbn13List.map((isbn) => (
+                        <li key={`isbn13-${isbn}`}>{isbn}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {isbn10List.length > 0 && (
+                  <div className="isbn-group">
+                    <h3>ISBN-10 ({isbn10List.length})</h3>
+                    <ul>
+                      {isbn10List.map((isbn) => (
+                        <li key={`isbn10-${isbn}`}>{isbn}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p>No ISBNs available for this book.</p>
+            )}
+          </details>
+        </section>
+      )}
     </main>
   );
 }
