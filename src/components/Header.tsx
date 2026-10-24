@@ -1,46 +1,37 @@
-import type { MouseEvent } from "react"; // type for mouse click event on an html element
+import { Link, NavLink, useLocation } from "react-router";
+import type { AuthLocationState } from "../routes";
+import { useAuth } from "../useAuth";
 import "./Header.css";
 
-export type AppPage = "discover" | "personal-library";
-
-// define the props the Header component expects to receive: current page, navigation function
-interface HeaderProps {
-  page: AppPage;
-  onNavigate: (page: AppPage) => void;
-}
-
-function Header({ page, onNavigate }: HeaderProps) {
-  // helper: switch page when user clicks a link
-  function navigate(event: MouseEvent<HTMLAnchorElement>, target: AppPage) {
-    event.preventDefault();
-    onNavigate(target);
-  }
+// NavLink sets aria-current="page" on the link matching the current URL
+function Header() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  // after logging in, come back to the page the user was on
+  const loginState: AuthLocationState = { from: location };
 
   return (
     <header className="site-header">
-      <a
-        className="site-logo"
-        href="/"
-        onClick={(event) => navigate(event, "discover")}
-      >
+      <NavLink className="site-logo" to="/">
         Bookworm
-      </a>
+      </NavLink>
 
       <nav className="main-nav" aria-label="Main navigation">
-        <a href="/" onClick={(event) => navigate(event, "discover")}>
+        <NavLink to="/" end>
           Home
-        </a>
-        <a href="/search" onClick={(event) => navigate(event, "discover")}>
-          Discover
-        </a>
-        <a
-          href="/personal-library"
-          aria-current={page === "personal-library" ? "page" : undefined}
-          onClick={(event) => navigate(event, "personal-library")}
-        >
-          My Library
-        </a>
-        <a href="/account">Account</a>
+        </NavLink>
+        <NavLink to="/search">Discover</NavLink>
+        <NavLink to="/personal-library">My Library</NavLink>
+        <NavLink to="/account">Account</NavLink>
+        {user ? (
+          <button className="nav-auth-button" type="button" onClick={logout}>
+            Log Out
+          </button>
+        ) : (
+          <Link to="/login" state={loginState} replace>
+            Log In
+          </Link>
+        )}
       </nav>
     </header>
   );

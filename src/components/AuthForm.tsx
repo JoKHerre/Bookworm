@@ -1,10 +1,16 @@
 import { useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "../useAuth";
 import "./AuthForm.css";
 
-export function AuthForm() {
+interface AuthFormProps {
+  mode: "login" | "register";
+}
+
+export function AuthForm({ mode }: AuthFormProps) {
   const { login, register } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const location = useLocation();
+  const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,7 +79,13 @@ export function AuthForm() {
         <button
           className="auth-toggle"
           type="button"
-          onClick={() => setMode(isLogin ? "register" : "login")}
+          // keep the "return to" state when switching between login and signup
+          onClick={() =>
+            void navigate(isLogin ? "/signup" : "/login", {
+              state: location.state,
+              replace: true,
+            })
+          }
         >
           {isLogin ? "Need an account? Sign Up" : "Have an account? Log in"}
         </button>
