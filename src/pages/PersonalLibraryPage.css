@@ -115,6 +115,12 @@
   outline-offset: 3px;
 }
 
+.personal-library-removal-error {
+  margin: 14px 0 0;
+  color: var(--olive);
+  font-size: 0.84rem;
+}
+
 .personal-library-book-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

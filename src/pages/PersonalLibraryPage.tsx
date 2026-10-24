@@ -24,12 +24,57 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
   const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
   const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
   const [error, setError] = useState(""); // message to display in case of error loading the saved books
+  const [removalError, setRemovalError] = useState(""); // message to display if removing a book fails
+  const [removingBookIds, setRemovingBookIds] = useState<Set<number>>(
+    () => new Set(),
+  ); // saved-book rows whose removal requests are in progress
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
   const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null); // for clicking on a book to view detail view
+
+  // remove a book:
+  async function removeBook(id: number, title: string) {
+    // clear any previous removal error msg + add book's id to set of books being removed
+    setRemovalError("");
+    setRemovingBookIds((currentIds) => new Set(currentIds).add(id));
+
+    try {
+      // send DELETE request to server
+      const response = await fetch(`/api/library/${id}`, { method: "DELETE" });
+
+      // handle error status codes with error messages to display to user
+      if (response.status === 401) {
+        throw new Error("Your session has expired. Please sign in again.");
+      }
+      if (response.status === 404) {
+        throw new Error(`Could not find “${title}” in your library to remove.`);
+      }
+      if (!response.ok) {
+        throw new Error(`Could not remove “${title}” from your library.`);
+      }
+
+      // successful DELETE: update the visible list by filtering out the removed book
+      setBooks((currentBooks) => currentBooks.filter((book) => book.id !== id));
+    } catch (removeError) {
+      // display the error message thrown from try block, or a generic msg
+      setRemovalError(
+        removeError instanceof Error
+          ? removeError.message
+          : `Could not remove “${title}” from your library. Please try again.`,
+      );
+    } finally {
+      // remove the book's id from the set of books being removed, regardless of success or failure
+      setRemovingBookIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(id);
+        return nextIds;
+      });
+    }
+  }
 
   useEffect(() => {
     let isCurrentRequest = true;
 
+    // loading the personal library: fetch list of saved books, then fetch details for each book
     async function loadPersonalLibrary() {
       // set loading to true and clear any previous error message
       setLoading(true);
@@ -136,6 +181,12 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
             </div>
           </div>
 
+          {removalError && (
+            <p className="personal-library-removal-error" role="alert">
+              {removalError}
+            </p>
+          )}
+
           {/* display loading msg, error + try again button if failure, empty state if no saved books, or the list of saved books */}
           {loading ? (
             <p className="personal-library-message" role="status">
@@ -165,6 +216,7 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
               {books.map(({ id, bookKey, details }) => {
                 const title = details?.title ?? "Book details unavailable";
                 const coverId = details?.covers?.[0];
+                const isRemoving = removingBookIds.has(id);
 
                 return (
                   <li className="personal-library-book-card" key={id}>
@@ -202,9 +254,12 @@ function PersonalLibraryPage({ onGoToDiscover }: PersonalLibraryPageProps) {
                     <button
                       className="personal-library-book-remove"
                       type="button"
-                      aria-label={`Remove ${title} from my library`}
+                      aria-label={`${isRemoving ? "Removing" : "Remove"} ${title} from my library`}
+                      aria-busy={isRemoving}
+                      disabled={isRemoving}
+                      onClick={() => void removeBook(id, title)}
                     >
-                      Remove
+                      {isRemoving ? "Removing…" : "Remove"}
                     </button>
                   </li>
                 );
