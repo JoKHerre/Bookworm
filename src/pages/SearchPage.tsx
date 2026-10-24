@@ -1,62 +1,74 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import type { BookSearchResponse, BookSearchResult } from "../../shared/books";
 import BookCard from "../components/BookCard";
-import BookDetailsPage from "./BookDetailsPage";
+import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
 type ViewMode = "grid" | "list";
 
 function SearchPage() {
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const submittedQuery = searchParams.get("q") ?? "";
+  const navigate = useNavigate();
+
+  const [query, setQuery] = useState(submittedQuery);
   const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [searched, setSearched] = useState(false);
-  const [selectedBookKey, setSelectedBookKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const searched = submittedQuery !== "";
+  const visibleBooks = searched ? books : [];
+  const visibleError = searched ? error : "";
+  const visibleLoading = searched && loading;
 
-  async function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    if (!submittedQuery) return;
 
-    if (!query.trim()) {
+    let isCurrentRequest = true;
+
+    async function search() {
+      setLoading(true);
       setError("");
-      setBooks([]);
-      setSearched(false);
-      return;
-    }
 
-    setLoading(true);
-    setError("");
-    setSearched(true);
-    setSelectedBookKey(null);
+      try {
+        const response = await fetch(
+          `/api/books/search?q=${encodeURIComponent(submittedQuery)}`,
+        );
 
-    try {
-      const response = await fetch(
-        `/api/books/search?q=${encodeURIComponent(query.trim())}`,
-      );
+        if (!response.ok) {
+          throw new Error("Search failed.");
+        }
 
-      if (!response.ok) {
-        throw new Error("Search failed.");
+        const data: BookSearchResponse = await response.json();
+        if (isCurrentRequest) setBooks(data.books ?? []);
+      } catch (err) {
+        console.error("Book search error:", err);
+        if (isCurrentRequest) {
+          setError("Unable to search for books. Please try again.");
+          setBooks([]);
+        }
+      } finally {
+        if (isCurrentRequest) setLoading(false);
       }
-
-      const data: BookSearchResponse = await response.json();
-      setBooks(data.books ?? []);
-    } catch (err) {
-      console.error("Book search error:", err);
-      setError("Unable to search for books. Please try again.");
-      setBooks([]);
-    } finally {
-      setLoading(false);
     }
+
+    search();
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [submittedQuery]);
+
+  function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = query.trim();
+    setSearchParams(trimmed ? { q: trimmed } : {});
   }
 
-  if (selectedBookKey) {
-    return (
-      <BookDetailsPage
-        bookKey={selectedBookKey}
-        onBack={() => setSelectedBookKey(null)}
-      />
-    );
+  function viewBook(bookKey: string) {
+    const state: BookDetailsLocationState = { backLabel: "Back to Search" };
+    void navigate(bookDetailsPath(bookKey), { state });
   }
 
   return (
@@ -72,26 +84,34 @@ function SearchPage() {
               aria-label="Search by title or author"
             />
 
-            <button type="submit" disabled={loading}>
-              {loading ? "Searching..." : "Search"}
+            <button type="submit" disabled={visibleLoading}>
+              {visibleLoading ? "Searching..." : "Search"}
             </button>
           </div>
         </form>
       </section>
 
-      {error && <p className="search-message search-message--error">{error}</p>}
-
-      {loading && <p className="search-message">Searching for books...</p>}
-
-      {!loading && !error && searched && books.length === 0 && (
-        <p className="search-message">No results.</p>
+      {visibleError && (
+        <p className="search-message search-message--error">{visibleError}</p>
       )}
 
-      {!loading && !error && books.length > 0 && (
+      {visibleLoading && (
+        <p className="search-message">Searching for books...</p>
+      )}
+
+      {!visibleLoading &&
+        !visibleError &&
+        searched &&
+        visibleBooks.length === 0 && (
+          <p className="search-message">No results.</p>
+        )}
+
+      {!visibleLoading && !visibleError && visibleBooks.length > 0 && (
         <>
           <div className="search-results-toolbar">
             <p className="search-results-count">
-              {books.length} {books.length === 1 ? "book" : "books"} found
+              {visibleBooks.length}{" "}
+              {visibleBooks.length === 1 ? "book" : "books"} found
             </p>
 
             <div
@@ -121,22 +141,22 @@ function SearchPage() {
 
           {viewMode === "grid" ? (
             <section className="book-grid" aria-label="Book search results">
-              {books.map((book) => (
+              {visibleBooks.map((book) => (
                 <BookCard
                   key={book.key}
                   book={book}
-                  onClick={() => setSelectedBookKey(book.key)}
+                  onClick={() => viewBook(book.key)}
                 />
               ))}
             </section>
           ) : (
             <section className="book-list" aria-label="Book search results">
-              {books.map((book) => (
+              {visibleBooks.map((book) => (
                 <button
                   key={book.key}
                   type="button"
                   className="book-list-item"
-                  onClick={() => setSelectedBookKey(book.key)}
+                  onClick={() => viewBook(book.key)}
                   aria-label={`View details for ${book.title} by ${
                     book.author_name?.join(", ") || "Unknown author"
                   }`}
