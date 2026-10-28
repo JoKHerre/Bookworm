@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import type { BookSearchResponse, BookSearchResult } from "../../shared/books";
+import type { BookSearchResult } from "../../shared/books";
+import { searchBooks } from "../booksApi";
 import BookCard from "../components/BookCard";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
@@ -12,8 +13,9 @@ function SearchPage() {
   const submittedQuery = searchParams.get("q") ?? "";
   const navigate = useNavigate();
 
-  const [query, setQuery] = useState(submittedQuery);
   const [books, setBooks] = useState<BookSearchResult[]>([]);
+  const [total, setTotal] = useState(0);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -25,50 +27,52 @@ function SearchPage() {
   useEffect(() => {
     if (!submittedQuery) return;
 
-    let isCurrentRequest = true;
+    const controller = new AbortController();
+    const { signal } = controller;
 
     async function search() {
       setLoading(true);
       setError("");
 
       try {
-        const response = await fetch(
-          `/api/books/search?q=${encodeURIComponent(submittedQuery)}`,
-        );
-
-        if (!response.ok) {
-          throw new Error("Search failed.");
+        const data = await searchBooks(submittedQuery, signal);
+        if (!signal.aborted) {
+          setBooks(data.books);
+          setTotal(data.total);
         }
-
-        const data: BookSearchResponse = await response.json();
-        if (isCurrentRequest) setBooks(data.books ?? []);
       } catch (err) {
-        console.error("Book search error:", err);
-        if (isCurrentRequest) {
-          setError("Unable to search for books. Please try again.");
-          setBooks([]);
-        }
+        if (signal.aborted) return;
+        setError(
+          err instanceof Error ? err.message : "Unable to search for books",
+        );
+        setBooks([]);
+        setTotal(0);
       } finally {
-        if (isCurrentRequest) setLoading(false);
+        if (!signal.aborted) setLoading(false);
       }
     }
 
-    search();
-
-    return () => {
-      isCurrentRequest = false;
-    };
-  }, [submittedQuery]);
+    void search();
+    return () => controller.abort();
+  }, [submittedQuery, searchAttempt]);
 
   function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmed = query.trim();
-    setSearchParams(trimmed ? { q: trimmed } : {});
+    const formData = new FormData(event.currentTarget);
+    const trimmed = String(formData.get("q") ?? "").trim();
+    if (trimmed === submittedQuery) {
+      setSearchAttempt((attempt) => attempt + 1);
+    } else {
+      setSearchParams(trimmed ? { q: trimmed } : {});
+    }
   }
 
-  function viewBook(bookKey: string) {
-    const state: BookDetailsLocationState = { backLabel: "Back to Search" };
-    void navigate(bookDetailsPath(bookKey), { state });
+  function viewBook(book: BookSearchResult) {
+    const state: BookDetailsLocationState = {
+      backLabel: "Back to Search",
+      searchBook: book,
+    };
+    void navigate(bookDetailsPath(book.key), { state });
   }
 
   return (
@@ -78,8 +82,9 @@ function SearchPage() {
           <div className="search-form-inner">
             <input
               type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              key={submittedQuery}
+              name="q"
+              defaultValue={submittedQuery}
               placeholder="Search by title or author..."
               aria-label="Search by title or author"
             />
@@ -110,8 +115,8 @@ function SearchPage() {
         <>
           <div className="search-results-toolbar">
             <p className="search-results-count">
-              {visibleBooks.length}{" "}
-              {visibleBooks.length === 1 ? "book" : "books"} found
+              Showing {visibleBooks.length} of {total}{" "}
+              {total === 1 ? "result" : "results"}
             </p>
 
             <div
@@ -145,7 +150,7 @@ function SearchPage() {
                 <BookCard
                   key={book.key}
                   book={book}
-                  onClick={() => viewBook(book.key)}
+                  onClick={() => viewBook(book)}
                 />
               ))}
             </section>
@@ -156,7 +161,7 @@ function SearchPage() {
                   key={book.key}
                   type="button"
                   className="book-list-item"
-                  onClick={() => viewBook(book.key)}
+                  onClick={() => viewBook(book)}
                   aria-label={`View details for ${book.title} by ${
                     book.author_name?.join(", ") || "Unknown author"
                   }`}
