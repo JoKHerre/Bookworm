@@ -116,12 +116,19 @@
 
 .book-summary h2,
 .book-genres h2,
-.book-isbns h2 {
+.book-isbns h2,
+.library-availability h2 {
   color: var(--olive);
   font-size: 24px;
   border-bottom: 1.5px solid var(--tan);
   padding-bottom: 12px;
   margin-bottom: 20px;
+}
+
+.library-availability .branches {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
 }
 
 .book-summary p {

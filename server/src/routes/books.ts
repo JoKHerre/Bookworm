@@ -8,6 +8,8 @@ import {
   type BooksError,
 } from "../../../shared/books.ts";
 
+import { checkBookAvailability } from "../services/bookAvailability.ts";
+
 import {
   searchOpenLibrary,
   getBookDetails,
@@ -90,3 +92,19 @@ booksRouter.get(
     }
   },
 );
+
+
+booksRouter.get("/availability", async (req, res) => {
+  const parsed = bookDetailsQuery.pick({ key: true }).safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+
+  try {
+    res.json({ availability: await checkBookAvailability(parsed.data.key) });
+  } catch (error) {
+    console.error("Availability check failed:", error);
+    res.status(502).json({ error: "Could not check library availability" });
+  }
+});
