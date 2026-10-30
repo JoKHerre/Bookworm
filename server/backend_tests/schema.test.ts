@@ -73,6 +73,7 @@ test("COL-01-T-4 creates the saved-books table", async () => {
     "book_key",
     "created_at",
     "id",
+    "reading_status",
     "user_id",
   ]);
 
@@ -82,8 +83,25 @@ test("COL-01-T-4 creates the saved-books table", async () => {
   assert.equal(columns.get("id")?.is_identity, "YES");
   assert.equal(columns.get("user_id")?.is_nullable, "NO");
   assert.equal(columns.get("book_key")?.is_nullable, "NO");
+  assert.equal(columns.get("reading_status")?.is_nullable, "NO");
+  assert.match(
+    columns.get("reading_status")?.column_default ?? "",
+    /to_be_read/,
+  );
   assert.equal(columns.get("created_at")?.is_nullable, "NO");
   assert.ok(columns.get("created_at")?.column_default);
+
+  const statuses = await pool.query<{ enumlabel: string }>(
+    `SELECT e.enumlabel
+     FROM pg_enum e
+     JOIN pg_type t ON t.oid = e.enumtypid
+     WHERE t.typname = 'reading_status'
+     ORDER BY e.enumsortorder`,
+  );
+  assert.deepEqual(
+    statuses.rows.map(({ enumlabel }) => enumlabel),
+    ["to_be_read", "currently_reading", "finished"],
+  );
 
   // get the table's indexes and check that there is a unique index on (user_id, book_key)
   const indexes = await pool.query<{ indexdef: string }>(
@@ -98,6 +116,67 @@ test("COL-01-T-4 creates the saved-books table", async () => {
         indexdef.includes("book_key"),
     ),
     "Expected a unique index on (user_id, book_key)",
+  );
+});
+
+// COL-02 reading status tests
+test("COL-02-T-1 defaults saved books to to_be_read", async () => {
+  // create sample user and book key
+  const user = await createTestUser();
+  const bookKey = createTestBookKey();
+
+  // insert a saved_books row without specifying reading_status
+  const result = await pool.query<{ reading_status: string }>(
+    `INSERT INTO saved_books (user_id, book_key)
+     VALUES ($1, $2)
+     RETURNING reading_status`,
+    [user.id, bookKey],
+  );
+
+  // check that reading_status is present and set to "to_be_read"
+  assert.equal(result.rows[0]?.reading_status, "to_be_read");
+});
+
+test("COL-02-T-1 accepts each supported reading status", async () => {
+  // create sample user
+  const user = await createTestUser();
+  const statuses = ["to_be_read", "currently_reading", "finished"];
+
+  // try inserting a saved_books row for each of the reading statuses
+  // ensure that each status is accepted and returned correctly
+  for (const status of statuses) {
+    const result = await pool.query<{ reading_status: string }>(
+      `INSERT INTO saved_books (user_id, book_key, reading_status)
+       VALUES ($1, $2, $3)
+       RETURNING reading_status`,
+      [user.id, createTestBookKey(), status],
+    );
+    assert.equal(result.rows[0]?.reading_status, status);
+  }
+});
+
+test("COL-02-T-1 rejects unsupported and null reading statuses", async () => {
+  // create sample user
+  const user = await createTestUser();
+
+  // try inserting saved_books row with an unsupported reading statuses
+  // ensure errors occur
+  await assert.rejects(
+    pool.query(
+      `INSERT INTO saved_books (user_id, book_key, reading_status)
+       VALUES ($1, $2, $3)`,
+      [user.id, createTestBookKey(), "on_hold"],
+    ),
+    (error) => hasPostgresErrorCode(error, "22P02"),
+  );
+
+  await assert.rejects(
+    pool.query(
+      `INSERT INTO saved_books (user_id, book_key, reading_status)
+       VALUES ($1, $2, NULL)`,
+      [user.id, createTestBookKey()],
+    ),
+    (error) => hasPostgresErrorCode(error, "23502"),
   );
 });
 

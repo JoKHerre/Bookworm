@@ -91,7 +91,12 @@ libraryRouter.post("/", requireAuth, async (req, res) => {
       // if duplicate conflict, do nothing
       target: [savedBooks.userId, savedBooks.bookKey],
     })
-    .returning(); // return the new row if successfully inserted
+    .returning({
+      id: savedBooks.id,
+      userId: savedBooks.userId,
+      bookKey: savedBooks.bookKey,
+      createdAt: savedBooks.createdAt,
+    }); // return the existing API response fields if successfully inserted
 
   // no row returned == skipped insert due to duplicate; return 409 with error message
   if (!savedBook) {

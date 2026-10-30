@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -32,6 +33,13 @@ export const sessions = pgTable(
   (t) => [index("session_user_id_idx").on(t.userId)],
 );
 
+// define the allowed reading status values for user's saved books
+export const readingStatusEnum = pgEnum("reading_status", [
+  "to_be_read",
+  "currently_reading",
+  "finished",
+]);
+
 export const savedBooks = pgTable(
   "saved_books",
   {
@@ -40,6 +48,9 @@ export const savedBooks = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     bookKey: text("book_key").notNull(),
+    readingStatus: readingStatusEnum("reading_status")
+      .notNull()
+      .default("to_be_read"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
