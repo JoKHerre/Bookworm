@@ -22,12 +22,27 @@ function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [suggestionQuery, setSuggestionQuery] = useState("");
+  const [query, setQuery] = useState(submittedQuery);
+  const [previousSubmittedQuery, setPreviousSubmittedQuery] =
+    useState(submittedQuery);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState<BookSearchResult[]>([]);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const showList = showSuggestions && suggestions.length > 0;
+  const activeSuggestion = showList
+    ? suggestions[activeSuggestionIndex]
+    : undefined;
   const searched = submittedQuery !== "";
   const visibleBooks = searched ? books : [];
   const visibleError = searched ? error : "";
   const visibleLoading = searched && loading;
+
+  if (submittedQuery !== previousSubmittedQuery) {
+    setPreviousSubmittedQuery(submittedQuery);
+    setQuery(submittedQuery);
+    setSuggestions([]);
+    closeSuggestions();
+  }
 
   useEffect(() => {
     if (!submittedQuery) return;
@@ -62,7 +77,9 @@ function SearchPage() {
   }, [submittedQuery, searchAttempt]);
 
   useEffect(() => {
-    const parsed = bookSuggestionsQuery.safeParse({ q: suggestionQuery });
+    if (!showSuggestions) return;
+
+    const parsed = bookSuggestionsQuery.safeParse({ q: query });
     if (!parsed.success) return;
 
     const controller = new AbortController();
@@ -81,18 +98,47 @@ function SearchPage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [suggestionQuery]);
+  }, [query, showSuggestions]);
 
-  function updateSuggestionQuery(value: string) {
-    setSuggestionQuery(value);
+  function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setQuery(event.target.value);
+    setShowSuggestions(true);
     setSuggestions([]);
+    setActiveSuggestionIndex(-1);
+  }
+
+  function closeSuggestions() {
+    setShowSuggestions(false);
+    setActiveSuggestionIndex(-1);
+  }
+
+  function handleSuggestionKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (!showList) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveSuggestionIndex((index) => (index + 1) % suggestions.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveSuggestionIndex((index) =>
+        index <= 0 ? suggestions.length - 1 : index - 1,
+      );
+    } else if (event.key === "Enter" && activeSuggestion) {
+      event.preventDefault();
+      viewBook(activeSuggestion);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeSuggestions();
+    }
   }
 
   function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    updateSuggestionQuery("");
-    const formData = new FormData(event.currentTarget);
-    const trimmed = String(formData.get("q") ?? "").trim();
+    closeSuggestions();
+    const trimmed = query.trim();
+    setQuery(trimmed);
     if (trimmed === submittedQuery) {
       setSearchAttempt((attempt) => attempt + 1);
     } else {
@@ -112,50 +158,64 @@ function SearchPage() {
     <main className="search-page">
       <section className="search-intro">
         <form className="book-search-form" onSubmit={handleSearch}>
-          <div className="search-form-inner">
-            <div className="search-input-wrapper">
-              <input
-                type="search"
-                key={submittedQuery}
-                name="q"
-                defaultValue={submittedQuery}
-                onChange={(event) => updateSuggestionQuery(event.target.value)}
-                onFocus={(event) =>
-                  updateSuggestionQuery(event.currentTarget.value)
-                }
-                onBlur={() => updateSuggestionQuery("")}
-                autoComplete="off"
-                placeholder="Search by title or author..."
-                aria-label="Search by title or author"
-                aria-controls={
-                  suggestions.length > 0 ? "book-suggestions" : undefined
-                }
-              />
+          <div className="search-input-wrapper">
+            <input
+              type="search"
+              name="q"
+              value={query}
+              onChange={handleInputChange}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={closeSuggestions}
+              onKeyDown={handleSuggestionKeyDown}
+              autoComplete="off"
+              placeholder="Search by title or author"
+              aria-label="Search by title or author"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={showList}
+              aria-controls={showList ? "book-suggestions" : undefined}
+              aria-activedescendant={
+                activeSuggestion
+                  ? `book-suggestion-${activeSuggestionIndex}`
+                  : undefined
+              }
+            />
 
-              {suggestions.length > 0 && (
-                <ul
-                  id="book-suggestions"
-                  className="book-suggestions"
-                  aria-label="Book suggestions"
-                >
-                  {suggestions.map((book) => (
-                    <li key={book.key} className="book-suggestion">
-                      <span className="book-suggestion-title">
-                        {book.title}
-                      </span>
-                      <span className="book-suggestion-author">
-                        {book.author_name?.join(", ") || "Unknown author"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <button type="submit" disabled={visibleLoading}>
-              {visibleLoading ? "Searching..." : "Search"}
-            </button>
+            {showList && (
+              <ul
+                id="book-suggestions"
+                className="book-suggestions"
+                role="listbox"
+                aria-label="Book suggestions"
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                {suggestions.map((book, index) => (
+                  <li
+                    key={book.key}
+                    id={`book-suggestion-${index}`}
+                    className={
+                      index === activeSuggestionIndex
+                        ? "book-suggestion active"
+                        : "book-suggestion"
+                    }
+                    role="option"
+                    aria-selected={index === activeSuggestionIndex}
+                    onMouseEnter={() => setActiveSuggestionIndex(index)}
+                    onClick={() => viewBook(book)}
+                  >
+                    <span className="book-suggestion-title">{book.title}</span>
+                    <span className="book-suggestion-author">
+                      {book.author_name?.join(", ") || "Unknown author"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+
+          <button type="submit" disabled={visibleLoading}>
+            {visibleLoading ? "Searching..." : "Search"}
+          </button>
         </form>
       </section>
 
@@ -258,7 +318,7 @@ function SearchPage() {
                   </div>
 
                   <span className="book-list-action" aria-hidden="true">
-                    View details →
+                    View details
                   </span>
                 </button>
               ))}
