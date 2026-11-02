@@ -33,3 +33,13 @@ Serves SRC-03 (show book suggestions while the user types). This task adds the b
 3. Blank queries, queries shorter than three characters, and queries made only of common words return HTTP 400; Open Library is not called for them.
 4. An Open Library failure returns HTTP 502 with the standard `{ "error": "..." }` response, with no automatic retry.
 5. The existing `GET /api/books/search` endpoint continues to request up to 20 results.
+
+## Tests
+
+| Test name                                         | Asserts                                                                                 | Criterion |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------- | --------- |
+| SRC-03-T-2 rejects invalid suggestion queries     | Blank, short, and common-word-only queries return 400; the upstream fetch is not called | 3         |
+| SRC-03-T-2 limits suggestion results              | A valid query returns at most five books and sends `limit=5` upstream                   | 1         |
+| SRC-03-T-2 sends a prefix query for partial words | A query such as `harry pot` sends `pot*` as its final search term                       | 2         |
+| SRC-03-T-2 handles an Open Library failure        | An upstream failure returns 502 with an `error` string and makes one upstream request   | 4         |
+| SRC-03-T-2 preserves submitted search behavior    | The existing search endpoint still sends `limit=20` and returns its standard response   | 5         |
