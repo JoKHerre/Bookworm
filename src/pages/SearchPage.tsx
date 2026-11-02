@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import type { BookSearchResult } from "../../shared/books";
-import { searchBooks } from "../booksApi";
+import {
+  bookSuggestionsQuery,
+  type BookSearchResult,
+} from "../../shared/books";
+import { getBookSuggestions, searchBooks } from "../booksApi";
 import BookCard from "../components/BookCard";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
@@ -19,6 +22,8 @@ function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [suggestionQuery, setSuggestionQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<BookSearchResult[]>([]);
   const searched = submittedQuery !== "";
   const visibleBooks = searched ? books : [];
   const visibleError = searched ? error : "";
@@ -56,8 +61,36 @@ function SearchPage() {
     return () => controller.abort();
   }, [submittedQuery, searchAttempt]);
 
+  useEffect(() => {
+    const parsed = bookSuggestionsQuery.safeParse({ q: suggestionQuery });
+    if (!parsed.success) return;
+
+    const controller = new AbortController();
+    const { signal } = controller;
+    const timeout = window.setTimeout(() => {
+      void getBookSuggestions(parsed.data.q, signal)
+        .then((data) => {
+          if (!signal.aborted) setSuggestions(data.books);
+        })
+        .catch(() => {
+          if (!signal.aborted) setSuggestions([]);
+        });
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [suggestionQuery]);
+
+  function updateSuggestionQuery(value: string) {
+    setSuggestionQuery(value);
+    setSuggestions([]);
+  }
+
   function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
+    updateSuggestionQuery("");
     const formData = new FormData(event.currentTarget);
     const trimmed = String(formData.get("q") ?? "").trim();
     if (trimmed === submittedQuery) {
@@ -80,14 +113,44 @@ function SearchPage() {
       <section className="search-intro">
         <form className="book-search-form" onSubmit={handleSearch}>
           <div className="search-form-inner">
-            <input
-              type="search"
-              key={submittedQuery}
-              name="q"
-              defaultValue={submittedQuery}
-              placeholder="Search by title or author..."
-              aria-label="Search by title or author"
-            />
+            <div className="search-input-wrapper">
+              <input
+                type="search"
+                key={submittedQuery}
+                name="q"
+                defaultValue={submittedQuery}
+                onChange={(event) => updateSuggestionQuery(event.target.value)}
+                onFocus={(event) =>
+                  updateSuggestionQuery(event.currentTarget.value)
+                }
+                onBlur={() => updateSuggestionQuery("")}
+                autoComplete="off"
+                placeholder="Search by title or author..."
+                aria-label="Search by title or author"
+                aria-controls={
+                  suggestions.length > 0 ? "book-suggestions" : undefined
+                }
+              />
+
+              {suggestions.length > 0 && (
+                <ul
+                  id="book-suggestions"
+                  className="book-suggestions"
+                  aria-label="Book suggestions"
+                >
+                  {suggestions.map((book) => (
+                    <li key={book.key} className="book-suggestion">
+                      <span className="book-suggestion-title">
+                        {book.title}
+                      </span>
+                      <span className="book-suggestion-author">
+                        {book.author_name?.join(", ") || "Unknown author"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <button type="submit" disabled={visibleLoading}>
               {visibleLoading ? "Searching..." : "Search"}

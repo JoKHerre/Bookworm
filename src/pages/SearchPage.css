@@ -259,3 +259,55 @@
     display: none;
   }
 }
+
+/* Book search suggestions */
+
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-input-wrapper input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.book-suggestions {
+  position: absolute;
+  padding: 6px;
+  list-style: none;
+  text-align: left;
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.book-suggestion {
+  padding: 10px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.book-suggestion:hover,
+.book-suggestion.active {
+  background: #eee5d5;
+}
+
+.book-suggestion-title,
+.book-suggestion-author {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.book-suggestion-title {
+  font-weight: 600;
+}
+
+.book-suggestion-author {
+  margin-top: 2px;
+  font-size: 14px;
+  opacity: 0.75;
+}
