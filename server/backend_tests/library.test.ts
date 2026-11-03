@@ -82,6 +82,22 @@ async function deleteBook(id: number | string, token?: string) {
   });
 }
 
+// send a PATCH request to update /api/library/:id/reading-status
+async function patchReadingStatus(
+  id: number | string,
+  body: unknown,
+  token?: string,
+) {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (token) headers.set("cookie", `session=${token}`);
+
+  return fetch(`${baseUrl}/api/library/${id}/reading-status`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body) ?? "",
+  });
+}
+
 // return all rows in saved_books for a given bookKey
 async function rowsForBook(bookKey: string) {
   return db.select().from(savedBooks).where(eq(savedBooks.bookKey, bookKey));
@@ -323,6 +339,202 @@ test("COL-03 returns not found for a missing row and repeated removal", async ()
   const repeatedResponse = await deleteBook(savedBook.id, user.token);
   assert.equal(repeatedResponse.status, 404);
   assert.deepEqual(await repeatedResponse.json(), {
+    error: "Book not found in your library",
+  });
+  assert.equal((await rowsForBook(savedBook.bookKey)).length, 0);
+});
+
+test("COL-02-T-3 updates a saved book's reading status", async () => {
+  // create test user and saved book
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+
+  // send patch request to update reading status
+  const response = await patchReadingStatus(
+    savedBook.id,
+    { readingStatus: "currently_reading" },
+    user.token,
+  );
+  const body = (await response.json()) as {
+    id: number;
+    readingStatus: string;
+  };
+
+  // check response and db
+  assert.equal(response.status, 200);
+  assert.deepEqual(body, {
+    id: savedBook.id,
+    readingStatus: "currently_reading",
+  });
+
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.id, savedBook.id);
+  assert.equal(rows[0]?.userId, user.id);
+  assert.equal(rows[0]?.readingStatus, "currently_reading");
+});
+
+test("COL-02-T-3 allows changing between all supported statuses", async () => {
+  // create test user and saved book + validate initial reading status
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+  const [initialRow] = await rowsForBook(savedBook.bookKey);
+  assert.ok(initialRow);
+  assert.equal(initialRow.readingStatus, "to_be_read");
+
+  // iterate through all valid reading statuses and update the saved book's status
+  for (const readingStatus of ["to_be_read", "currently_reading", "finished"]) {
+    const response = await patchReadingStatus(
+      savedBook.id,
+      { readingStatus },
+      user.token,
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      id: savedBook.id,
+      readingStatus,
+    });
+
+    const rows = await rowsForBook(savedBook.bookKey);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.readingStatus, readingStatus);
+  }
+
+  // try repeating same reading status update; ensure it succeeds and does not create a new row
+  const repeatedResponse = await patchReadingStatus(
+    savedBook.id,
+    { readingStatus: "finished" },
+    user.token,
+  );
+  assert.equal(repeatedResponse.status, 200);
+  assert.deepEqual(await repeatedResponse.json(), {
+    id: savedBook.id,
+    readingStatus: "finished",
+  });
+
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.id, initialRow.id);
+  assert.equal(rows[0]?.userId, initialRow.userId);
+  assert.equal(rows[0]?.bookKey, initialRow.bookKey);
+  assert.equal(rows[0]?.createdAt.getTime(), initialRow.createdAt.getTime());
+  assert.equal(rows[0]?.readingStatus, "finished");
+});
+
+test("COL-02-T-3 rejects an unauthenticated status update", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+
+  // send patch request without a session token
+  const response = await patchReadingStatus(savedBook.id, {
+    readingStatus: "finished",
+  });
+
+  // assert failure and that reading status remains unchanged in db
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Not logged in" });
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.readingStatus, "to_be_read");
+});
+
+test("COL-02-T-3 rejects invalid saved-book IDs", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+
+  // iterate through list of invalid IDs and send patch requests; assert 400 status and error message for each
+  for (const invalidId of [
+    "abc",
+    "0",
+    "-1",
+    "1.5",
+    "2147483648",
+    "9007199254740992",
+  ]) {
+    const response = await patchReadingStatus(
+      invalidId,
+      { readingStatus: "finished" },
+      user.token,
+    );
+    assert.equal(response.status, 400, `Expected ${invalidId} to be rejected`);
+    assert.deepEqual(await response.json(), {
+      error: "Invalid saved book ID",
+    });
+  }
+
+  // ensure book's reading status remains unchanged in db
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.id, savedBook.id);
+  assert.equal(rows[0]?.readingStatus, "to_be_read");
+});
+
+test("COL-02-T-3 rejects invalid reading statuses", async () => {
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+  const invalidBodies: unknown[] = [
+    {},
+    { readingStatus: null },
+    { readingStatus: 1 },
+    { readingStatus: "on_hold" },
+    { readingStatus: "finished", unexpected: true },
+  ];
+
+  // iterate through list of invalid request bodies and send patch requests; assert 400 status and error message for each
+  for (const body of invalidBodies) {
+    const response = await patchReadingStatus(savedBook.id, body, user.token);
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      error: "Invalid reading status",
+    });
+  }
+
+  // ensure book's reading status remains unchanged in db
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.readingStatus, "to_be_read");
+});
+
+test("COL-02-T-3 does not update another user's saved book", async () => {
+  const requester = await createSignedInUser();
+  const owner = await createSignedInUser();
+  const savedBook = await createSavedBook(owner.token);
+
+  // send patch request to update reading status of another user's saved book
+  const response = await patchReadingStatus(
+    savedBook.id,
+    { readingStatus: "finished" },
+    requester.token,
+  );
+
+  // assert failure and that reading status remains unchanged in db
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
+    error: "Book not found in your library",
+  });
+  const rows = await rowsForBook(savedBook.bookKey);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.userId, owner.id);
+  assert.equal(rows[0]?.readingStatus, "to_be_read");
+});
+
+test("COL-02-T-3 returns not found for a missing saved book", async () => {
+  // save book, then delete it
+  const user = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+  const deleteResponse = await deleteBook(savedBook.id, user.token);
+  assert.equal(deleteResponse.status, 204);
+
+  // attempt to update reading status of the deleted book
+  const response = await patchReadingStatus(
+    savedBook.id,
+    { readingStatus: "finished" },
+    user.token,
+  );
+
+  // assert failure and that no rows exist in db for this book key
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), {
     error: "Book not found in your library",
   });
   assert.equal((await rowsForBook(savedBook.bookKey)).length, 0);
