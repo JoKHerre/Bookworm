@@ -71,6 +71,14 @@ async function createSavedBook(token: string) {
   return { bookKey, id: savedBook.id };
 }
 
+// send a GET request to /api/library
+async function getLibrary(token?: string) {
+  const headers = new Headers();
+  if (token) headers.set("cookie", `session=${token}`);
+
+  return fetch(`${baseUrl}/api/library`, { headers });
+}
+
 // send a DELETE request to /api/library/:id
 async function deleteBook(id: number | string, token?: string) {
   const headers = new Headers();
@@ -342,6 +350,46 @@ test("COL-03 returns not found for a missing row and repeated removal", async ()
     error: "Book not found in your library",
   });
   assert.equal((await rowsForBook(savedBook.bookKey)).length, 0);
+});
+
+test("COL-02-T-2 includes reading status in the signed-in user's library", async () => {
+  const user = await createSignedInUser();
+  const otherUser = await createSignedInUser();
+  const savedBook = await createSavedBook(user.token);
+  const otherUsersBook = await createSavedBook(otherUser.token);
+
+  const updateResponse = await patchReadingStatus(
+    savedBook.id,
+    { readingStatus: "currently_reading" },
+    user.token,
+  );
+  assert.equal(updateResponse.status, 200);
+
+  const response = await getLibrary(user.token);
+  assert.equal(response.status, 200);
+  const data = (await response.json()) as {
+    books: {
+      id: number;
+      bookKey: string;
+      createdAt: string;
+      readingStatus: string;
+    }[];
+  };
+
+  assert.equal(data.books.length, 1);
+  assert.deepEqual(Object.keys(data.books[0] ?? {}).sort(), [
+    "bookKey",
+    "createdAt",
+    "id",
+    "readingStatus",
+  ]);
+  assert.equal(data.books[0]?.id, savedBook.id);
+  assert.equal(data.books[0]?.bookKey, savedBook.bookKey);
+  assert.equal(data.books[0]?.readingStatus, "currently_reading");
+  assert.equal(
+    data.books.some((book) => book.id === otherUsersBook.id),
+    false,
+  );
 });
 
 test("COL-02-T-3 updates a saved book's reading status", async () => {

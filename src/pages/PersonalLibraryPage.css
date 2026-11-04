@@ -201,10 +201,55 @@
   overflow-wrap: anywhere;
 }
 
-.personal-library-book-remove {
-  min-height: 34px;
+.personal-library-book-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   margin-top: 14px;
-  padding: 6px 10px;
+}
+
+.personal-library-book-status select {
+  width: 100%;
+  min-height: 30px;
+  padding: 3px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--olive);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.personal-library-book-status select:hover {
+  border-color: var(--olive);
+}
+
+.personal-library-book-status select:focus-visible {
+  outline: 2px solid var(--olive);
+  outline-offset: 2px;
+}
+
+.personal-library-book-status select:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.personal-library-book-status-message,
+.personal-library-book-status-error {
+  color: var(--olive-text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.personal-library-book-status-error {
+  color: var(--olive);
+}
+
+.personal-library-book-remove {
+  min-height: 24px;
+  margin-top: 14px;
+  padding: 2px 8px;
   border: 1px solid var(--olive);
   border-radius: 5px;
   background: transparent;

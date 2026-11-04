@@ -31,12 +31,13 @@ export const libraryRouter: Router = Router();
 // define GET /api/library endpoint for retrieving a user's saved books
 libraryRouter.get("/", requireAuth, async (_req, res) => {
   // run requireAuth before handler to reject unauthenticated requests
-  // from the saved_books table, for each row belonging to the user, get the id, bookKey, and createdAt fields
+  // from saved_books, return each row's identity, key, creation time, and reading status
   const books = await db
     .select({
       id: savedBooks.id,
       bookKey: savedBooks.bookKey,
       createdAt: savedBooks.createdAt,
+      readingStatus: savedBooks.readingStatus,
     })
     .from(savedBooks)
     .where(eq(savedBooks.userId, res.locals.user!.id));
