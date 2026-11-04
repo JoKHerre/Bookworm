@@ -61,6 +61,13 @@ async function putRating(body: unknown, token?: string) {
   });
 }
 
+// send a GET request to /api/ratings; include a session cookie if a token is provided
+async function getRatings(token?: string) {
+  const headers = new Headers();
+  if (token) headers.set("cookie", `session=${token}`);
+  return fetch(`${baseUrl}/api/ratings`, { headers });
+}
+
 // return all rating rows for a given bookKey
 async function rowsForBook(bookKey: string) {
   return db.select().from(bookRatings).where(eq(bookRatings.bookKey, bookKey));
@@ -195,4 +202,52 @@ test("COL-04-T-3 keeps ratings separate for different users", async () => {
   assert.equal(rows.length, 2);
   assert.equal(rows.find((row) => row.userId === first.id)?.rating, 1);
   assert.equal(rows.find((row) => row.userId === second.id)?.rating, 5);
+});
+
+test("COL-04-T-4 rejects an unauthenticated ratings list", async () => {
+  const response = await getRatings();
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Not logged in" });
+});
+
+test("COL-04-T-4 lists only the signed-in user's ratings", async () => {
+  const first = await createSignedInUser();
+  const second = await createSignedInUser();
+  const emptyUser = await createSignedInUser();
+  const firstBook = createTestBookKey();
+  const secondBook = createTestBookKey();
+
+  await putRating({ bookKey: firstBook, rating: 3 }, first.token);
+  await putRating({ bookKey: secondBook, rating: 5 }, first.token);
+  await putRating({ bookKey: firstBook, rating: 1 }, second.token);
+
+  const response = await getRatings(first.token);
+  assert.equal(response.status, 200);
+  const { ratings } = (await response.json()) as {
+    ratings: { bookKey: string; rating: number }[];
+  };
+  assert.deepEqual(
+    ratings.sort((a, b) => a.rating - b.rating),
+    [
+      { bookKey: firstBook, rating: 3 },
+      { bookKey: secondBook, rating: 5 },
+    ],
+  );
+
+  const emptyResponse = await getRatings(emptyUser.token);
+  assert.deepEqual(await emptyResponse.json(), { ratings: [] });
+});
+
+test("COL-04-T-4 lists an updated rating once with its latest value", async () => {
+  const user = await createSignedInUser();
+  const bookKey = createTestBookKey();
+
+  await putRating({ bookKey, rating: 2 }, user.token);
+  await putRating({ bookKey, rating: 4 }, user.token);
+
+  const response = await getRatings(user.token);
+  assert.deepEqual(await response.json(), {
+    ratings: [{ bookKey, rating: 4 }],
+  });
 });
