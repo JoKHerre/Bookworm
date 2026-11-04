@@ -5,6 +5,8 @@ import {
   READING_STATUSES,
   type ReadingStatus,
 } from "../../shared/readingStatus";
+import StarDisplay from "../components/StarDisplay";
+import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
@@ -53,6 +55,7 @@ function PersonalLibraryPage() {
   const [readingStatusErrors, setReadingStatusErrors] = useState<
     Record<number, string>
   >({}); // errors to display beside the affected book's status control
+  const [ratings, setRatings] = useState<Map<string, number>>(() => new Map()); // the user's rating for each rated bookKey
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
 
   // remove a book:
@@ -222,9 +225,13 @@ function PersonalLibraryPage() {
           }),
         );
 
+        // ratings are optional extras: if they fail to load, cards just show no rating
+        const userRatings = await getRatings().catch(() => []);
+
         // if current request, store the array of saved books w their details in the books state
         if (isCurrentRequest) {
           setBooks(booksWithDetails);
+          setRatings(new Map(userRatings.map((r) => [r.bookKey, r.rating])));
         }
       } catch (loadError) {
         // load error: store error msg
@@ -319,6 +326,7 @@ function PersonalLibraryPage() {
                 const isUpdatingReadingStatus =
                   updatingReadingStatusIds.has(id);
                 const readingStatusError = readingStatusErrors[id];
+                const rating = ratings.get(bookKey);
 
                 return (
                   <li className="personal-library-book-card" key={id}>
@@ -349,6 +357,7 @@ function PersonalLibraryPage() {
                       <p>
                         {details?.authors.join(", ") || "Author unavailable"}
                       </p>
+                      {rating !== undefined && <StarDisplay rating={rating} />}
                       {!details && (
                         <p className="personal-library-book-key">{bookKey}</p>
                       )}
