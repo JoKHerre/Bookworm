@@ -3,6 +3,8 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import type { BookISBNs, BookDetails } from "../../shared/books";
 import { getBookDetails, getBookISBNs } from "../booksApi";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
+import { saveRating } from "../ratingsApi";
+import StarRating from "../components/StarRating";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
 
@@ -38,6 +40,9 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false); // used to control save button's availability
   const [saveMessage, setSaveMessage] = useState(""); // used to display message to user after attempting to save a book
+  const [rating, setRating] = useState<number | null>(null); // the signed-in user's rating of this book
+  const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
+  const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
   const [isbns, setISBNs] = useState<BookISBNs | null>(null);
   const [isbnError, setISBNError] = useState<string | null>(null);
 
@@ -130,6 +135,28 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     }
   }
 
+  // function to handle rating a book: optimistically show the new rating, roll back if saving fails
+  async function handleRate(newRating: number) {
+    const previousRating = rating;
+    setRating(newRating);
+    setRatingSaving(true);
+    setRatingMessage("");
+
+    try {
+      await saveRating(bookKey, newRating);
+      setRatingMessage("Rating saved.");
+    } catch (err) {
+      setRating(previousRating);
+      setRatingMessage(
+        err instanceof Error
+          ? err.message
+          : "Could not save your rating. Please try again.",
+      );
+    } finally {
+      setRatingSaving(false);
+    }
+  }
+
   const summary =
     typeof book?.description === "string"
       ? book.description
@@ -188,6 +215,16 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
             </button>
           )}
           {saveMessage && <p role="status">{saveMessage}</p>}
+          {user && (
+            <>
+              <StarRating
+                value={rating}
+                onChange={(value) => void handleRate(value)}
+                disabled={ratingSaving || loading || !book}
+              />
+              {ratingMessage && <p role="status">{ratingMessage}</p>}
+            </>
+          )}
         </div>
       </section>
 
