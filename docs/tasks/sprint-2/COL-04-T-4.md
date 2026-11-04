@@ -3,7 +3,7 @@ id: COL-04-T-4
 story: COL-04
 sprint: 2
 assignee: Natalie Marks
-estimate_hours: 1
+estimate_hours: 2
 ---
 
 # Display a user's book ratings
