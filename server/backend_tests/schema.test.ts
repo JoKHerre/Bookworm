@@ -5,7 +5,7 @@ import { assertTestDatabaseUrl, createTestBookKey, eq } from "./test-utils.ts";
 assertTestDatabaseUrl();
 
 // import postgres connection, schema, and drizzle eq helper
-const [{ db, pool }, { savedBooks, users }] = await Promise.all([
+const [{ db, pool }, { bookRatings, savedBooks, users }] = await Promise.all([
   import("../src/db/index.ts"),
   import("../src/db/schema.ts"),
 ]);
@@ -270,4 +270,101 @@ test("COL-01-T-4 allows the same book for different users", async () => {
     rows.map((row) => row.userId).sort(),
     [firstUser.id, secondUser.id].sort(),
   );
+});
+
+// COL-04 book rating tests
+test("COL-04-T-1 creates the book-ratings table", async () => {
+  const result = await pool.query<{
+    column_name: string;
+    is_nullable: string;
+  }>(
+    `SELECT column_name, is_nullable
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'book_ratings'`,
+  );
+  const columns = new Map(result.rows.map((c) => [c.column_name, c]));
+
+  assert.deepEqual([...columns.keys()].sort(), [
+    "book_key",
+    "created_at",
+    "id",
+    "rating",
+    "updated_at",
+    "user_id",
+  ]);
+  for (const name of columns.keys()) {
+    assert.equal(columns.get(name)?.is_nullable, "NO");
+  }
+});
+
+test("COL-04-T-1 accepts ratings from 1 to 5", async () => {
+  const user = await createTestUser();
+
+  for (const rating of [1, 2, 3, 4, 5]) {
+    const [row] = await db
+      .insert(bookRatings)
+      .values({ userId: user.id, bookKey: createTestBookKey(), rating })
+      .returning();
+    assert.equal(row?.rating, rating);
+  }
+});
+
+test("COL-04-T-1 rejects out-of-range and null ratings", async () => {
+  const user = await createTestUser();
+
+  // 0 and 6 violate the check constraint (23514)
+  for (const rating of [0, 6, -1]) {
+    await assert.rejects(
+      db
+        .insert(bookRatings)
+        .values({ userId: user.id, bookKey: createTestBookKey(), rating }),
+      (error) => hasPostgresErrorCode(error, "23514"),
+    );
+  }
+
+  // NULL violates not-null (23502)
+  await assert.rejects(
+    pool.query(
+      `INSERT INTO book_ratings (user_id, book_key, rating) VALUES ($1, $2, NULL)`,
+      [user.id, createTestBookKey()],
+    ),
+    (error) => hasPostgresErrorCode(error, "23502"),
+  );
+});
+
+test("COL-04-T-1 allows one rating per user per book", async () => {
+  const firstUser = await createTestUser();
+  const secondUser = await createTestUser();
+  const bookKey = createTestBookKey();
+
+  await db
+    .insert(bookRatings)
+    .values({ userId: firstUser.id, bookKey, rating: 4 });
+
+  // duplicate (user_id, book_key) is rejected (23505)
+  await assert.rejects(
+    db.insert(bookRatings).values({ userId: firstUser.id, bookKey, rating: 2 }),
+    (error) => hasPostgresErrorCode(error, "23505"),
+  );
+
+  // a different user may rate the same book
+  await db
+    .insert(bookRatings)
+    .values({ userId: secondUser.id, bookKey, rating: 5 });
+});
+
+test("COL-04-T-1 cascades ratings when a user is deleted", async () => {
+  const user = await createTestUser();
+  await db
+    .insert(bookRatings)
+    .values({ userId: user.id, bookKey: createTestBookKey(), rating: 3 });
+
+  await db.delete(users).where(eq(users.id, user.id));
+  createdUserIds.delete(user.id);
+
+  const rows = await db
+    .select()
+    .from(bookRatings)
+    .where(eq(bookRatings.userId, user.id));
+  assert.equal(rows.length, 0);
 });
