@@ -18,3 +18,8 @@ export interface BookRatingResponse {
   bookKey: string;
   rating: number;
 }
+
+// GET /api/ratings response: all of the signed-in user's ratings
+export interface BookRatingsResponse {
+  ratings: BookRatingResponse[];
+}

@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import type { BookISBNs, BookDetails } from "../../shared/books";
 import { getBookDetails, getBookISBNs } from "../booksApi";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
-import { saveRating } from "../ratingsApi";
+import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
@@ -87,6 +87,25 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
     return () => controller.abort();
   }, [bookKey, loading, book]);
+
+  // load the signed-in user's existing rating for this book, if any
+  const userId = user?.id;
+  useEffect(() => {
+    if (userId === undefined) return;
+    const controller = new AbortController();
+
+    getRatings(controller.signal)
+      .then((ratings) => {
+        const existing = ratings.find((r) => r.bookKey === bookKey);
+        // don't overwrite a rating the user has already picked while this loaded
+        if (existing) setRating((current) => current ?? existing.rating);
+      })
+      .catch(() => {
+        // a missing rating just leaves the control empty
+      });
+
+    return () => controller.abort();
+  }, [bookKey, userId]);
 
   function goToLogin() {
     const state: AuthLocationState = { from: location };

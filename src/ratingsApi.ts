@@ -1,4 +1,7 @@
-import type { BookRatingResponse } from "../shared/ratings";
+import type {
+  BookRatingResponse,
+  BookRatingsResponse,
+} from "../shared/ratings";
 
 // save (or update) the signed-in user's rating of a book via PUT /api/ratings
 export async function saveRating(
@@ -29,4 +32,14 @@ export async function saveRating(
     );
   }
   return data as BookRatingResponse;
+}
+
+// fetch all of the signed-in user's ratings via GET /api/ratings
+export async function getRatings(
+  signal?: AbortSignal,
+): Promise<BookRatingResponse[]> {
+  const response = await fetch("/api/ratings", { signal });
+  if (!response.ok) throw new Error("Could not load your ratings.");
+  const data = (await response.json()) as BookRatingsResponse;
+  return data.ratings;
 }
