@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { Router } from "express";
 import { db } from "../db/index.ts"; // postgresql connection
 import { bookRatings } from "../db/schema.ts"; // book ratings table definition
@@ -6,6 +7,16 @@ import { saveRatingBody } from "../../../shared/ratings.ts";
 
 // create an express router for rating-related endpoints
 export const ratingsRouter: Router = Router();
+
+// define GET /api/ratings endpoint for retrieving all of the signed-in user's ratings
+ratingsRouter.get("/", requireAuth, async (_req, res) => {
+  const ratings = await db
+    .select({ bookKey: bookRatings.bookKey, rating: bookRatings.rating })
+    .from(bookRatings)
+    .where(eq(bookRatings.userId, res.locals.user!.id));
+
+  res.json({ ratings });
+});
 
 // define PUT /api/ratings endpoint for saving or updating the user's rating of a book
 ratingsRouter.put("/", requireAuth, async (req, res) => {

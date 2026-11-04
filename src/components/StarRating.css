@@ -51,3 +51,14 @@
   cursor: not-allowed;
   opacity: 0.6;
 }
+
+.star-display {
+  margin: 4px 0 0;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+  color: var(--gold);
+}
+
+.star-display-empty {
+  color: var(--tan);
+}
