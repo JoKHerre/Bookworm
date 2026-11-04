@@ -12,6 +12,7 @@ import { deleteExpiredSessions } from "./db/session.ts";
 import cookieParser from "cookie-parser";
 import { booksRouter } from "./routes/books.ts";
 import { libraryRouter } from "./routes/library.ts";
+import { ratingsRouter } from "./routes/ratings.ts";
 
 const app: Express = express();
 
@@ -21,6 +22,7 @@ app.use(loadSession);
 app.use("/api/auth", authRouter);
 app.use("/api/books", booksRouter);
 app.use("/api/library", libraryRouter);
+app.use("/api/ratings", ratingsRouter);
 
 app.get("/api/test", (req: Request, res: Response) => {
   res.json({ message: "Hello from express" });
