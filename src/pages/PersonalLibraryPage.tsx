@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
+import {
+  READING_STATUSES,
+  type ReadingStatus,
+} from "../../shared/readingStatus";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
@@ -10,14 +14,16 @@ const SESSION_EXPIRED_MESSAGE =
 const STATUS_UPDATE_ERROR_MESSAGE =
   "Could not update this book's reading status. Please try again.";
 
-// define reading statuses
-type ReadingStatus = "to_be_read" | "currently_reading" | "finished";
+const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
+  to_be_read: "To Be Read",
+  currently_reading: "Currently Reading",
+  finished: "Finished",
+};
 
-const READING_STATUS_OPTIONS: { value: ReadingStatus; label: string }[] = [
-  { value: "to_be_read", label: "To Be Read" },
-  { value: "currently_reading", label: "Currently Reading" },
-  { value: "finished", label: "Finished" },
-];
+const READING_STATUS_OPTIONS = READING_STATUSES.map((value) => ({
+  value,
+  label: READING_STATUS_LABELS[value],
+}));
 
 // define the shape of a saved book object as returned by the server
 interface SavedBook {
@@ -349,7 +355,6 @@ function PersonalLibraryPage() {
                     </div>
                     <div className="personal-library-book-status">
                       <select
-                        id={`reading-status-${id}`}
                         aria-label={`Reading status for ${title}`}
                         aria-busy={isUpdatingReadingStatus}
                         aria-describedby={

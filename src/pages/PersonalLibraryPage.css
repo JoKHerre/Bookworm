@@ -221,10 +221,6 @@
   cursor: pointer;
 }
 
-.personal-library-book-status select:hover {
-  border-color: var(--olive);
-}
-
 .personal-library-book-status select:focus-visible {
   outline: 2px solid var(--olive);
   outline-offset: 2px;
