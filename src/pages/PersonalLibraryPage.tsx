@@ -1,19 +1,38 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
+import {
+  READING_STATUSES,
+  type ReadingStatus,
+} from "../../shared/readingStatus";
 import StarDisplay from "../components/StarDisplay";
 import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
+// define error messages
 const SESSION_EXPIRED_MESSAGE =
   "Your session has expired. Please sign in again.";
+const STATUS_UPDATE_ERROR_MESSAGE =
+  "Could not update this book's reading status. Please try again.";
+
+const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
+  to_be_read: "To Be Read",
+  currently_reading: "Currently Reading",
+  finished: "Finished",
+};
+
+const READING_STATUS_OPTIONS = READING_STATUSES.map((value) => ({
+  value,
+  label: READING_STATUS_LABELS[value],
+}));
 
 // define the shape of a saved book object as returned by the server
 interface SavedBook {
   id: number;
   bookKey: string;
   createdAt: string;
+  readingStatus: ReadingStatus;
 }
 
 // PersonalLibraryBook: SavedBook plus any additional details
@@ -30,6 +49,12 @@ function PersonalLibraryPage() {
   const [removingBookIds, setRemovingBookIds] = useState<Set<number>>(
     () => new Set(),
   ); // saved-book rows whose removal requests are in progress
+  const [updatingReadingStatusIds, setUpdatingReadingStatusIds] = useState<
+    Set<number>
+  >(() => new Set()); // saved-book rows whose reading status requests are in progress
+  const [readingStatusErrors, setReadingStatusErrors] = useState<
+    Record<number, string>
+  >({}); // errors to display beside the affected book's status control
   const [ratings, setRatings] = useState<Map<string, number>>(() => new Map()); // the user's rating for each rated bookKey
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
 
@@ -72,6 +97,84 @@ function PersonalLibraryPage() {
     }
 
     if (requestError) setRemovalError(requestError);
+  }
+
+  async function updateReadingStatus(
+    id: number,
+    title: string,
+    readingStatus: ReadingStatus,
+  ) {
+    // capture current status, to be restored if the update fails
+    const previousStatus = books.find((book) => book.id === id)?.readingStatus;
+    if (!previousStatus) return;
+
+    setReadingStatusErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[id];
+      return nextErrors;
+    });
+    setUpdatingReadingStatusIds((currentIds) => new Set(currentIds).add(id));
+    // show the selected option immediately; restore the saved value if the update fails.
+    setBooks((currentBooks) =>
+      currentBooks.map((book) =>
+        book.id === id ? { ...book, readingStatus } : book,
+      ),
+    );
+
+    let requestError = "";
+    try {
+      // attempt PATCH request to update the reading status on the server
+      const response = await fetch(`/api/library/${id}/reading-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ readingStatus }),
+      });
+
+      // assign requestError based on the response status code, if applicable
+      if (response.status === 401) {
+        requestError = SESSION_EXPIRED_MESSAGE;
+      } else if (response.status === 404) {
+        requestError = `Could not find “${title}” in your library to update.`;
+      } else if (!response.ok) {
+        requestError = STATUS_UPDATE_ERROR_MESSAGE;
+      } else {
+        // successful PATCH
+        // update book in the state with its new reading status as returned by the server
+        const data = (await response.json()) as {
+          id: number;
+          readingStatus: ReadingStatus;
+        };
+        setBooks((currentBooks) =>
+          currentBooks.map((book) =>
+            book.id === id
+              ? { ...book, readingStatus: data.readingStatus }
+              : book,
+          ),
+        );
+      }
+    } catch {
+      requestError = STATUS_UPDATE_ERROR_MESSAGE;
+    } finally {
+      // remove the book's id from the set of books being updated, regardless of success or failure
+      setUpdatingReadingStatusIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(id);
+        return nextIds;
+      });
+    }
+
+    // if error, restore previous reading status and display error msg
+    if (requestError) {
+      setBooks((currentBooks) =>
+        currentBooks.map((book) =>
+          book.id === id ? { ...book, readingStatus: previousStatus } : book,
+        ),
+      );
+      setReadingStatusErrors((currentErrors) => ({
+        ...currentErrors,
+        [id]: requestError,
+      }));
+    }
   }
 
   useEffect(() => {
@@ -216,10 +319,13 @@ function PersonalLibraryPage() {
             </div>
           ) : (
             <ul className="personal-library-book-grid" aria-label="Saved books">
-              {books.map(({ id, bookKey, details }) => {
+              {books.map(({ id, bookKey, details, readingStatus }) => {
                 const title = details?.title ?? "Book details unavailable";
                 const coverId = details?.covers?.[0];
                 const isRemoving = removingBookIds.has(id);
+                const isUpdatingReadingStatus =
+                  updatingReadingStatusIds.has(id);
+                const readingStatusError = readingStatusErrors[id];
                 const rating = ratings.get(bookKey);
 
                 return (
@@ -254,6 +360,49 @@ function PersonalLibraryPage() {
                       {rating !== undefined && <StarDisplay rating={rating} />}
                       {!details && (
                         <p className="personal-library-book-key">{bookKey}</p>
+                      )}
+                    </div>
+                    <div className="personal-library-book-status">
+                      <select
+                        aria-label={`Reading status for ${title}`}
+                        aria-busy={isUpdatingReadingStatus}
+                        aria-describedby={
+                          readingStatusError
+                            ? `reading-status-error-${id}`
+                            : undefined
+                        }
+                        disabled={isUpdatingReadingStatus}
+                        value={readingStatus}
+                        onChange={(event) =>
+                          void updateReadingStatus(
+                            id,
+                            title,
+                            event.target.value as ReadingStatus,
+                          )
+                        }
+                      >
+                        {READING_STATUS_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {isUpdatingReadingStatus && (
+                        <p
+                          className="personal-library-book-status-message"
+                          role="status"
+                        >
+                          Saving status…
+                        </p>
+                      )}
+                      {readingStatusError && (
+                        <p
+                          className="personal-library-book-status-error"
+                          id={`reading-status-error-${id}`}
+                          role="alert"
+                        >
+                          {readingStatusError}
+                        </p>
                       )}
                     </div>
                     <button
