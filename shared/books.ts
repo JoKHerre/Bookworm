@@ -15,6 +15,58 @@ export const bookSearchQuery = z.object({
 
 export type BookSearchQuery = z.infer<typeof bookSearchQuery>;
 
+const suggestionStopWords = new Set([
+  "about",
+  "after",
+  "again",
+  "also",
+  "been",
+  "before",
+  "being",
+  "between",
+  "could",
+  "does",
+  "during",
+  "from",
+  "have",
+  "into",
+  "just",
+  "more",
+  "most",
+  "over",
+  "same",
+  "since",
+  "some",
+  "than",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "through",
+  "under",
+  "until",
+  "very",
+  "were",
+  "with",
+  "would",
+  "your",
+]);
+
+export const bookSuggestionsQuery = z.object({
+  q: z
+    .string({ error: "Please enter a book title or author" })
+    .trim()
+    .min(3, "Please enter at least three characters")
+    .refine((query) => {
+      const words = query.toLowerCase().split(/\s+/);
+      return words.length > 1 || !suggestionStopWords.has(words[0] ?? "");
+    }, "Please enter a more specific query"),
+});
+
+export type BookSuggestionsQuery = z.infer<typeof bookSuggestionsQuery>;
+
 export const bookSearchResult = z.object({
   key: z.string(),
   title: z.string(),

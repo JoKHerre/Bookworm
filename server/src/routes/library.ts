@@ -14,6 +14,14 @@ const saveBookBody = z
   })
   .strict();
 
+// define expected shape of request body for updating reading status
+// require an object with one property, readingStatus, which must be one of the three allowed values
+const updateReadingStatusBody = z
+  .object({
+    readingStatus: z.enum(["to_be_read", "currently_reading", "finished"]),
+  })
+  .strict();
+
 const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
@@ -71,6 +79,50 @@ libraryRouter.delete("/:id", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
+// PATCH route for updating the reading status of a saved book in the user's library
+libraryRouter.patch("/:id/reading-status", requireAuth, async (req, res) => {
+  // ensure valid book id
+  const idParam = req.params.id;
+  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
+    return;
+  }
+
+  const id = Number(idParam);
+  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
+    return;
+  }
+
+  // get and validate request body's readingStatus
+  const parsed = updateReadingStatusBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid reading status" });
+    return;
+  }
+
+  // update readingStatus for this user's saved book
+  const [updatedBook] = await db
+    .update(savedBooks)
+    .set({ readingStatus: parsed.data.readingStatus })
+    .where(
+      and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
+    )
+    .returning({
+      id: savedBooks.id,
+      readingStatus: savedBooks.readingStatus,
+    });
+
+  // handle book not found case
+  if (!updatedBook) {
+    res.status(404).json({ error: "Book not found in your library" });
+    return;
+  }
+
+  // return success code
+  res.status(200).json(updatedBook);
+});
+
 // define the POST /api/library endpoint for saving a book to the user's library
 libraryRouter.post("/", requireAuth, async (req, res) => {
   // check request body against the expected schema; if invalid, return 400 with error message
@@ -91,7 +143,12 @@ libraryRouter.post("/", requireAuth, async (req, res) => {
       // if duplicate conflict, do nothing
       target: [savedBooks.userId, savedBooks.bookKey],
     })
-    .returning(); // return the new row if successfully inserted
+    .returning({
+      id: savedBooks.id,
+      userId: savedBooks.userId,
+      bookKey: savedBooks.bookKey,
+      createdAt: savedBooks.createdAt,
+    }); // return the existing API response fields if successfully inserted
 
   // no row returned == skipped insert due to duplicate; return 409 with error message
   if (!savedBook) {

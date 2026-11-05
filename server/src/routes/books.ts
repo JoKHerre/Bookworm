@@ -1,5 +1,6 @@
 import { Router, type Response } from "express";
 import {
+  bookSuggestionsQuery,
   bookDetailsQuery,
   bookSearchQuery,
   type BookDetails,
@@ -11,6 +12,7 @@ import {
 import { checkBookAvailability } from "../services/bookAvailability.ts";
 
 import {
+  searchOpenLibrarySuggestions,
   searchOpenLibrary,
   getBookDetails,
   getISBNsForWork,
@@ -18,6 +20,31 @@ import {
 } from "../services/openLibrary.ts";
 
 export const booksRouter: Router = Router();
+
+booksRouter.get(
+  "/suggestions",
+  async (req, res: Response<BookSearchResponse | BooksError>) => {
+    const parsed = bookSuggestionsQuery.safeParse(req.query);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid suggestion query",
+      });
+      return;
+    }
+
+    try {
+      const results = await searchOpenLibrarySuggestions(parsed.data.q);
+      res.json(results);
+    } catch (error) {
+      console.error("Book suggestions error:", error);
+
+      res.status(502).json({
+        error: "Unable to retrieve book suggestions from Open Library",
+      });
+    }
+  },
+);
 
 booksRouter.get(
   "/search",

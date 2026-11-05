@@ -47,13 +47,14 @@ async function fetchOpenLibrary<T extends z.ZodType>(
   return schema.parse(rawData);
 }
 
-export async function searchOpenLibrary(
+async function searchOpenLibraryQuery(
   query: string,
+  limit: number,
 ): Promise<BookSearchResponse> {
   const params = new URLSearchParams({
     q: query,
     fields: "key,title,author_name,first_publish_year,cover_i",
-    limit: "20",
+    limit: String(limit),
   });
 
   const data = await fetchOpenLibrary(
@@ -65,6 +66,46 @@ export async function searchOpenLibrary(
     books: data.docs,
     total: data.numFound ?? data.num_found ?? 0,
   };
+}
+
+export function searchOpenLibrary(query: string): Promise<BookSearchResponse> {
+  return searchOpenLibraryQuery(query, 20);
+}
+
+const openLibraryQuerySpecialCharacters = new Set('+-&|!(){}[]^"~*?:\\/');
+
+function escapeOpenLibraryQueryText(value: string): string {
+  return Array.from(value)
+    .map((character) =>
+      openLibraryQuerySpecialCharacters.has(character)
+        ? `\\${character}`
+        : character,
+    )
+    .join("");
+}
+
+function toSuggestionQuery(query: string): string {
+  const words = query.trim().split(/\s+/).map(escapeOpenLibraryQueryText);
+  const lastIndex = words.length - 1;
+  const lastWord = words[lastIndex];
+
+  if (lastWord === undefined) {
+    throw new Error("Please enter a book title or author");
+  }
+
+  words[lastIndex] = `${lastWord}*`;
+  return words.join(" ");
+}
+
+export async function searchOpenLibrarySuggestions(
+  query: string,
+): Promise<BookSearchResponse> {
+  return searchOpenLibraryQuery(toSuggestionQuery(query), 5).then(
+    (results) => ({
+      ...results,
+      books: results.books.slice(0, 5),
+    }),
+  );
 }
 
 async function getWork(key: string) {
@@ -122,7 +163,6 @@ export async function getBookDetails(
   const key = openLibraryWorkKey.parse(workKey);
   const work = await getWork(key);
 
-  // Search already supplies author names; saved books still need them resolved.
   const authors = includeAuthors
     ? await Promise.all(
         (work.authors ?? []).slice(0, 5).map(async ({ author }) => {
