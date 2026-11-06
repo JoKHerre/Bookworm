@@ -59,7 +59,7 @@ export function getBookISBNs(key: string, signal: AbortSignal) {
 
 
 export function getBookAvailability(key: string, signal: AbortSignal) {
-  return get<{ availability: any }>(
+  return get<AvailabilityResponse>(
     "availability",
     new URLSearchParams({ key }),
     signal,

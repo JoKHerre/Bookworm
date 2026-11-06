@@ -124,7 +124,7 @@ booksRouter.get(
 booksRouter.get("/availability", async (req, res) => {
   const parsed = bookDetailsQuery.pick({ key: true }).safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0].message });
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid Request"});
     return;
   }
 

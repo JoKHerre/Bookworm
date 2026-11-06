@@ -9,12 +9,14 @@ type Branches = Record<string, { available: number; total: number }>;
 export type Availability = {
   bibid: string;
   title: string;
-  author?: string;
-  format?: string;
-  systemAvailable?: number;
-  systemTotal?: number;
+  author?: string | undefined;
+  format?: string | undefined;
+  systemAvailable?: number | undefined;
+  systemTotal?: number | undefined;
   branches: Branches;
 };
+
+type Match = Omit<Availability, "branches">;
 
 export async function checkIsbnAvailability(isbn: string): Promise<Availability | null> {
   const term = isbn.replace(/[^0-9Xx]/g, "");
@@ -46,16 +48,18 @@ export async function checkIsbnAvailability(isbn: string): Promise<Availability 
     page: 0,
   });
 
-  let match: Omit<Availability, "branches"> & { pos: number };
+  let match: Match;
+  let pos: number;
 
   if (search.url.includes("title.aspx")) {
     const bibid = search.url.match(/cn=(\d+)/)?.[1];
     if (!bibid) return null;
-    match = { bibid, title: clean(cheerio.load(search.text)("title").text()), pos: 1 };
+    match = { bibid, title: clean(cheerio.load(search.text)("title").text())};
+    pos = 1; 
   } else {
     const { text } = await get("components/ajaxResults.aspx", { page: 1, hpp: 100 }, true);
     const $ = cheerio.load(text);
-    const items: (typeof match)[] = [];
+    const items: (Match & {pos: number})[] = [];
 
     $("div.content-module--search-result").each((i, el) => {
       const item = $(el);
@@ -78,12 +82,14 @@ export async function checkIsbnAvailability(isbn: string): Promise<Availability 
 
     const found = items.find((r) => r.format === "Book") ?? items[0];
     if (!found) return null;
-    match = found;
+    const { pos: foundPos, ...details } = found;
+    match = details;
+    pos = foundPos;
   }
 
   const { text } = await get(
     "components/ajaxavailability.aspx",
-    { fp: 1, level: "local", morelink: 0, pos: match.pos, bibid: match.bibid, displayAeonOnly: 0 },
+    { fp: 1, level: "local", morelink: 0, pos, bibid: match.bibid, displayAeonOnly: 0 },
     true,
   );
 
@@ -91,9 +97,11 @@ export async function checkIsbnAvailability(isbn: string): Promise<Availability 
   const branches: Branches = {};
   $("tr").each((_, tr) => {
     const m = clean($(tr).text()).match(/^(.+?)\s*\((\d+) of (\d+) available\)$/);
-    if (m) branches[m[1]] = { available: Number(m[2]), total: Number(m[3]) };
+    if (!m) return;
+    const [, name, available, total] = m;
+    if (name === undefined || available === undefined || total === undefined) return;
+    branches[name] = { available: Number(available), total: Number(total) };
   });
 
-  const { pos: _pos, ...rest } = match;
-  return { ...rest, branches };
+  return {...match, branches}
 }
