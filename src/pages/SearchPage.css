@@ -258,24 +258,42 @@
 
 .search-input-wrapper {
   position: relative;
+  z-index: 1;
   flex: 1;
   min-width: 0;
 }
 
 .search-input-wrapper input {
+  position: relative;
+  z-index: 1;
+  display: block;
   width: 100%;
   box-sizing: border-box;
 }
 
+.search-input-wrapper input[aria-expanded="true"] {
+  border-radius: 10px 10px 0 0;
+}
+
 .book-suggestions {
   position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  margin: 0;
   padding: 6px;
   list-style: none;
   text-align: left;
   background: var(--cream);
-  border: 1px solid var(--tan);
-  border-radius: 10px;
+  border: 1.5px solid var(--tan);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
   box-shadow: var(--shadow);
+}
+
+.search-input-wrapper input:focus + .book-suggestions {
+  border-color: var(--gold);
 }
 
 .book-suggestion {
@@ -292,7 +310,6 @@
 
 .book-suggestion-title,
 .book-suggestion-author {
-  display: block;
   overflow-wrap: anywhere;
 }
 
@@ -301,7 +318,6 @@
 }
 
 .book-suggestion-author {
-  margin-top: 2px;
   font-size: 14px;
   opacity: 0.75;
 }
