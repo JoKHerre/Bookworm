@@ -39,6 +39,14 @@ export function searchBooks(query: string, signal: AbortSignal) {
   );
 }
 
+export function getBookSuggestions(query: string, signal: AbortSignal) {
+  return get<BookSearchResponse>(
+    "suggestions",
+    new URLSearchParams({ q: query }),
+    signal,
+  );
+}
+
 export function getBookDetails(
   key: string,
   signal: AbortSignal,

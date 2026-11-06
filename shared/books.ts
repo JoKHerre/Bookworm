@@ -4,13 +4,45 @@ export const openLibraryWorkKey = z
   .string({ error: "Invalid book key" })
   .regex(/^\/works\/OL\d+W$/, "Invalid book key");
 
-// GET /api/books/search?q=...
+// GET /api/books/search?q=...&genre=...&language=...&year=...
 
 export const bookSearchQuery = z.object({
   q: z
     .string({ error: "Please enter a book title or author" })
     .trim()
     .min(1, "Please enter a book title or author"),
+  genre: z
+    .array(
+      z.enum([
+        "Fantasy",
+        "Sci-fi",
+        "Mystery",
+        "Romance",
+        "Horror",
+        "History",
+        "Thriller",
+        "Adventure",
+        "Biography",
+        "Non-fiction",
+        "Poetry",
+      ]),
+    )
+    .default([]),
+  language: z.enum(["", "English", "Spanish", "French"]).default(""),
+  year: z
+    .enum([
+      "",
+      "2020-present",
+      "2010-2019",
+      "2000-2009",
+      "1990-1999",
+      "1980-1989",
+      "1970-1979",
+      "1950-1969",
+      "1900-1949",
+      "before-1900",
+    ])
+    .default(""),
 });
 
 export type BookSearchQuery = z.infer<typeof bookSearchQuery>;

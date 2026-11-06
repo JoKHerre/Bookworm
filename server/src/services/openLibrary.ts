@@ -11,11 +11,18 @@ import {
   openLibraryWorkKey,
   type BookDetails,
   type BookISBNs,
+  type BookSearchQuery,
   type BookSearchResponse,
 } from "../../../shared/books.ts";
 
 const BASE_URL = "https://openlibrary.org";
 const EDITIONS_PAGE_SIZE = 100;
+
+const languageCodes = {
+  English: "eng",
+  Spanish: "spa",
+  French: "fre",
+};
 
 export class OpenLibraryError extends Error {
   status: number;
@@ -63,13 +70,44 @@ async function searchOpenLibraryQuery(
   );
 
   return {
-    books: data.docs,
+    books: data.docs.slice(0, limit),
     total: data.numFound ?? data.num_found ?? 0,
   };
 }
 
-export function searchOpenLibrary(query: string): Promise<BookSearchResponse> {
-  return searchOpenLibraryQuery(query, 20);
+export function searchOpenLibrary(
+  query: BookSearchQuery,
+): Promise<BookSearchResponse> {
+  const constraints: string[] = [];
+
+  if (query.genre.length) {
+    const subjects = [...new Set(query.genre)].map((genre) => {
+      let subject = genre.toLowerCase();
+      if (genre === "Sci-fi") subject = "science fiction";
+      if (genre === "Non-fiction") subject = "nonfiction";
+      return `"${subject}"`;
+    });
+    constraints.push(`subject:(${subjects.join(" OR ")})`);
+  }
+  if (query.language) {
+    constraints.push(`language:${languageCodes[query.language]}`);
+  }
+  if (query.year) {
+    let range: string;
+    if (query.year === "before-1900") {
+      range = "* TO 1899";
+    } else if (query.year === "2020-present") {
+      range = `2020 TO ${new Date().getUTCFullYear()}`;
+    } else {
+      range = query.year.replace("-", " TO ");
+    }
+    constraints.push(`first_publish_year:[${range}]`);
+  }
+
+  const filteredQuery = constraints.length
+    ? `(${query.q}) AND ${constraints.join(" AND ")}`
+    : query.q;
+  return searchOpenLibraryQuery(filteredQuery, 20);
 }
 
 const openLibraryQuerySpecialCharacters = new Set('+-&|!(){}[]^"~*?:\\/');
