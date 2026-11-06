@@ -47,7 +47,11 @@ booksRouter.get(
 booksRouter.get(
   "/search",
   async (req, res: Response<BookSearchResponse | BooksError>) => {
-    const parsed = bookSearchQuery.safeParse(req.query);
+    let genre = req.query.genre;
+    if (typeof genre === "string") genre = [genre];
+    if (Array.isArray(genre)) genre = genre.filter((value) => value !== "");
+
+    const parsed = bookSearchQuery.safeParse({ ...req.query, genre });
 
     if (!parsed.success) {
       res.status(400).json({
@@ -56,7 +60,7 @@ booksRouter.get(
       return;
     }
     try {
-      const results = await searchOpenLibrary(parsed.data.q);
+      const results = await searchOpenLibrary(parsed.data);
       res.json(results);
     } catch (error) {
       console.error("Book search error:", error);
