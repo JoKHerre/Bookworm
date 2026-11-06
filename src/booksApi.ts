@@ -57,7 +57,6 @@ export function getBookISBNs(key: string, signal: AbortSignal) {
   return get<BookISBNs>("isbns", new URLSearchParams({ key }), signal);
 }
 
-
 export function getBookAvailability(key: string, signal: AbortSignal) {
   return get<AvailabilityResponse>(
     "availability",

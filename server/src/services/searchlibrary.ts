@@ -18,16 +18,23 @@ export type Availability = {
 
 type Match = Omit<Availability, "branches">;
 
-export async function checkIsbnAvailability(isbn: string): Promise<Availability | null> {
+export async function checkIsbnAvailability(
+  isbn: string,
+): Promise<Availability | null> {
   const term = isbn.replace(/[^0-9Xx]/g, "");
   if (!term) throw new Error("Provide a valid isbn");
 
   const clean = (s: string) => s.replace(/\s+/g, " ").trim();
   const fetchc = makeFetchCookie(fetch);
 
-  const get = async (path: string, params: Record<string, string | number>, xhr = false) => {
+  const get = async (
+    path: string,
+    params: Record<string, string | number>,
+    xhr = false,
+  ) => {
     const url = new URL(path, BASE);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+    for (const [k, v] of Object.entries(params))
+      url.searchParams.set(k, String(v));
     const headers: Record<string, string> = {
       "User-Agent": "Mozilla/5.0",
     };
@@ -54,26 +61,39 @@ export async function checkIsbnAvailability(isbn: string): Promise<Availability 
   if (search.url.includes("title.aspx")) {
     const bibid = search.url.match(/cn=(\d+)/)?.[1];
     if (!bibid) return null;
-    match = { bibid, title: clean(cheerio.load(search.text)("title").text())};
-    pos = 1; 
+    match = { bibid, title: clean(cheerio.load(search.text)("title").text()) };
+    pos = 1;
   } else {
-    const { text } = await get("components/ajaxResults.aspx", { page: 1, hpp: 100 }, true);
+    const { text } = await get(
+      "components/ajaxResults.aspx",
+      { page: 1, hpp: 100 },
+      true,
+    );
     const $ = cheerio.load(text);
-    const items: (Match & {pos: number})[] = [];
+    const items: (Match & { pos: number })[] = [];
 
     $("div.content-module--search-result").each((i, el) => {
       const item = $(el);
       const link = item.find("a.nsm-brief-action-link").first();
       const bibid = link.attr("href")?.match(/cn=(\d+)/)?.[1];
       if (!bibid) return;
-      const m = clean(item.text()).match(/System Availability:\s*(\d+)\s*\(of\s*(\d+)\)/);
+      const m = clean(item.text()).match(
+        /System Availability:\s*(\d+)\s*\(of\s*(\d+)\)/,
+      );
       items.push({
         bibid,
         title: clean(link.text()),
         author:
-          clean(item.find(".nsm-brief-primary-author-group .nsm-browse-text").first().text()) ||
-          undefined,
-        format: item.find("img.c-title-detail-formats__img[alt]").first().attr("alt"),
+          clean(
+            item
+              .find(".nsm-brief-primary-author-group .nsm-browse-text")
+              .first()
+              .text(),
+          ) || undefined,
+        format: item
+          .find("img.c-title-detail-formats__img[alt]")
+          .first()
+          .attr("alt"),
         systemAvailable: m ? Number(m[1]) : undefined,
         systemTotal: m ? Number(m[2]) : undefined,
         pos: i + 1,
@@ -89,19 +109,29 @@ export async function checkIsbnAvailability(isbn: string): Promise<Availability 
 
   const { text } = await get(
     "components/ajaxavailability.aspx",
-    { fp: 1, level: "local", morelink: 0, pos, bibid: match.bibid, displayAeonOnly: 0 },
+    {
+      fp: 1,
+      level: "local",
+      morelink: 0,
+      pos,
+      bibid: match.bibid,
+      displayAeonOnly: 0,
+    },
     true,
   );
 
   const $ = cheerio.load(text);
   const branches: Branches = {};
   $("tr").each((_, tr) => {
-    const m = clean($(tr).text()).match(/^(.+?)\s*\((\d+) of (\d+) available\)$/);
+    const m = clean($(tr).text()).match(
+      /^(.+?)\s*\((\d+) of (\d+) available\)$/,
+    );
     if (!m) return;
     const [, name, available, total] = m;
-    if (name === undefined || available === undefined || total === undefined) return;
+    if (name === undefined || available === undefined || total === undefined)
+      return;
     branches[name] = { available: Number(available), total: Number(total) };
   });
 
-  return {...match, branches}
+  return { ...match, branches };
 }

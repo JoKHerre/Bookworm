@@ -47,8 +47,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [isbnError, setISBNError] = useState<string | null>(null);
 
   const [availability, setAvailability] = useState<
-  Awaited<ReturnType<typeof getBookAvailability>>["availability"] | undefined >(undefined);
-  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+    Awaited<ReturnType<typeof getBookAvailability>>["availability"] | undefined
+  >(undefined);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -297,27 +300,26 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         </>
       )}
 
-
-{book && (
-  <section className="library-availability">
-    <h2>Library Availability</h2>
-    {availabilityError ? (
-      <p role="alert">{availabilityError}</p>
-    ) : availability === undefined ? (
-      <p role="status">Checking library...</p>
-    ) : availability === null ? (
-      <p>Not found in the library catalog.</p>
-    ) : (
-      <ul className="branches">
-        {Object.entries(availability.branches).map(([name, b]) => (
-          <li key={name}>
-            {name}: {b.available} of {b.total} available
-          </li>
-        ))}
-      </ul>
-    )}
-  </section>
-)}
+      {book && (
+        <section className="library-availability">
+          <h2>Library Availability</h2>
+          {availabilityError ? (
+            <p role="alert">{availabilityError}</p>
+          ) : availability === undefined ? (
+            <p role="status">Checking library...</p>
+          ) : availability === null ? (
+            <p>Not found in the library catalog.</p>
+          ) : (
+            <ul className="branches">
+              {Object.entries(availability.branches).map(([name, b]) => (
+                <li key={name}>
+                  {name}: {b.available} of {b.total} available
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {book && (
         <section className="book-isbns">
