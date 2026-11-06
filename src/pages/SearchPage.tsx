@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   bookSuggestionsQuery,
@@ -39,6 +39,7 @@ function SearchPage() {
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [language, setLanguage] = useState("");
   const [publicationYearRange, setPublicationYearRange] = useState("");
+  const genreFilterRef = useRef<HTMLDetailsElement>(null);
   const [query, setQuery] = useState(submittedQuery);
   const [previousSubmittedQuery, setPreviousSubmittedQuery] =
     useState(submittedQuery);
@@ -60,6 +61,23 @@ function SearchPage() {
     setSuggestions([]);
     closeSuggestions();
   }
+
+  useEffect(() => {
+    function handleClickOutside(event: PointerEvent) {
+      const dropdown = genreFilterRef.current;
+      if (
+        dropdown?.open &&
+        event.target instanceof Node &&
+        !dropdown.contains(event.target)
+      ) {
+        dropdown.open = false;
+      }
+    }
+
+    document.addEventListener("pointerdown", handleClickOutside);
+    return () =>
+      document.removeEventListener("pointerdown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (!submittedQuery) return;
@@ -238,7 +256,7 @@ function SearchPage() {
 
       {searched && (
         <section className="search-filters" aria-label="Filter search results">
-          <details className="genre-filter">
+          <details className="genre-filter" ref={genreFilterRef}>
             <summary>Genres</summary>
             <div className="genre-filter-options">
               {genreOptions.map((genre) => (
