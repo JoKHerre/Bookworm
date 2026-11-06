@@ -204,6 +204,7 @@ function SearchPage() {
                     onClick={() => viewBook(book)}
                   >
                     <span className="book-suggestion-title">{book.title}</span>
+                    {" - "}
                     <span className="book-suggestion-author">
                       {book.author_name?.join(", ") || "Unknown author"}
                     </span>
