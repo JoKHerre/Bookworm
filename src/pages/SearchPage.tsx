@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   bookSuggestionsQuery,
+  type BookSearchQuery,
   type BookSearchResult,
 } from "../../shared/books";
 import { getBookSuggestions, searchBooks } from "../booksApi";
@@ -11,7 +12,7 @@ import "./SearchPage.css";
 
 type ViewMode = "grid" | "list";
 
-const genreOptions = [
+const genreOptions: BookSearchQuery["genre"] = [
   "Fantasy",
   "Sci-fi",
   "Mystery",
@@ -36,9 +37,14 @@ function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [language, setLanguage] = useState("");
-  const [publicationYearRange, setPublicationYearRange] = useState("");
+  const [selectedGenres, setSelectedGenres] = useState<
+    BookSearchQuery["genre"]
+  >([]);
+  const [language, setLanguage] = useState<BookSearchQuery["language"]>("");
+  const [publicationYearRange, setPublicationYearRange] =
+    useState<BookSearchQuery["year"]>("");
+  const hasActiveFilters =
+    selectedGenres.length > 0 || language !== "" || publicationYearRange !== "";
   const genreFilterRef = useRef<HTMLDetailsElement>(null);
   const [query, setQuery] = useState(submittedQuery);
   const [previousSubmittedQuery, setPreviousSubmittedQuery] =
@@ -90,7 +96,11 @@ function SearchPage() {
       setError("");
 
       try {
-        const data = await searchBooks(submittedQuery, signal);
+        const data = await searchBooks(submittedQuery, signal, {
+          genre: selectedGenres,
+          language,
+          year: publicationYearRange,
+        });
         if (!signal.aborted) {
           setBooks(data.books);
           setTotal(data.total);
@@ -109,7 +119,13 @@ function SearchPage() {
 
     void search();
     return () => controller.abort();
-  }, [submittedQuery, searchAttempt]);
+  }, [
+    submittedQuery,
+    searchAttempt,
+    selectedGenres,
+    language,
+    publicationYearRange,
+  ]);
 
   useEffect(() => {
     if (!showSuggestions) return;
@@ -187,6 +203,12 @@ function SearchPage() {
       searchBook: book,
     };
     void navigate(bookDetailsPath(book.key), { state });
+  }
+
+  function resetFilters() {
+    setSelectedGenres([]);
+    setLanguage("");
+    setPublicationYearRange("");
   }
 
   return (
@@ -283,7 +305,9 @@ function SearchPage() {
             Language
             <select
               value={language}
-              onChange={(event) => setLanguage(event.target.value)}
+              onChange={(event) =>
+                setLanguage(event.target.value as BookSearchQuery["language"])
+              }
             >
               <option value="">Any language</option>
               <option>English</option>
@@ -296,36 +320,55 @@ function SearchPage() {
             Publication year
             <select
               value={publicationYearRange}
-              onChange={(event) => setPublicationYearRange(event.target.value)}
+              onChange={(event) =>
+                setPublicationYearRange(
+                  event.target.value as BookSearchQuery["year"],
+                )
+              }
             >
               <option value="">Any year</option>
-              <option value="2020-present">2020–present</option>
-              <option value="2010-2019">2010–2019</option>
-              <option value="2000-2009">2000–2009</option>
-              <option value="1990-1999">1990–1999</option>
-              <option value="1980-1989">1980–1989</option>
-              <option value="1970-1979">1970–1979</option>
-              <option value="1950-1969">1950–1969</option>
-              <option value="1900-1949">1900–1949</option>
+              <option value="2020-present">2020-present</option>
+              <option value="2010-2019">2010-2019</option>
+              <option value="2000-2009">2000-2009</option>
+              <option value="1990-1999">1990-1999</option>
+              <option value="1980-1989">1980-1989</option>
+              <option value="1970-1979">1970-1979</option>
+              <option value="1950-1969">1950-1969</option>
+              <option value="1900-1949">1900-1949</option>
               <option value="before-1900">Before 1900</option>
             </select>
           </label>
+
+          <button
+            type="button"
+            className="search-filter-reset"
+            onClick={resetFilters}
+            disabled={!hasActiveFilters}
+          >
+            Reset
+          </button>
         </section>
       )}
 
       {visibleError && (
-        <p className="search-message search-message--error">{visibleError}</p>
+        <p className="search-message search-message--error" role="alert">
+          {visibleError}
+        </p>
       )}
 
       {visibleLoading && (
-        <p className="search-message">Searching for books...</p>
+        <p className="search-message" role="status">
+          Searching for books...
+        </p>
       )}
 
       {!visibleLoading &&
         !visibleError &&
         searched &&
         visibleBooks.length === 0 && (
-          <p className="search-message">No results.</p>
+          <p className="search-message" role="status">
+            No results.
+          </p>
         )}
 
       {!visibleLoading && !visibleError && visibleBooks.length > 0 && (

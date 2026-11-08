@@ -1,6 +1,7 @@
 import type {
   BookDetails,
   BookISBNs,
+  BookSearchQuery,
   BookSearchResponse,
 } from "../shared/books";
 
@@ -31,12 +32,17 @@ async function get<T>(
   return data as T;
 }
 
-export function searchBooks(query: string, signal: AbortSignal) {
-  return get<BookSearchResponse>(
-    "search",
-    new URLSearchParams({ q: query }),
-    signal,
-  );
+export function searchBooks(
+  query: string,
+  signal: AbortSignal,
+  filters: Partial<Omit<BookSearchQuery, "q">> = {},
+) {
+  const params = new URLSearchParams({ q: query });
+  for (const genre of filters.genre ?? []) params.append("genre", genre);
+  if (filters.language) params.set("language", filters.language);
+  if (filters.year) params.set("year", filters.year);
+
+  return get<BookSearchResponse>("search", params, signal);
 }
 
 export function getBookSuggestions(query: string, signal: AbortSignal) {

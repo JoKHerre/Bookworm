@@ -34,3 +34,17 @@ Serves SRC-04 (filter search results to narrow down the books shown). This task 
 3. Removing one selection updates results without changing the query or remaining selections.
 4. Reset clears all filters and restores unfiltered results for the same search query.
 5. A search with no matches or an error shows a message and leaves filters usable.
+
+## Tests
+
+The repository has no frontend test runner, so this task is verified with `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, and manual checks in the running app:
+
+| Test name                             | Setup                                                                                                                        | Asserts                                                                                                      | Criterion |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| Applying filters updates results      | Submit a search, select two genres, a language, and a year; inspect the request in DevTools and switch between List and Grid | Request includes the query and all selected filters; both layouts show the returned books and matching total | 1         |
+| Active selections stay visible        | Wait for filtered results, reopen Genres, and inspect the dropdowns                                                          | Selected genres stay checked; language and year selections remain visible                                    | 2         |
+| Removing a selection preserves others | Uncheck one selected genre, then choose "Any language" or "Any year"                                                         | Results refresh after each change; query and remaining selections stay intact                                | 3         |
+| Reset clears filters                  | With filters active, click Reset                                                                                             | All selections clear; unfiltered results return for the same query; Reset becomes disabled                   | 4         |
+| Keyboard use                          | Tab through the controls; use Space to toggle a genre and Enter to activate Reset                                            | Controls work with the keyboard; focus ring is visible                                                       | 4         |
+| No matches shows a message            | Choose a query and filters that return no matches                                                                            | "No results." appears; filters remain usable                                                                 | 5         |
+| Failed search shows an error          | Stop the API server and change a filter; restart it and change a filter again                                                | An error appears while unavailable; filters stay usable and results return after recovery                    | 5         |
