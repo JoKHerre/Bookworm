@@ -163,6 +163,29 @@
   outline-offset: 2px;
 }
 
+.isbn-language-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  font-weight: 600;
+}
+
+.isbn-language-filter select {
+  padding: 8px 12px;
+  border: 1px solid var(--tan);
+  border-radius: 8px;
+  background: var(--cream);
+  color: var(--olive);
+  font: inherit;
+}
+
+.isbn-language-filter select:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
 .isbn-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

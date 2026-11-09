@@ -139,6 +139,15 @@ export const bookDetails = z.object({
 
 export type BookDetails = z.infer<typeof bookDetails>;
 
+// GET /api/books/isbns?key=/works/OL...W&language=eng|all
+
+export const bookISBNsQuery = z.object({
+  key: openLibraryWorkKey,
+  language: z.enum(["eng", "all"]).default("eng"),
+});
+
+export type BookISBNsQuery = z.infer<typeof bookISBNsQuery>;
+
 export const bookISBNs = z.object({
   isbn_13: z.array(z.string()),
   isbn_10: z.array(z.string()),

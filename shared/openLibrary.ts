@@ -24,6 +24,7 @@ export const openLibraryWork = z.object({
 
 export const openLibraryEdition = z.object({
   key: z.string(),
+  languages: z.array(z.object({ key: z.string() })).optional(),
   isbn_13: z.array(z.string()).optional(),
   isbn_10: z.array(z.string()).optional(),
 });

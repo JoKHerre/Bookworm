@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import {
   bookSuggestionsQuery,
   bookDetailsQuery,
+  bookISBNsQuery,
   bookSearchQuery,
   type BookDetails,
   type BookISBNs,
@@ -107,14 +108,16 @@ booksRouter.get(
 booksRouter.get(
   "/isbns",
   async (req, res: Response<BookISBNs | BooksError>) => {
-    const parsed = bookDetailsQuery.safeParse(req.query);
+    const parsed = bookISBNsQuery.safeParse(req.query);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid book key" });
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid ISBN query",
+      });
       return;
     }
 
     try {
-      res.json(await getISBNsForWork(parsed.data.key));
+      res.json(await getISBNsForWork(parsed.data.key, parsed.data.language));
     } catch (error) {
       console.error("Book ISBN lookup error:", error);
       res.status(502).json({ error: "Unable to retrieve ISBNs" });

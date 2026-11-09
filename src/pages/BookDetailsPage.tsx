@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import type { BookISBNs, BookDetails } from "../../shared/books";
+import type {
+  BookISBNs,
+  BookISBNsQuery,
+  BookDetails,
+} from "../../shared/books";
 import { getBookDetails, getBookISBNs } from "../booksApi";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../ratingsApi";
@@ -43,6 +47,8 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [rating, setRating] = useState<number | null>(null); // the signed-in user's rating of this book
   const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
+  const [isbnLanguage, setISBNLanguage] =
+    useState<BookISBNsQuery["language"]>("eng");
   const [isbns, setISBNs] = useState<BookISBNs | null>(null);
   const [isbnError, setISBNError] = useState<string | null>(null);
 
@@ -73,7 +79,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     const controller = new AbortController();
     const { signal } = controller;
 
-    getBookISBNs(bookKey, signal)
+    getBookISBNs(bookKey, signal, isbnLanguage)
       .then((data) => {
         if (!signal.aborted) setISBNs(data);
       })
@@ -86,7 +92,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       });
 
     return () => controller.abort();
-  }, [bookKey, loading, book]);
+  }, [bookKey, loading, book, isbnLanguage]);
 
   // load the signed-in user's existing rating for this book, if any
   const userId = user?.id;
@@ -278,7 +284,28 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         <section className="book-isbns">
           <h2>ISBNs</h2>
           <details>
-            <summary>Show all{isbns ? ` (${totalIsbns})` : ""}</summary>
+            <summary>Show ISBNs{isbns ? ` (${totalIsbns})` : ""}</summary>
+
+            <label className="isbn-language-filter">
+              Edition language
+              <select
+                value={isbnLanguage}
+                aria-describedby="isbn-language-help"
+                onChange={(event) => {
+                  const language = event.target.value;
+                  if (language !== "eng" && language !== "all") return;
+                  setISBNLanguage(language);
+                  setISBNs(null);
+                  setISBNError(null);
+                }}
+              >
+                <option value="eng">English</option>
+                <option value="all">All languages</option>
+              </select>
+            </label>
+            <p id="isbn-language-help">
+              All languages includes editions without language information.
+            </p>
 
             {isbnError ? (
               <p role="alert">{isbnError}</p>
@@ -308,7 +335,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
                 )}
               </div>
             ) : (
-              <p>No ISBNs available for this book.</p>
+              <p>
+                {isbnLanguage === "eng"
+                  ? "No ISBNs available for editions marked as English."
+                  : "No ISBNs available for this book."}
+              </p>
             )}
           </details>
         </section>

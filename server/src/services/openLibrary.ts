@@ -11,6 +11,7 @@ import {
   openLibraryWorkKey,
   type BookDetails,
   type BookISBNs,
+  type BookISBNsQuery,
   type BookSearchQuery,
   type BookSearchResponse,
 } from "../../../shared/books.ts";
@@ -162,7 +163,10 @@ async function getEditions(key: string, limit: number, offset: number) {
   );
 }
 
-export async function getISBNsForWork(workKey: string): Promise<BookISBNs> {
+export async function getISBNsForWork(
+  workKey: string,
+  language: BookISBNsQuery["language"] = "eng",
+): Promise<BookISBNs> {
   const key = openLibraryWorkKey.parse(workKey);
   const isbn13Set = new Set<string>();
   const isbn10Set = new Set<string>();
@@ -174,6 +178,13 @@ export async function getISBNsForWork(workKey: string): Promise<BookISBNs> {
     const data = await getEditions(key, EDITIONS_PAGE_SIZE, offset);
 
     for (const edition of data.entries) {
+      if (
+        language === "eng" &&
+        !edition.languages?.some(({ key }) => key === "/languages/eng")
+      ) {
+        continue;
+      }
+
       for (const isbn of edition.isbn_13 ?? []) {
         isbn13Set.add(isbn);
       }

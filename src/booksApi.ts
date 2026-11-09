@@ -1,8 +1,10 @@
-import type {
-  BookDetails,
-  BookISBNs,
-  BookSearchQuery,
-  BookSearchResponse,
+import {
+  bookISBNs,
+  type BookDetails,
+  type BookISBNs,
+  type BookISBNsQuery,
+  type BookSearchQuery,
+  type BookSearchResponse,
 } from "../shared/books";
 
 async function get<T>(
@@ -65,6 +67,19 @@ export function getBookDetails(
   );
 }
 
-export function getBookISBNs(key: string, signal: AbortSignal) {
-  return get<BookISBNs>("isbns", new URLSearchParams({ key }), signal);
+export async function getBookISBNs(
+  key: string,
+  signal: AbortSignal,
+  language: BookISBNsQuery["language"] = "eng",
+) {
+  const data = await get<BookISBNs>(
+    "isbns",
+    new URLSearchParams({ key, language }),
+    signal,
+  );
+  const parsed = bookISBNs.safeParse(data);
+  if (!parsed.success) {
+    throw new Error("Unable to read ISBNs. Please try again.");
+  }
+  return parsed.data;
 }
