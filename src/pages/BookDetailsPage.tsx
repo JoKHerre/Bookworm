@@ -1,46 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import {
-  bookISBNFormat,
-  bookISBNsQuery,
-  type BookISBNFormat,
-  type BookISBNs,
-  type BookISBNsQuery,
-  type BookDetails,
-} from "../../shared/books";
-import { getBookDetails, getBookISBNs } from "../booksApi";
+import type { BookDetails } from "../../shared/books";
+import { getBookDetails } from "../booksApi";
+import BookISBNSection from "../components/BookISBNSection";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
-
-const isbnFormatLabels: Record<BookISBNFormat, string> = {
-  physical: "Physical books",
-  ebook: "Ebooks",
-  other: "Other / unknown",
-};
-
-function mergeISBNPages(pages: BookISBNs[]): BookISBNs["groups"] {
-  const groups: BookISBNs["groups"] = {
-    physical: { isbn_13: [], isbn_10: [] },
-    ebook: { isbn_13: [], isbn_10: [] },
-    other: { isbn_13: [], isbn_10: [] },
-  };
-
-  for (const format of bookISBNFormat.options) {
-    groups[format] = {
-      isbn_13: [
-        ...new Set(pages.flatMap((page) => page.groups[format].isbn_13)),
-      ].sort(),
-      isbn_10: [
-        ...new Set(pages.flatMap((page) => page.groups[format].isbn_10)),
-      ].sort(),
-    };
-  }
-
-  return groups;
-}
 
 function BookDetailsPage() {
   const params = useParams();
@@ -77,15 +44,6 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [rating, setRating] = useState<number | null>(null); // the signed-in user's rating of this book
   const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
-  const [isbnLanguage, setISBNLanguage] =
-    useState<BookISBNsQuery["language"]>("eng");
-  const [isbnFormat, setISBNFormat] = useState<BookISBNsQuery["format"]>("all");
-  const [isbnPages, setISBNPages] = useState<BookISBNs[]>([]);
-  const [isbnRequest, setISBNRequest] = useState({ offset: 0, attempt: 0 });
-  const [isbnLoading, setISBNLoading] = useState(true);
-  const [isbnError, setISBNError] = useState<string | null>(null);
-  const isbnRequestPending = useRef(true);
-  const isbnGeneration = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,42 +66,6 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
     return () => controller.abort();
   }, [bookKey, searchBook]);
-
-  useEffect(() => {
-    if (loading || !book) return;
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    const generation = isbnGeneration.current;
-    const isCurrentRequest = () =>
-      !signal.aborted && generation === isbnGeneration.current;
-
-    getBookISBNs(bookKey, signal, {
-      language: isbnLanguage,
-      format: isbnFormat,
-      offset: isbnRequest.offset,
-    })
-      .then((data) => {
-        if (!isCurrentRequest()) return;
-        setISBNPages((pages) =>
-          isbnRequest.offset === 0 ? [data] : [...pages, data],
-        );
-      })
-      .catch((err) => {
-        if (isCurrentRequest()) {
-          setISBNError(
-            err instanceof Error ? err.message : "Unable to load ISBNs",
-          );
-        }
-      })
-      .finally(() => {
-        if (!isCurrentRequest()) return;
-        isbnRequestPending.current = false;
-        setISBNLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [bookKey, loading, book, isbnLanguage, isbnFormat, isbnRequest]);
 
   // load the signed-in user's existing rating for this book, if any
   const userId = user?.id;
@@ -245,40 +167,6 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
   const title = book?.title ?? searchBook?.title ?? "Book details";
 
-  const isbnGroups = useMemo(() => mergeISBNPages(isbnPages), [isbnPages]);
-  const hasLoadedISBNPage = isbnPages.length > 0;
-  const nextISBNOffset = isbnPages.at(-1)?.pagination.nextOffset ?? null;
-  const editionsChecked = isbnPages.reduce(
-    (total, page) => total + page.pagination.editionsChecked,
-    0,
-  );
-  const totalIsbns = bookISBNFormat.options.reduce((total, format) => {
-    const group = isbnGroups[format];
-    return total + group.isbn_13.length + group.isbn_10.length;
-  }, 0);
-
-  function resetISBNPages() {
-    // Invalidate callbacks immediately, before the effect cleans up its request.
-    isbnGeneration.current += 1;
-    isbnRequestPending.current = true;
-    setISBNPages([]);
-    setISBNError(null);
-    setISBNLoading(true);
-    setISBNRequest({ offset: 0, attempt: 0 });
-  }
-
-  function requestISBNPage() {
-    if (isbnRequestPending.current) return;
-    const offset = isbnError ? isbnRequest.offset : nextISBNOffset;
-    if (offset === null) return;
-
-    isbnRequestPending.current = true;
-    isbnGeneration.current += 1;
-    setISBNError(null);
-    setISBNLoading(true);
-    setISBNRequest((request) => ({ offset, attempt: request.attempt + 1 }));
-  }
-
   return (
     <main className="book-details" aria-busy={loading}>
       <button className="back-button" onClick={onBack}>
@@ -361,152 +249,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         </>
       )}
 
-      {book && (
-        <section className="book-isbns">
-          <h2>ISBNs</h2>
-          <details>
-            <summary>
-              Show ISBNs{hasLoadedISBNPage ? ` (${totalIsbns})` : ""}
-            </summary>
-
-            <label className="isbn-filter">
-              Edition language
-              <select
-                value={isbnLanguage}
-                aria-describedby="isbn-language-help"
-                onChange={(event) => {
-                  const language = event.target.value;
-                  if (language !== "eng" && language !== "all") return;
-                  if (language === isbnLanguage) return;
-                  setISBNLanguage(language);
-                  resetISBNPages();
-                }}
-              >
-                <option value="eng">English</option>
-                <option value="all">All languages</option>
-              </select>
-            </label>
-            <p id="isbn-language-help">
-              All languages includes editions without language information.
-            </p>
-
-            <label className="isbn-filter">
-              Edition format
-              <select
-                value={isbnFormat}
-                aria-describedby="isbn-format-help"
-                onChange={(event) => {
-                  const format = bookISBNsQuery.shape.format.safeParse(
-                    event.target.value,
-                  );
-                  if (!format.success) return;
-                  if (format.data === isbnFormat) return;
-                  setISBNFormat(format.data);
-                  resetISBNPages();
-                }}
-              >
-                <option value="all">All formats</option>
-                {bookISBNFormat.options.map((format) => (
-                  <option key={format} value={format}>
-                    {isbnFormatLabels[format]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p id="isbn-format-help">
-              Groups use the edition's format information. Other / unknown
-              includes audio editions and editions with missing or unrecognized
-              formats.
-            </p>
-
-            {hasLoadedISBNPage && (
-              <p role="status">
-                {editionsChecked} editions checked.{" "}
-                {nextISBNOffset !== null
-                  ? "More editions remain."
-                  : "No more editions remain."}
-              </p>
-            )}
-            {isbnError && <p role="alert">{isbnError}</p>}
-            {isbnLoading && (
-              <p role="status">
-                {hasLoadedISBNPage
-                  ? "Loading more ISBNs..."
-                  : "Loading ISBNs..."}
-              </p>
-            )}
-
-            {totalIsbns > 0 && (
-              <div>
-                {bookISBNFormat.options.map((format) => {
-                  const group = isbnGroups[format];
-                  const groupTotal =
-                    group.isbn_13.length + group.isbn_10.length;
-                  if (groupTotal === 0) return null;
-
-                  return (
-                    <section className="isbn-format-group" key={format}>
-                      <h3>
-                        {isbnFormatLabels[format]} ({groupTotal})
-                      </h3>
-                      <div className="isbn-columns">
-                        {group.isbn_13.length > 0 && (
-                          <div className="isbn-group">
-                            <h4>ISBN-13 ({group.isbn_13.length})</h4>
-                            <ul>
-                              {group.isbn_13.map((isbn) => (
-                                <li key={`isbn13-${isbn}`}>{isbn}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {group.isbn_10.length > 0 && (
-                          <div className="isbn-group">
-                            <h4>ISBN-10 ({group.isbn_10.length})</h4>
-                            <ul>
-                              {group.isbn_10.map((isbn) => (
-                                <li key={`isbn10-${isbn}`}>{isbn}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            )}
-            {hasLoadedISBNPage &&
-              totalIsbns === 0 &&
-              nextISBNOffset !== null && (
-                <p>No matching ISBNs found in the editions checked so far.</p>
-              )}
-            {hasLoadedISBNPage &&
-              totalIsbns === 0 &&
-              nextISBNOffset === null && (
-                <p>
-                  No ISBNs available for{" "}
-                  {isbnFormat === "all"
-                    ? "all formats"
-                    : isbnFormatLabels[isbnFormat].toLowerCase()}{" "}
-                  {isbnLanguage === "eng"
-                    ? "among editions marked as English."
-                    : "across all languages."}
-                </p>
-              )}
-            {(isbnError || nextISBNOffset !== null) && (
-              <button
-                className="isbn-page-button"
-                type="button"
-                onClick={requestISBNPage}
-                disabled={isbnLoading}
-              >
-                {isbnLoading ? "Loading..." : isbnError ? "Retry" : "Load more"}
-              </button>
-            )}
-          </details>
-        </section>
-      )}
+      {book && <BookISBNSection bookKey={bookKey} />}
     </main>
   );
 }
