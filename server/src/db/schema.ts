@@ -9,6 +9,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { READING_STATUSES } from "../../../shared/readingStatus.ts";
 
 export const users = pgTable("users", {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
@@ -36,11 +37,7 @@ export const sessions = pgTable(
 );
 
 // define the allowed reading status values for user's saved books
-export const readingStatusEnum = pgEnum("reading_status", [
-  "to_be_read",
-  "currently_reading",
-  "finished",
-]);
+export const readingStatusEnum = pgEnum("reading_status", READING_STATUSES);
 
 export const savedBooks = pgTable(
   "saved_books",
