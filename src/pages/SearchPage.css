@@ -342,7 +342,8 @@
 }
 
 .search-filter select,
-.genre-filter summary {
+.genre-filter summary,
+.search-filter-reset {
   padding: 8px 10px;
   font: inherit;
   color: var(--olive);
@@ -350,6 +351,11 @@
   border: 1.5px solid var(--tan);
   border-radius: 10px;
   cursor: pointer;
+}
+
+.search-filter-reset:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .genre-filter {
@@ -386,7 +392,8 @@
 
 .search-filter select:focus-visible,
 .genre-filter summary:focus-visible,
-.genre-filter-options input:focus-visible {
+.genre-filter-options input:focus-visible,
+.search-filter-reset:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 2px;
 }
