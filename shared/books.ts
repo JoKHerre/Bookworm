@@ -143,12 +143,24 @@ export const bookISBNFormat = z.enum(["physical", "ebook", "other"]);
 
 export type BookISBNFormat = z.infer<typeof bookISBNFormat>;
 
-// GET /api/books/isbns?key=/works/OL...W&language=eng|all&format=all|physical|ebook|other
+export const ISBN_EDITIONS_PAGE_SIZE = 100;
+
+const isbnPaginationParameter = z
+  .string()
+  .regex(/^\d+$/, "Pagination values must be nonnegative integers")
+  .transform(Number)
+  .pipe(z.number().int().nonnegative());
+
+// GET /api/books/isbns?key=/works/OL...W&language=eng|all&format=all|physical|ebook|other&offset=0&limit=100
 
 export const bookISBNsQuery = z.object({
   key: openLibraryWorkKey,
   language: z.enum(["eng", "all"]).default("eng"),
   format: z.enum(["all", ...bookISBNFormat.options]).default("all"),
+  offset: isbnPaginationParameter.default(0),
+  limit: isbnPaginationParameter
+    .pipe(z.number().int().min(1).max(ISBN_EDITIONS_PAGE_SIZE))
+    .default(ISBN_EDITIONS_PAGE_SIZE),
 });
 
 export type BookISBNsQuery = z.infer<typeof bookISBNsQuery>;
@@ -158,12 +170,36 @@ const bookISBNGroup = z.object({
   isbn_10: z.array(z.string()),
 });
 
+const bookISBNPagination = z
+  .object({
+    offset: z.number().int().nonnegative(),
+    editionsChecked: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(ISBN_EDITIONS_PAGE_SIZE),
+    totalEditions: z.number().int().nonnegative(),
+    nextOffset: z.number().int().nonnegative().nullable(),
+  })
+  .refine(({ offset, editionsChecked, totalEditions, nextOffset }) => {
+    const end = offset + editionsChecked;
+    if (!Number.isSafeInteger(end)) return false;
+    if (editionsChecked === 0) {
+      return offset >= totalEditions && nextOffset === null;
+    }
+
+    return (
+      end <= totalEditions && nextOffset === (end < totalEditions ? end : null)
+    );
+  }, "Invalid ISBN pagination");
+
 export const bookISBNs = z.object({
   groups: z.object({
     physical: bookISBNGroup,
     ebook: bookISBNGroup,
     other: bookISBNGroup,
   }),
+  pagination: bookISBNPagination,
 });
 
 export type BookISBNs = z.infer<typeof bookISBNs>;

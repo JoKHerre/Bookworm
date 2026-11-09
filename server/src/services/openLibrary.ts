@@ -8,6 +8,7 @@ import {
 } from "../../../shared/openLibrary.ts";
 
 import {
+  bookISBNs,
   openLibraryWorkKey,
   type BookDetails,
   type BookISBNFormat,
@@ -18,7 +19,6 @@ import {
 } from "../../../shared/books.ts";
 
 const BASE_URL = "https://openlibrary.org";
-const EDITIONS_PAGE_SIZE = 100;
 
 const languageCodes = {
   English: "eng",
@@ -203,56 +203,57 @@ function sortedISBNs(group: { isbn_13: Set<string>; isbn_10: Set<string> }) {
 }
 
 export async function getISBNsForWork(
-  workKey: string,
-  language: BookISBNsQuery["language"] = "eng",
-  format: BookISBNsQuery["format"] = "all",
+  query: BookISBNsQuery,
 ): Promise<BookISBNs> {
-  const key = openLibraryWorkKey.parse(workKey);
+  const { language, format, offset, limit } = query;
+  const key = openLibraryWorkKey.parse(query.key);
   const isbnSets = {
     physical: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
     ebook: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
     other: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
   };
 
-  let offset = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const data = await getEditions(key, EDITIONS_PAGE_SIZE, offset);
-
-    for (const edition of data.entries) {
-      if (
-        language === "eng" &&
-        !edition.languages?.some(({ key }) => key === "/languages/eng")
-      ) {
-        continue;
-      }
-
-      const editionFormat = classifyEditionFormat(edition.physical_format);
-      if (format !== "all" && format !== editionFormat) continue;
-      const group = isbnSets[editionFormat];
-
-      for (const isbn of edition.isbn_13 ?? []) {
-        group.isbn_13.add(isbn);
-      }
-
-      for (const isbn of edition.isbn_10 ?? []) {
-        group.isbn_10.add(isbn);
-      }
-    }
-
-    offset += data.entries.length;
-
-    hasMore = data.entries.length > 0 && offset < data.size;
+  const data = await getEditions(key, limit, offset);
+  if (data.entries.length > limit) {
+    throw new OpenLibraryError("Invalid Open Library edition page", 502);
   }
 
-  return {
+  for (const edition of data.entries) {
+    if (
+      language === "eng" &&
+      !edition.languages?.some(({ key }) => key === "/languages/eng")
+    ) {
+      continue;
+    }
+
+    const editionFormat = classifyEditionFormat(edition.physical_format);
+    if (format !== "all" && format !== editionFormat) continue;
+    const group = isbnSets[editionFormat];
+
+    for (const isbn of edition.isbn_13 ?? []) {
+      group.isbn_13.add(isbn);
+    }
+
+    for (const isbn of edition.isbn_10 ?? []) {
+      group.isbn_10.add(isbn);
+    }
+  }
+
+  const end = offset + data.entries.length;
+
+  return bookISBNs.parse({
     groups: {
       physical: sortedISBNs(isbnSets.physical),
       ebook: sortedISBNs(isbnSets.ebook),
       other: sortedISBNs(isbnSets.other),
     },
-  };
+    pagination: {
+      offset,
+      editionsChecked: data.entries.length,
+      totalEditions: data.size,
+      nextOffset: end < data.size ? end : null,
+    },
+  });
 }
 
 export async function getBookDetails(

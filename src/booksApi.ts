@@ -1,4 +1,5 @@
 import {
+  ISBN_EDITIONS_PAGE_SIZE,
   bookISBNs,
   type BookDetails,
   type BookISBNs,
@@ -70,16 +71,31 @@ export function getBookDetails(
 export async function getBookISBNs(
   key: string,
   signal: AbortSignal,
-  language: BookISBNsQuery["language"] = "eng",
-  format: BookISBNsQuery["format"] = "all",
+  options: Partial<Omit<BookISBNsQuery, "key">> = {},
 ) {
+  const {
+    language = "eng",
+    format = "all",
+    offset = 0,
+    limit = ISBN_EDITIONS_PAGE_SIZE,
+  } = options;
   const data = await get<BookISBNs>(
     "isbns",
-    new URLSearchParams({ key, language, format }),
+    new URLSearchParams({
+      key,
+      language,
+      format,
+      offset: String(offset),
+      limit: String(limit),
+    }),
     signal,
   );
   const parsed = bookISBNs.safeParse(data);
-  if (!parsed.success) {
+  if (
+    !parsed.success ||
+    parsed.data.pagination.offset !== offset ||
+    parsed.data.pagination.editionsChecked > limit
+  ) {
     throw new Error("Unable to read ISBNs. Please try again.");
   }
   return parsed.data;

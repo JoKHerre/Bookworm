@@ -31,7 +31,7 @@ export const openLibraryEdition = z.object({
 });
 
 export const openLibraryEditionsResponse = z.object({
-  size: z.number(),
+  size: z.number().int().nonnegative(),
   entries: z.array(openLibraryEdition),
 });
 

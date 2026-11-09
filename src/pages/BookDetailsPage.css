@@ -217,6 +217,33 @@
   overflow-wrap: anywhere;
 }
 
+.isbn-page-button {
+  margin-top: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--olive);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--olive);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.isbn-page-button:hover:not(:disabled) {
+  background: var(--olive);
+  color: var(--cream);
+}
+
+.isbn-page-button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.isbn-page-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 @media (max-width: 600px) {
   .book-header {
     flex-direction: column;
