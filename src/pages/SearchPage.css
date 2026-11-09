@@ -19,12 +19,6 @@
   width: 100%;
 }
 
-.search-form-inner {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-}
-
 .book-search-form input {
   font: inherit;
   padding: 12px 16px;
@@ -258,4 +252,72 @@
   .book-list-action {
     display: none;
   }
+}
+
+/* Book search suggestions */
+
+.search-input-wrapper {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-input-wrapper input {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.search-input-wrapper input[aria-expanded="true"] {
+  border-radius: 10px 10px 0 0;
+}
+
+.book-suggestions {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  text-align: left;
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  box-shadow: var(--shadow);
+}
+
+.search-input-wrapper input:focus + .book-suggestions {
+  border-color: var(--gold);
+}
+
+.book-suggestion {
+  padding: 10px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.book-suggestion:hover,
+.book-suggestion.active {
+  background: #eee5d5;
+}
+
+.book-suggestion-title,
+.book-suggestion-author {
+  overflow-wrap: anywhere;
+}
+
+.book-suggestion-title {
+  font-weight: 600;
+}
+
+.book-suggestion-author {
+  font-size: 14px;
+  opacity: 0.75;
 }
