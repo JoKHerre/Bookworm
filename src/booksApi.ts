@@ -71,10 +71,11 @@ export async function getBookISBNs(
   key: string,
   signal: AbortSignal,
   language: BookISBNsQuery["language"] = "eng",
+  format: BookISBNsQuery["format"] = "all",
 ) {
   const data = await get<BookISBNs>(
     "isbns",
-    new URLSearchParams({ key, language }),
+    new URLSearchParams({ key, language, format }),
     signal,
   );
   const parsed = bookISBNs.safeParse(data);

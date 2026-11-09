@@ -10,6 +10,7 @@ import {
 import {
   openLibraryWorkKey,
   type BookDetails,
+  type BookISBNFormat,
   type BookISBNs,
   type BookISBNsQuery,
   type BookSearchQuery,
@@ -163,13 +164,55 @@ async function getEditions(key: string, limit: number, offset: number) {
   );
 }
 
+const physicalBookFormats = new Set([
+  "hardcover",
+  "hardback",
+  "paperback",
+  "softcover",
+  "softback",
+  "mass market paperback",
+  "trade paperback",
+  "board book",
+  "library binding",
+  "school & library binding",
+]);
+
+const ebookFormats = new Set([
+  "ebook",
+  "e-book",
+  "epub",
+  "kindle",
+  "kindle edition",
+]);
+
+function classifyEditionFormat(physicalFormat?: string): BookISBNFormat {
+  const format =
+    physicalFormat?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+
+  // Only explicit book formats qualify. Missing, mixed, and audio formats stay other.
+  if (physicalBookFormats.has(format)) return "physical";
+  if (ebookFormats.has(format)) return "ebook";
+  return "other";
+}
+
+function sortedISBNs(group: { isbn_13: Set<string>; isbn_10: Set<string> }) {
+  return {
+    isbn_13: Array.from(group.isbn_13).sort(),
+    isbn_10: Array.from(group.isbn_10).sort(),
+  };
+}
+
 export async function getISBNsForWork(
   workKey: string,
   language: BookISBNsQuery["language"] = "eng",
+  format: BookISBNsQuery["format"] = "all",
 ): Promise<BookISBNs> {
   const key = openLibraryWorkKey.parse(workKey);
-  const isbn13Set = new Set<string>();
-  const isbn10Set = new Set<string>();
+  const isbnSets = {
+    physical: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
+    ebook: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
+    other: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
+  };
 
   let offset = 0;
   let hasMore = true;
@@ -185,12 +228,16 @@ export async function getISBNsForWork(
         continue;
       }
 
+      const editionFormat = classifyEditionFormat(edition.physical_format);
+      if (format !== "all" && format !== editionFormat) continue;
+      const group = isbnSets[editionFormat];
+
       for (const isbn of edition.isbn_13 ?? []) {
-        isbn13Set.add(isbn);
+        group.isbn_13.add(isbn);
       }
 
       for (const isbn of edition.isbn_10 ?? []) {
-        isbn10Set.add(isbn);
+        group.isbn_10.add(isbn);
       }
     }
 
@@ -200,8 +247,11 @@ export async function getISBNsForWork(
   }
 
   return {
-    isbn_13: Array.from(isbn13Set).sort(),
-    isbn_10: Array.from(isbn10Set).sort(),
+    groups: {
+      physical: sortedISBNs(isbnSets.physical),
+      ebook: sortedISBNs(isbnSets.ebook),
+      other: sortedISBNs(isbnSets.other),
+    },
   };
 }
 

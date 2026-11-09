@@ -163,7 +163,7 @@
   outline-offset: 2px;
 }
 
-.isbn-language-filter {
+.isbn-filter {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -172,7 +172,7 @@
   font-weight: 600;
 }
 
-.isbn-language-filter select {
+.isbn-filter select {
   padding: 8px 12px;
   border: 1px solid var(--tan);
   border-radius: 8px;
@@ -181,9 +181,17 @@
   font: inherit;
 }
 
-.isbn-language-filter select:focus-visible {
+.isbn-filter select:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 2px;
+}
+
+.isbn-format-group {
+  margin-top: 24px;
+}
+
+.isbn-format-group h3 {
+  margin-bottom: 0;
 }
 
 .isbn-columns {
@@ -193,8 +201,8 @@
   margin-top: 16px;
 }
 
-.isbn-group h3 {
-  margin-bottom: 8px;
+.isbn-group h4 {
+  margin: 0 0 8px;
 }
 
 .isbn-group ul {

@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import type {
-  BookISBNs,
-  BookISBNsQuery,
-  BookDetails,
+import {
+  bookISBNFormat,
+  bookISBNsQuery,
+  type BookISBNFormat,
+  type BookISBNs,
+  type BookISBNsQuery,
+  type BookDetails,
 } from "../../shared/books";
 import { getBookDetails, getBookISBNs } from "../booksApi";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
@@ -11,6 +14,12 @@ import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
+
+const isbnFormatLabels: Record<BookISBNFormat, string> = {
+  physical: "Physical books",
+  ebook: "Ebooks",
+  other: "Other / unknown",
+};
 
 function BookDetailsPage() {
   const params = useParams();
@@ -49,6 +58,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
   const [isbnLanguage, setISBNLanguage] =
     useState<BookISBNsQuery["language"]>("eng");
+  const [isbnFormat, setISBNFormat] = useState<BookISBNsQuery["format"]>("all");
   const [isbns, setISBNs] = useState<BookISBNs | null>(null);
   const [isbnError, setISBNError] = useState<string | null>(null);
 
@@ -79,7 +89,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     const controller = new AbortController();
     const { signal } = controller;
 
-    getBookISBNs(bookKey, signal, isbnLanguage)
+    getBookISBNs(bookKey, signal, isbnLanguage, isbnFormat)
       .then((data) => {
         if (!signal.aborted) setISBNs(data);
       })
@@ -92,7 +102,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       });
 
     return () => controller.abort();
-  }, [bookKey, loading, book, isbnLanguage]);
+  }, [bookKey, loading, book, isbnLanguage, isbnFormat]);
 
   // load the signed-in user's existing rating for this book, if any
   const userId = user?.id;
@@ -194,9 +204,12 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
   const title = book?.title ?? searchBook?.title ?? "Book details";
 
-  const isbn13List = isbns?.isbn_13 ?? [];
-  const isbn10List = isbns?.isbn_10 ?? [];
-  const totalIsbns = isbn13List.length + isbn10List.length;
+  const totalIsbns = isbns
+    ? bookISBNFormat.options.reduce((total, format) => {
+        const group = isbns.groups[format];
+        return total + group.isbn_13.length + group.isbn_10.length;
+      }, 0)
+    : 0;
 
   return (
     <main className="book-details" aria-busy={loading}>
@@ -286,7 +299,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
           <details>
             <summary>Show ISBNs{isbns ? ` (${totalIsbns})` : ""}</summary>
 
-            <label className="isbn-language-filter">
+            <label className="isbn-filter">
               Edition language
               <select
                 value={isbnLanguage}
@@ -307,38 +320,87 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
               All languages includes editions without language information.
             </p>
 
+            <label className="isbn-filter">
+              Edition format
+              <select
+                value={isbnFormat}
+                aria-describedby="isbn-format-help"
+                onChange={(event) => {
+                  const format = bookISBNsQuery.shape.format.safeParse(
+                    event.target.value,
+                  );
+                  if (!format.success) return;
+                  setISBNFormat(format.data);
+                  setISBNs(null);
+                  setISBNError(null);
+                }}
+              >
+                <option value="all">All formats</option>
+                {bookISBNFormat.options.map((format) => (
+                  <option key={format} value={format}>
+                    {isbnFormatLabels[format]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p id="isbn-format-help">
+              Groups use the edition's format information. Other / unknown
+              includes audio editions and editions with missing or unrecognized
+              formats.
+            </p>
+
             {isbnError ? (
               <p role="alert">{isbnError}</p>
             ) : !isbns ? (
               <p role="status">Loading ISBNs...</p>
             ) : totalIsbns > 0 ? (
-              <div className="isbn-columns">
-                {isbn13List.length > 0 && (
-                  <div className="isbn-group">
-                    <h3>ISBN-13 ({isbn13List.length})</h3>
-                    <ul>
-                      {isbn13List.map((isbn) => (
-                        <li key={`isbn13-${isbn}`}>{isbn}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {isbn10List.length > 0 && (
-                  <div className="isbn-group">
-                    <h3>ISBN-10 ({isbn10List.length})</h3>
-                    <ul>
-                      {isbn10List.map((isbn) => (
-                        <li key={`isbn10-${isbn}`}>{isbn}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+              <div>
+                {bookISBNFormat.options.map((format) => {
+                  const group = isbns.groups[format];
+                  const groupTotal =
+                    group.isbn_13.length + group.isbn_10.length;
+                  if (groupTotal === 0) return null;
+
+                  return (
+                    <section className="isbn-format-group" key={format}>
+                      <h3>
+                        {isbnFormatLabels[format]} ({groupTotal})
+                      </h3>
+                      <div className="isbn-columns">
+                        {group.isbn_13.length > 0 && (
+                          <div className="isbn-group">
+                            <h4>ISBN-13 ({group.isbn_13.length})</h4>
+                            <ul>
+                              {group.isbn_13.map((isbn) => (
+                                <li key={`isbn13-${isbn}`}>{isbn}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {group.isbn_10.length > 0 && (
+                          <div className="isbn-group">
+                            <h4>ISBN-10 ({group.isbn_10.length})</h4>
+                            <ul>
+                              {group.isbn_10.map((isbn) => (
+                                <li key={`isbn10-${isbn}`}>{isbn}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
               </div>
             ) : (
               <p>
+                No ISBNs available for{" "}
+                {isbnFormat === "all"
+                  ? "all formats"
+                  : isbnFormatLabels[isbnFormat].toLowerCase()}{" "}
                 {isbnLanguage === "eng"
-                  ? "No ISBNs available for editions marked as English."
-                  : "No ISBNs available for this book."}
+                  ? "among editions marked as English."
+                  : "across all languages."}
               </p>
             )}
           </details>

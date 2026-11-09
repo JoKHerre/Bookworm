@@ -117,7 +117,13 @@ booksRouter.get(
     }
 
     try {
-      res.json(await getISBNsForWork(parsed.data.key, parsed.data.language));
+      res.json(
+        await getISBNsForWork(
+          parsed.data.key,
+          parsed.data.language,
+          parsed.data.format,
+        ),
+      );
     } catch (error) {
       console.error("Book ISBN lookup error:", error);
       res.status(502).json({ error: "Unable to retrieve ISBNs" });

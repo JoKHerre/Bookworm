@@ -139,18 +139,31 @@ export const bookDetails = z.object({
 
 export type BookDetails = z.infer<typeof bookDetails>;
 
-// GET /api/books/isbns?key=/works/OL...W&language=eng|all
+export const bookISBNFormat = z.enum(["physical", "ebook", "other"]);
+
+export type BookISBNFormat = z.infer<typeof bookISBNFormat>;
+
+// GET /api/books/isbns?key=/works/OL...W&language=eng|all&format=all|physical|ebook|other
 
 export const bookISBNsQuery = z.object({
   key: openLibraryWorkKey,
   language: z.enum(["eng", "all"]).default("eng"),
+  format: z.enum(["all", ...bookISBNFormat.options]).default("all"),
 });
 
 export type BookISBNsQuery = z.infer<typeof bookISBNsQuery>;
 
-export const bookISBNs = z.object({
+const bookISBNGroup = z.object({
   isbn_13: z.array(z.string()),
   isbn_10: z.array(z.string()),
+});
+
+export const bookISBNs = z.object({
+  groups: z.object({
+    physical: bookISBNGroup,
+    ebook: bookISBNGroup,
+    other: bookISBNGroup,
+  }),
 });
 
 export type BookISBNs = z.infer<typeof bookISBNs>;
