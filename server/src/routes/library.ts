@@ -5,6 +5,7 @@ import { db } from "../db/index.ts"; // postgresql connection
 import { savedBooks } from "../db/schema.ts"; // saved books table definition
 import { requireAuth } from "../auth/middleware.ts"; // existing login check
 import { openLibraryWorkKey } from "../../../shared/books.ts";
+import { READING_STATUSES } from "../../../shared/readingStatus.ts";
 
 // define expected shape of request body for saving a book
 // bookKey format using regex, reject extra fields (such as a userid) with .strict(), etc
@@ -18,12 +19,25 @@ const saveBookBody = z
 // require an object with one property, readingStatus, which must be one of the three allowed values
 const updateReadingStatusBody = z
   .object({
-    readingStatus: z.enum(["to_be_read", "currently_reading", "finished"]),
+    readingStatus: z.enum(READING_STATUSES),
   })
   .strict();
 
 const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
+
+function parseSavedBookId(idParam: unknown): number | null {
+  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
+    return null;
+  }
+
+  const id = Number(idParam);
+  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+    return null;
+  }
+
+  return id;
+}
 
 // create an express router for library-related endpoints
 export const libraryRouter: Router = Router();
@@ -31,12 +45,13 @@ export const libraryRouter: Router = Router();
 // define GET /api/library endpoint for retrieving a user's saved books
 libraryRouter.get("/", requireAuth, async (_req, res) => {
   // run requireAuth before handler to reject unauthenticated requests
-  // from the saved_books table, for each row belonging to the user, get the id, bookKey, and createdAt fields
+  // from saved_books, return each row's identity, key, creation time, and reading status
   const books = await db
     .select({
       id: savedBooks.id,
       bookKey: savedBooks.bookKey,
       createdAt: savedBooks.createdAt,
+      readingStatus: savedBooks.readingStatus,
     })
     .from(savedBooks)
     .where(eq(savedBooks.userId, res.locals.user!.id));
@@ -48,15 +63,8 @@ libraryRouter.get("/", requireAuth, async (_req, res) => {
 // define DELETE /api/library/:id endpoint for removing a saved book from the user's library
 libraryRouter.delete("/:id", requireAuth, async (req, res) => {
   // Validate the path parameter before converting it to a PostgreSQL integer.
-  const idParam = req.params.id;
-  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
-    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
-    return;
-  }
-
-  // Reject unsafe values and numbers outside PostgreSQL's positive integer range.
-  const id = Number(idParam);
-  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+  const id = parseSavedBookId(req.params.id);
+  if (id === null) {
     res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
     return;
   }
@@ -82,14 +90,8 @@ libraryRouter.delete("/:id", requireAuth, async (req, res) => {
 // PATCH route for updating the reading status of a saved book in the user's library
 libraryRouter.patch("/:id/reading-status", requireAuth, async (req, res) => {
   // ensure valid book id
-  const idParam = req.params.id;
-  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
-    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
-    return;
-  }
-
-  const id = Number(idParam);
-  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
+  const id = parseSavedBookId(req.params.id);
+  if (id === null) {
     res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
     return;
   }
