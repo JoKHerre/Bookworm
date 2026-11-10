@@ -5,6 +5,7 @@ import {
   READING_STATUSES,
   type ReadingStatus,
 } from "../../shared/readingStatus";
+import { filterByTag, libraryTags } from "../../shared/tags";
 import StarDisplay from "../components/StarDisplay";
 import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
@@ -56,6 +57,7 @@ function PersonalLibraryPage() {
     Record<number, string>
   >({}); // errors to display beside the affected book's status control
   const [ratings, setRatings] = useState<Map<string, number>>(() => new Map()); // the user's rating for each rated bookKey
+  const [selectedTag, setSelectedTag] = useState(""); // the tag the library is filtered by; "" shows every book
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
 
   // remove a book:
@@ -265,6 +267,11 @@ function PersonalLibraryPage() {
     void navigate(bookDetailsPath(bookKey), { state });
   }
 
+  // a selected tag that no longer exists in the library falls back to "All tags"
+  const availableTags = libraryTags(books);
+  const activeTag = availableTags.includes(selectedTag) ? selectedTag : "";
+  const visibleBooks = filterByTag(books, activeTag);
+
   return (
     <div className="personal-library-shell">
       <main className="personal-library-page" id="personal-library">
@@ -318,107 +325,145 @@ function PersonalLibraryPage() {
               </button>
             </div>
           ) : (
-            <ul className="personal-library-book-grid" aria-label="Saved books">
-              {books.map(({ id, bookKey, details, readingStatus }) => {
-                const title = details?.title ?? "Book details unavailable";
-                const coverId = details?.covers?.[0];
-                const isRemoving = removingBookIds.has(id);
-                const isUpdatingReadingStatus =
-                  updatingReadingStatusIds.has(id);
-                const readingStatusError = readingStatusErrors[id];
-                const rating = ratings.get(bookKey);
+            <>
+              {availableTags.length > 0 && (
+                <div className="personal-library-tag-filter">
+                  <label htmlFor="personal-library-tag-filter">
+                    Filter by tag
+                  </label>
+                  <select
+                    id="personal-library-tag-filter"
+                    value={activeTag}
+                    onChange={(event) => setSelectedTag(event.target.value)}
+                  >
+                    <option value="">All tags</option>
+                    {availableTags.map((tag) => (
+                      <option key={tag} value={tag}>
+                        {tag}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {visibleBooks.length === 0 ? (
+                <p className="personal-library-message" role="status">
+                  No books match this tag.
+                </p>
+              ) : (
+                <ul
+                  className="personal-library-book-grid"
+                  aria-label="Saved books"
+                >
+                  {visibleBooks.map(
+                    ({ id, bookKey, details, readingStatus }) => {
+                      const title =
+                        details?.title ?? "Book details unavailable";
+                      const coverId = details?.covers?.[0];
+                      const isRemoving = removingBookIds.has(id);
+                      const isUpdatingReadingStatus =
+                        updatingReadingStatusIds.has(id);
+                      const readingStatusError = readingStatusErrors[id];
+                      const rating = ratings.get(bookKey);
 
-                return (
-                  <li className="personal-library-book-card" key={id}>
-                    {coverId ? (
-                      <img
-                        className="personal-library-book-cover"
-                        src={`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`}
-                        alt={`Cover of ${title}`}
-                      />
-                    ) : (
-                      <div
-                        className="personal-library-book-cover personal-library-book-cover--placeholder"
-                        aria-hidden="true"
-                      />
-                    )}
-                    {/* select book to view details */}
-                    <div className="personal-library-book-details">
-                      <h3>
-                        <button
-                          className="personal-library-book-title"
-                          type="button"
-                          aria-label={`View details for ${title}`}
-                          onClick={() => viewBook(bookKey)}
-                        >
-                          {title}
-                        </button>
-                      </h3>
-                      <p>
-                        {details?.authors.join(", ") || "Author unavailable"}
-                      </p>
-                      {rating !== undefined && <StarDisplay rating={rating} />}
-                      {!details && (
-                        <p className="personal-library-book-key">{bookKey}</p>
-                      )}
-                    </div>
-                    <div className="personal-library-book-status">
-                      <select
-                        aria-label={`Reading status for ${title}`}
-                        aria-busy={isUpdatingReadingStatus}
-                        aria-describedby={
-                          readingStatusError
-                            ? `reading-status-error-${id}`
-                            : undefined
-                        }
-                        disabled={isUpdatingReadingStatus}
-                        value={readingStatus}
-                        onChange={(event) =>
-                          void updateReadingStatus(
-                            id,
-                            title,
-                            event.target.value as ReadingStatus,
-                          )
-                        }
-                      >
-                        {READING_STATUS_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      {isUpdatingReadingStatus && (
-                        <p
-                          className="personal-library-book-status-message"
-                          role="status"
-                        >
-                          Saving status…
-                        </p>
-                      )}
-                      {readingStatusError && (
-                        <p
-                          className="personal-library-book-status-error"
-                          id={`reading-status-error-${id}`}
-                          role="alert"
-                        >
-                          {readingStatusError}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      className="personal-library-book-remove"
-                      type="button"
-                      aria-label={`${isRemoving ? "Removing" : "Remove"} ${title} from my library`}
-                      aria-busy={isRemoving}
-                      disabled={isRemoving}
-                      onClick={() => void removeBook(id, title)}
-                    >
-                      {isRemoving ? "Removing…" : "Remove"}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                      return (
+                        <li className="personal-library-book-card" key={id}>
+                          {coverId ? (
+                            <img
+                              className="personal-library-book-cover"
+                              src={`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`}
+                              alt={`Cover of ${title}`}
+                            />
+                          ) : (
+                            <div
+                              className="personal-library-book-cover personal-library-book-cover--placeholder"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {/* select book to view details */}
+                          <div className="personal-library-book-details">
+                            <h3>
+                              <button
+                                className="personal-library-book-title"
+                                type="button"
+                                aria-label={`View details for ${title}`}
+                                onClick={() => viewBook(bookKey)}
+                              >
+                                {title}
+                              </button>
+                            </h3>
+                            <p>
+                              {details?.authors.join(", ") ||
+                                "Author unavailable"}
+                            </p>
+                            {rating !== undefined && (
+                              <StarDisplay rating={rating} />
+                            )}
+                            {!details && (
+                              <p className="personal-library-book-key">
+                                {bookKey}
+                              </p>
+                            )}
+                          </div>
+                          <div className="personal-library-book-status">
+                            <select
+                              aria-label={`Reading status for ${title}`}
+                              aria-busy={isUpdatingReadingStatus}
+                              aria-describedby={
+                                readingStatusError
+                                  ? `reading-status-error-${id}`
+                                  : undefined
+                              }
+                              disabled={isUpdatingReadingStatus}
+                              value={readingStatus}
+                              onChange={(event) =>
+                                void updateReadingStatus(
+                                  id,
+                                  title,
+                                  event.target.value as ReadingStatus,
+                                )
+                              }
+                            >
+                              {READING_STATUS_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            {isUpdatingReadingStatus && (
+                              <p
+                                className="personal-library-book-status-message"
+                                role="status"
+                              >
+                                Saving status…
+                              </p>
+                            )}
+                            {readingStatusError && (
+                              <p
+                                className="personal-library-book-status-error"
+                                id={`reading-status-error-${id}`}
+                                role="alert"
+                              >
+                                {readingStatusError}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            className="personal-library-book-remove"
+                            type="button"
+                            aria-label={`${isRemoving ? "Removing" : "Remove"} ${title} from my library`}
+                            aria-busy={isRemoving}
+                            disabled={isRemoving}
+                            onClick={() => void removeBook(id, title)}
+                          >
+                            {isRemoving ? "Removing…" : "Remove"}
+                          </button>
+                        </li>
+                      );
+                    },
+                  )}
+                </ul>
+              )}
+            </>
           )}
         </section>
       </main>
