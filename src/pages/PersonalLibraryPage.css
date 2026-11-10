@@ -282,3 +282,28 @@
     padding-inline: 8px;
   }
 }
+
+.personal-library-tag-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  color: var(--olive);
+  font-size: 0.9rem;
+}
+
+.personal-library-tag-filter select {
+  min-height: 32px;
+  padding: 3px 12px;
+  border: 1px solid var(--tan);
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--olive);
+  font: inherit;
+  cursor: pointer;
+}
+
+.personal-library-tag-filter select:focus-visible {
+  outline: 2px solid var(--olive);
+  outline-offset: 2px;
+}
