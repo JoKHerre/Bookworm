@@ -38,3 +38,14 @@ export function filterByTag<T extends BookWithTags>(
   if (!tag) return [...books];
   return books.filter((book) => book.details?.tags.includes(tag));
 }
+
+// Books carrying every selected tag; an empty selection keeps every book.
+export function filterByTags<T extends BookWithTags>(
+  books: readonly T[],
+  tags: readonly string[],
+): T[] {
+  if (tags.length === 0) return [...books];
+  return books.filter((book) =>
+    tags.every((tag) => book.details?.tags.includes(tag)),
+  );
+}

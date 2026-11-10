@@ -5,7 +5,7 @@ import {
   READING_STATUSES,
   type ReadingStatus,
 } from "../../shared/readingStatus";
-import { filterByTag, libraryTags } from "../../shared/tags";
+import { filterByTags, libraryTags } from "../../shared/tags";
 import StarDisplay from "../components/StarDisplay";
 import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
@@ -57,7 +57,7 @@ function PersonalLibraryPage() {
     Record<number, string>
   >({}); // errors to display beside the affected book's status control
   const [ratings, setRatings] = useState<Map<string, number>>(() => new Map()); // the user's rating for each rated bookKey
-  const [selectedTag, setSelectedTag] = useState(""); // the tag the library is filtered by; "" shows every book
+  const [selectedTags, setSelectedTags] = useState<string[]>([]); // tags a book must all have to be shown; empty shows every book
   const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
 
   // remove a book:
@@ -267,10 +267,18 @@ function PersonalLibraryPage() {
     void navigate(bookDetailsPath(bookKey), { state });
   }
 
-  // a selected tag that no longer exists in the library falls back to "All tags"
+  // selected tags that no longer exist in the library are ignored
   const availableTags = libraryTags(books);
-  const activeTag = availableTags.includes(selectedTag) ? selectedTag : "";
-  const visibleBooks = filterByTag(books, activeTag);
+  const activeTags = selectedTags.filter((tag) => availableTags.includes(tag));
+  const visibleBooks = filterByTags(books, activeTags);
+
+  function toggleTag(tag: string) {
+    setSelectedTags(
+      activeTags.includes(tag)
+        ? activeTags.filter((activeTag) => activeTag !== tag)
+        : [...activeTags, tag],
+    );
+  }
 
   return (
     <div className="personal-library-shell">
@@ -327,27 +335,30 @@ function PersonalLibraryPage() {
           ) : (
             <>
               {availableTags.length > 0 && (
-                <div className="personal-library-tag-filter">
-                  <label htmlFor="personal-library-tag-filter">
-                    Filter by tag
-                  </label>
-                  <select
-                    id="personal-library-tag-filter"
-                    value={activeTag}
-                    onChange={(event) => setSelectedTag(event.target.value)}
+                <fieldset className="personal-library-tag-filter">
+                  <legend>Filter by tags</legend>
+                  {availableTags.map((tag) => (
+                    <label key={tag}>
+                      <input
+                        type="checkbox"
+                        checked={activeTags.includes(tag)}
+                        onChange={() => toggleTag(tag)}
+                      />
+                      {tag}
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={activeTags.length === 0}
+                    onClick={() => setSelectedTags([])}
                   >
-                    <option value="">All tags</option>
-                    {availableTags.map((tag) => (
-                      <option key={tag} value={tag}>
-                        {tag}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    Clear tags
+                  </button>
+                </fieldset>
               )}
               {visibleBooks.length === 0 ? (
                 <p className="personal-library-message" role="status">
-                  No books match this tag.
+                  No books match these tags.
                 </p>
               ) : (
                 <ul
