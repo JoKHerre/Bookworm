@@ -5,6 +5,8 @@ import type {
   BookSearchResponse,
 } from "../shared/books";
 
+import type { AvailabilityResponse } from "../shared/availability";
+
 async function get<T>(
   path: string,
   params: URLSearchParams,
@@ -67,4 +69,12 @@ export function getBookDetails(
 
 export function getBookISBNs(key: string, signal: AbortSignal) {
   return get<BookISBNs>("isbns", new URLSearchParams({ key }), signal);
+}
+
+export function getBookAvailability(key: string, signal: AbortSignal) {
+  return get<AvailabilityResponse>(
+    "availability",
+    new URLSearchParams({ key }),
+    signal,
+  );
 }
