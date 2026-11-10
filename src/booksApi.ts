@@ -8,6 +8,8 @@ import {
   type BookSearchResponse,
 } from "../shared/books";
 
+import type { AvailabilityResponse } from "../shared/availability";
+
 async function get<T>(
   path: string,
   params: URLSearchParams,
@@ -99,4 +101,12 @@ export async function getBookISBNs(
     throw new Error("Unable to read ISBNs. Please try again.");
   }
   return parsed.data;
+}
+
+export function getBookAvailability(key: string, signal: AbortSignal) {
+  return get<AvailabilityResponse>(
+    "availability",
+    new URLSearchParams({ key }),
+    signal,
+  );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import type { BookDetails } from "../../shared/books";
-import { getBookDetails } from "../booksApi";
+import { getBookDetails, getBookAvailability } from "../booksApi";
 import BookISBNSection from "../components/BookISBNSection";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../ratingsApi";
@@ -45,6 +45,13 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
 
+  const [availability, setAvailability] = useState<
+    Awaited<ReturnType<typeof getBookAvailability>>["availability"] | undefined
+  >(undefined);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(
+    null,
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -67,6 +74,25 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     return () => controller.abort();
   }, [bookKey, searchBook]);
 
+  useEffect(() => {
+    if (loading || !book) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    getBookAvailability(bookKey, signal)
+      .then((data) => {
+        if (!signal.aborted) setAvailability(data.availability);
+      })
+      .catch((err) => {
+        if (!signal.aborted) {
+          setAvailabilityError(
+            err instanceof Error ? err.message : "Unable to check availability",
+          );
+        }
+      });
+
+    return () => controller.abort();
+  }, [bookKey, loading, book]);
   // load the signed-in user's existing rating for this book, if any
   const userId = user?.id;
   useEffect(() => {
@@ -247,6 +273,27 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
             )}
           </section>
         </>
+      )}
+
+      {book && (
+        <section className="library-availability">
+          <h2>Library Availability</h2>
+          {availabilityError ? (
+            <p role="alert">{availabilityError}</p>
+          ) : availability === undefined ? (
+            <p role="status">Checking library...</p>
+          ) : availability === null ? (
+            <p>Not found in the library catalog.</p>
+          ) : (
+            <ul className="branches">
+              {Object.entries(availability.branches).map(([name, b]) => (
+                <li key={name}>
+                  {name}: {b.available} of {b.total} available
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       {book && <BookISBNSection bookKey={bookKey} />}
