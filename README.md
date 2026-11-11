@@ -1,5 +1,7 @@
 # Bookworm
 
+Bookworm is a web app for discovering books and organizing a personal library. Users can search Open Library by title or author, view book details, save books, track reading status, and rate books.
+
 A React + Vite frontend with an Express backend and a PostgreSQL database.
 
 ## Prerequisites
