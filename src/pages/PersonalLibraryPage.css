@@ -330,3 +330,12 @@
   cursor: not-allowed;
   opacity: 0.6;
 }
+
+.personal-library-tag-options {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  max-height: 96px;
+  overflow-y: auto;
+}

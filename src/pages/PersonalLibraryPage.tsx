@@ -337,16 +337,18 @@ function PersonalLibraryPage() {
               {availableTags.length > 0 && (
                 <fieldset className="personal-library-tag-filter">
                   <legend>Filter by tags</legend>
-                  {availableTags.map((tag) => (
-                    <label key={tag}>
-                      <input
-                        type="checkbox"
-                        checked={activeTags.includes(tag)}
-                        onChange={() => toggleTag(tag)}
-                      />
-                      {tag}
-                    </label>
-                  ))}
+                  <div className="personal-library-tag-options">
+                    {availableTags.map((tag) => (
+                      <label key={tag}>
+                        <input
+                          type="checkbox"
+                          checked={activeTags.includes(tag)}
+                          onChange={() => toggleTag(tag)}
+                        />
+                        {tag}
+                      </label>
+                    ))}
+                  </div>
                   <button
                     type="button"
                     disabled={activeTags.length === 0}
