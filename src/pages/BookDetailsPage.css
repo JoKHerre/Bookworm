@@ -125,6 +125,10 @@
   margin-bottom: 20px;
 }
 
+.library-availability {
+  margin-top: 40px;
+}
+
 .library-availability .branches {
   list-style: none;
   padding-left: 0;

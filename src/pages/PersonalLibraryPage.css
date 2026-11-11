@@ -282,3 +282,60 @@
     padding-inline: 8px;
   }
 }
+
+.personal-library-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0;
+  padding: 14px 0;
+  border: none;
+  color: var(--olive);
+  font-size: 0.9rem;
+}
+
+.personal-library-tag-filter legend {
+  float: left;
+  margin-right: 14px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.personal-library-tag-filter label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.personal-library-tag-filter input:focus-visible,
+.personal-library-tag-filter button:focus-visible {
+  outline: 2px solid var(--olive);
+  outline-offset: 2px;
+}
+
+.personal-library-tag-filter button {
+  min-height: 30px;
+  padding: 3px 14px;
+  border: 1px solid var(--tan);
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--olive);
+  font: inherit;
+  cursor: pointer;
+}
+
+.personal-library-tag-filter button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.personal-library-tag-options {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  max-height: 96px;
+  overflow-y: auto;
+}

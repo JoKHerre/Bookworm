@@ -283,18 +283,18 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
           </section>
 
           <section className="book-genres">
-            <h2>Genres</h2>
+            <h2>Tags</h2>
 
-            {book.subjects && book.subjects.length > 0 ? (
+            {book.tags.length > 0 ? (
               <div className="genre-list">
-                {book.subjects.slice(0, 10).map((subject) => (
-                  <span className="genre-tag" key={subject}>
-                    {subject}
+                {book.tags.map((tag) => (
+                  <span className="genre-tag" key={tag}>
+                    {tag}
                   </span>
                 ))}
               </div>
             ) : (
-              <p>No genres or subjects available.</p>
+              <p>No tags available.</p>
             )}
           </section>
         </>
