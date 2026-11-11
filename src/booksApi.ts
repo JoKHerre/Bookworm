@@ -8,7 +8,7 @@ import {
   type BookSearchResponse,
 } from "../shared/books";
 
-import type { AvailabilityResponse } from "../shared/availability";
+import { availabilityResponse } from "../shared/availability";
 
 async function get<T>(
   path: string,
@@ -103,10 +103,15 @@ export async function getBookISBNs(
   return parsed.data;
 }
 
-export function getBookAvailability(key: string, signal: AbortSignal) {
-  return get<AvailabilityResponse>(
+export async function getBookAvailability(key: string, signal: AbortSignal) {
+  const data = await get<unknown>(
     "availability",
     new URLSearchParams({ key }),
     signal,
   );
+  const parsed = availabilityResponse.safeParse(data);
+  if (!parsed.success) {
+    throw new Error("Unable to read library availability. Please try again.");
+  }
+  return parsed.data;
 }

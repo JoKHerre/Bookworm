@@ -39,9 +39,12 @@ export class OpenLibraryError extends Error {
 async function fetchOpenLibrary<T extends z.ZodType>(
   path: string,
   schema: T,
+  signal?: AbortSignal,
 ): Promise<z.infer<T>> {
   const response = await fetch(`${BASE_URL}${path}`, {
-    signal: AbortSignal.timeout(10000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+      : AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -152,7 +155,12 @@ async function getWork(key: string) {
   return fetchOpenLibrary(`${key}.json`, openLibraryWork);
 }
 
-async function getEditions(key: string, limit: number, offset: number) {
+async function getEditions(
+  key: string,
+  limit: number,
+  offset: number,
+  signal?: AbortSignal,
+) {
   const params = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
@@ -161,6 +169,7 @@ async function getEditions(key: string, limit: number, offset: number) {
   return fetchOpenLibrary(
     `${key}/editions.json?${params.toString()}`,
     openLibraryEditionsResponse,
+    signal,
   );
 }
 
@@ -204,6 +213,7 @@ function sortedISBNs(group: { isbn_13: Set<string>; isbn_10: Set<string> }) {
 
 export async function getISBNsForWork(
   query: BookISBNsQuery,
+  signal?: AbortSignal,
 ): Promise<BookISBNs> {
   const { language, format, offset, limit } = query;
   const key = openLibraryWorkKey.parse(query.key);
@@ -213,7 +223,7 @@ export async function getISBNsForWork(
     other: { isbn_13: new Set<string>(), isbn_10: new Set<string>() },
   };
 
-  const data = await getEditions(key, limit, offset);
+  const data = await getEditions(key, limit, offset, signal);
   if (data.entries.length > limit) {
     throw new OpenLibraryError("Invalid Open Library edition page", 502);
   }
