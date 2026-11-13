@@ -373,6 +373,36 @@ test("COL-04-T-1 cascades ratings when a user is deleted", async () => {
   assert.equal(rows.length, 0);
 });
 
+// constants and helper functions for COL-05-T-1 collection tests
+const NOT_NULL_VIOLATION = "23502";
+const FOREIGN_KEY_VIOLATION = "23503";
+const UNIQUE_VIOLATION = "23505";
+const CHECK_VIOLATION = "23514";
+
+function getMembershipsForUser(userId: number) {
+  return db
+    .select()
+    .from(collectionBooks)
+    .where(eq(collectionBooks.userId, userId))
+    .orderBy(collectionBooks.collectionId, collectionBooks.savedBookId);
+}
+
+function getCollectionsForUser(userId: number) {
+  return db
+    .select()
+    .from(collections)
+    .where(eq(collections.userId, userId))
+    .orderBy(collections.id);
+}
+
+function getSavedBooksForUser(userId: number) {
+  return db
+    .select()
+    .from(savedBooks)
+    .where(eq(savedBooks.userId, userId))
+    .orderBy(savedBooks.id);
+}
+
 // create a fixture with two collections, two books, and three memberships, all owned by the same user.
 async function createCollectionFixture() {
   const user = await createTestUser();
@@ -391,9 +421,13 @@ async function createCollectionFixture() {
     ])
     .returning();
   assert.ok(firstBook && secondBook && firstCollection && secondCollection);
-  
+
   // first book in both collections, second book in first collection only
-  const memberships = await db
+  const [
+    firstBookInFirstCollection,
+    secondBookInFirstCollection,
+    firstBookInSecondCollection,
+  ] = await db
     .insert(collectionBooks)
     .values([
       {
@@ -413,13 +447,25 @@ async function createCollectionFixture() {
       },
     ])
     .returning();
+  assert.ok(
+    firstBookInFirstCollection &&
+      secondBookInFirstCollection &&
+      firstBookInSecondCollection,
+  );
   return {
     user,
     firstBook,
     secondBook,
     firstCollection,
     secondCollection,
-    memberships,
+    firstBookInFirstCollection,
+    secondBookInFirstCollection,
+    firstBookInSecondCollection,
+    memberships: [
+      firstBookInFirstCollection,
+      secondBookInFirstCollection,
+      firstBookInSecondCollection,
+    ],
   };
 }
 
@@ -569,14 +615,14 @@ test("COL-05-T-1 rejects invalid collection names on insert and update", async (
   assert.ok(collection);
   await assert.rejects(
     pool.query("INSERT INTO collections (user_id) VALUES ($1)", [user.id]),
-    (error) => hasPostgresErrorCode(error, "23502"),
+    (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
   );
   // DEFAULT represents an omitted replacement value in an UPDATE.
   await assert.rejects(
     pool.query("UPDATE collections SET name = DEFAULT WHERE id = $1", [
       collection.id,
     ]),
-    (error) => hasPostgresErrorCode(error, "23502"),
+    (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
   );
   for (const name of [
     null,
@@ -591,7 +637,7 @@ test("COL-05-T-1 rejects invalid collection names on insert and update", async (
     "Favorites\n",
     "x".repeat(101),
   ]) {
-    const code = name === null ? "23502" : "23514";
+    const code = name === null ? NOT_NULL_VIOLATION : CHECK_VIOLATION;
     await assert.rejects(
       pool.query("INSERT INTO collections (user_id, name) VALUES ($1, $2)", [
         user.id,
@@ -607,10 +653,7 @@ test("COL-05-T-1 rejects invalid collection names on insert and update", async (
       (error) => hasPostgresErrorCode(error, code),
     );
   }
-  assert.deepEqual(
-    await db.select().from(collections).where(eq(collections.userId, user.id)),
-    [collection],
-  );
+  assert.deepEqual(await getCollectionsForUser(user.id), [collection]);
 });
 
 test("COL-05-T-1 enforces collection name uniqueness per owner", async () => {
@@ -621,7 +664,7 @@ test("COL-05-T-1 enforces collection name uniqueness per owner", async () => {
     .values({ userId: firstUser.id, name: "Favorites" });
   await assert.rejects(
     db.insert(collections).values({ userId: firstUser.id, name: "favorites" }),
-    (error) => hasPostgresErrorCode(error, "23505"),
+    (error) => hasPostgresErrorCode(error, UNIQUE_VIOLATION),
   );
   const [other] = await db
     .insert(collections)
@@ -645,7 +688,7 @@ test("COL-05-T-1 renames a collection without changing its memberships", async (
       .update(collections)
       .set({ name: "summer reading" })
       .where(eq(collections.id, fixture.firstCollection.id)),
-    (error) => hasPostgresErrorCode(error, "23505"),
+    (error) => hasPostgresErrorCode(error, UNIQUE_VIOLATION),
   );
   const [unchanged] = await db
     .select()
@@ -656,21 +699,14 @@ test("COL-05-T-1 renames a collection without changing its memberships", async (
     name: "BEST BOOKS",
   });
   assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, fixture.user.id))
-      .orderBy(collectionBooks.collectionId, collectionBooks.savedBookId),
+    await getMembershipsForUser(fixture.user.id),
     fixture.memberships,
   );
 });
 
 test("COL-05-T-1 supports multiple books and multiple collections", async () => {
   const fixture = await createCollectionFixture();
-  const memberships = await db
-    .select()
-    .from(collectionBooks)
-    .where(eq(collectionBooks.userId, fixture.user.id));
+  const memberships = await getMembershipsForUser(fixture.user.id);
   assert.equal(memberships.length, 3);
   assert.equal(
     memberships.filter((row) => row.collectionId === fixture.firstCollection.id)
@@ -686,29 +722,17 @@ test("COL-05-T-1 supports multiple books and multiple collections", async () => 
     assert.ok(
       row.createdAt instanceof Date && Number.isFinite(row.createdAt.getTime()),
     );
-  assert.equal(
-    (
-      await db
-        .select()
-        .from(savedBooks)
-        .where(eq(savedBooks.userId, fixture.user.id))
-    ).length,
-    2,
-  );
+  assert.equal((await getSavedBooksForUser(fixture.user.id)).length, 2);
 });
 
 test("COL-05-T-1 rejects duplicate memberships", async () => {
   const fixture = await createCollectionFixture();
   await assert.rejects(
-    db.insert(collectionBooks).values(fixture.memberships[0]!),
-    (error) => hasPostgresErrorCode(error, "23505"),
+    db.insert(collectionBooks).values(fixture.firstBookInFirstCollection),
+    (error) => hasPostgresErrorCode(error, UNIQUE_VIOLATION),
   );
   assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, fixture.user.id))
-      .orderBy(collectionBooks.collectionId, collectionBooks.savedBookId),
+    await getMembershipsForUser(fixture.user.id),
     fixture.memberships,
   );
 });
@@ -720,7 +744,7 @@ test("COL-05-T-1 rejects missing required references", async () => {
       pool.query(
         `INSERT INTO collections (user_id, name) VALUES (${expression}, 'Missing owner')`,
       ),
-      (error) => hasPostgresErrorCode(error, "23502"),
+      (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
     );
     for (let missingIndex = 0; missingIndex < 3; missingIndex += 1) {
       const values = [
@@ -739,7 +763,7 @@ test("COL-05-T-1 rejects missing required references", async () => {
          VALUES (${placeholders.join(", ")})`,
           parameters,
         ),
-        (error) => hasPostgresErrorCode(error, "23502"),
+        (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
       );
     }
   }
@@ -749,7 +773,7 @@ test("COL-05-T-1 rejects nonexistent references", async () => {
   const fixture = await createCollectionFixture();
   await assert.rejects(
     db.insert(collections).values({ userId: -1, name: "No owner" }),
-    (error) => hasPostgresErrorCode(error, "23503"),
+    (error) => hasPostgresErrorCode(error, FOREIGN_KEY_VIOLATION),
   );
   for (const membership of [
     {
@@ -770,14 +794,10 @@ test("COL-05-T-1 rejects nonexistent references", async () => {
   ])
     await assert.rejects(
       db.insert(collectionBooks).values(membership),
-      (error) => hasPostgresErrorCode(error, "23503"),
+      (error) => hasPostgresErrorCode(error, FOREIGN_KEY_VIOLATION),
     );
   assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, fixture.user.id))
-      .orderBy(collectionBooks.collectionId, collectionBooks.savedBookId),
+    await getMembershipsForUser(fixture.user.id),
     fixture.memberships,
   );
 });
@@ -800,7 +820,7 @@ test("COL-05-T-1 rejects cross-user memberships", async () => {
     ])
       await assert.rejects(
         db.insert(collectionBooks).values({ userId, ...pair }),
-        (error) => hasPostgresErrorCode(error, "23503"),
+        (error) => hasPostgresErrorCode(error, FOREIGN_KEY_VIOLATION),
       );
   }
 });
@@ -815,41 +835,21 @@ test("COL-05-T-1 removes membership without deleting parents", async () => {
         eq(collectionBooks.savedBookId, fixture.firstBook.id),
       ),
     );
-  assert.equal(
-    (
-      await db
-        .select()
-        .from(collectionBooks)
-        .where(eq(collectionBooks.userId, fixture.user.id))
-    ).length,
-    2,
-  );
+  assert.equal((await getMembershipsForUser(fixture.user.id)).length, 2);
   await db
     .delete(collectionBooks)
     .where(eq(collectionBooks.collectionId, fixture.firstCollection.id));
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, fixture.user.id)),
-    [fixture.memberships[2]],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collections)
-      .where(eq(collections.userId, fixture.user.id))
-      .orderBy(collections.id),
-    [fixture.firstCollection, fixture.secondCollection],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(savedBooks)
-      .where(eq(savedBooks.userId, fixture.user.id))
-      .orderBy(savedBooks.id),
-    [fixture.firstBook, fixture.secondBook],
-  );
+  assert.deepEqual(await getMembershipsForUser(fixture.user.id), [
+    fixture.firstBookInSecondCollection,
+  ]);
+  assert.deepEqual(await getCollectionsForUser(fixture.user.id), [
+    fixture.firstCollection,
+    fixture.secondCollection,
+  ]);
+  assert.deepEqual(await getSavedBooksForUser(fixture.user.id), [
+    fixture.firstBook,
+    fixture.secondBook,
+  ]);
 });
 
 test("COL-05-T-1 cascades membership deletion from a collection", async () => {
@@ -857,55 +857,31 @@ test("COL-05-T-1 cascades membership deletion from a collection", async () => {
   await db
     .delete(collections)
     .where(eq(collections.id, fixture.firstCollection.id));
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, fixture.user.id)),
-    [fixture.memberships[2]],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collections)
-      .where(eq(collections.userId, fixture.user.id)),
-    [fixture.secondCollection],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(savedBooks)
-      .where(eq(savedBooks.userId, fixture.user.id))
-      .orderBy(savedBooks.id),
-    [fixture.firstBook, fixture.secondBook],
-  );
+  assert.deepEqual(await getMembershipsForUser(fixture.user.id), [
+    fixture.firstBookInSecondCollection,
+  ]);
+  assert.deepEqual(await getCollectionsForUser(fixture.user.id), [
+    fixture.secondCollection,
+  ]);
+  assert.deepEqual(await getSavedBooksForUser(fixture.user.id), [
+    fixture.firstBook,
+    fixture.secondBook,
+  ]);
 });
 
 test("COL-05-T-1 cascades membership deletion from a saved book", async () => {
   const fixture = await createCollectionFixture();
   await db.delete(savedBooks).where(eq(savedBooks.id, fixture.firstBook.id));
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, fixture.user.id)),
-    [fixture.memberships[1]],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collections)
-      .where(eq(collections.userId, fixture.user.id))
-      .orderBy(collections.id),
-    [fixture.firstCollection, fixture.secondCollection],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(savedBooks)
-      .where(eq(savedBooks.userId, fixture.user.id)),
-    [fixture.secondBook],
-  );
+  assert.deepEqual(await getMembershipsForUser(fixture.user.id), [
+    fixture.secondBookInFirstCollection,
+  ]);
+  assert.deepEqual(await getCollectionsForUser(fixture.user.id), [
+    fixture.firstCollection,
+    fixture.secondCollection,
+  ]);
+  assert.deepEqual(await getSavedBooksForUser(fixture.user.id), [
+    fixture.secondBook,
+  ]);
 });
 
 test("COL-05-T-1 cascades collections and memberships when a user is deleted", async () => {
@@ -913,49 +889,19 @@ test("COL-05-T-1 cascades collections and memberships when a user is deleted", a
   const second = await createCollectionFixture();
   await db.delete(users).where(eq(users.id, first.user.id));
   createdUserIds.delete(first.user.id);
+  assert.deepEqual(await getCollectionsForUser(first.user.id), []);
+  assert.deepEqual(await getMembershipsForUser(first.user.id), []);
+  assert.deepEqual(await getSavedBooksForUser(first.user.id), []);
+  assert.deepEqual(await getCollectionsForUser(second.user.id), [
+    second.firstCollection,
+    second.secondCollection,
+  ]);
   assert.deepEqual(
-    await db
-      .select()
-      .from(collections)
-      .where(eq(collections.userId, first.user.id)),
-    [],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, first.user.id)),
-    [],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(savedBooks)
-      .where(eq(savedBooks.userId, first.user.id)),
-    [],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collections)
-      .where(eq(collections.userId, second.user.id))
-      .orderBy(collections.id),
-    [second.firstCollection, second.secondCollection],
-  );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(collectionBooks)
-      .where(eq(collectionBooks.userId, second.user.id))
-      .orderBy(collectionBooks.collectionId, collectionBooks.savedBookId),
+    await getMembershipsForUser(second.user.id),
     second.memberships,
   );
-  assert.deepEqual(
-    await db
-      .select()
-      .from(savedBooks)
-      .where(eq(savedBooks.userId, second.user.id))
-      .orderBy(savedBooks.id),
-    [second.firstBook, second.secondBook],
-  );
+  assert.deepEqual(await getSavedBooksForUser(second.user.id), [
+    second.firstBook,
+    second.secondBook,
+  ]);
 });
