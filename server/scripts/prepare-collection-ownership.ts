@@ -2,7 +2,9 @@ import pg from "pg";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
-  throw new Error("DATABASE_URL is required to push the database schema.");
+  throw new Error(
+    "Set DATABASE_URL in server/.env or export it before running db:push.",
+  );
 }
 const pool = new pg.Pool({ connectionString });
 
