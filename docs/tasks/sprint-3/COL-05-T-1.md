@@ -32,7 +32,7 @@ Define and export `collections` and `collectionBooks` in `server/src/db/schema.t
 | `collection_books` | `created_at` | Required timestamp with time zone, defaulting to the insertion time |
 
 - The membership pair `(collection_id, saved_book_id)` is the composite primary key. A book can appear once in each of several collections, and each collection can contain several books.
-- Use composite foreign keys from membership `(user_id, collection_id)` to collection `(user_id, id)` and membership `(user_id, saved_book_id)` to saved book `(user_id, id)`. Add the supporting unique constraints to those parent pairs. These relationships reject cross-user memberships in the database.
+- Use composite foreign keys from membership `(collection_id, user_id)` to collection `(id, user_id)` and membership `(saved_book_id, user_id)` to saved book `(id, user_id)`. Add the supporting unique constraints to those parent pairs. These relationships reject cross-user memberships in the database.
 - Names are unique per owner ignoring capitalization. `Favorites` and `favorites` conflict for one owner. Different owners can each have `Favorites`.
 - The database rejects untrimmed names instead of silently rewriting input. Future endpoint validation will trim input before writing. Thus ` Favorites ` cannot create a second collection beside `Favorites`.
 - For this task, boundary whitespace means PostgreSQL's `[[:space:]]` character class, including ordinary spaces, tabs, and line breaks. Reject a name starting or ending with such whitespace. Count the 1–100 limit in PostgreSQL characters, not bytes. Preserve capitalization, internal spaces, punctuation, and Unicode text. Case-insensitive uniqueness uses PostgreSQL `lower(name)` under the database locale, without accent folding or Unicode normalization.
@@ -58,11 +58,12 @@ Define and export `collections` and `collectionBooks` in `server/src/db/schema.t
 
 ### Test touchpoints
 
-- `server/src/db/schema.ts` supplies existing `users` and `savedBooks` and proposed `collections` and `collectionBooks` exports. Existing `sessions` and `bookRatings` remain covered by regression checks.
+- `server/src/db/schema.ts` supplies existing `users` and `savedBooks` and the new `collections` and `collectionBooks` exports. Existing `sessions` and `bookRatings` remain covered by regression checks.
 - `server/src/db/index.ts` supplies `db` and `pool`. Tests use Drizzle `db.insert()`, `db.select()`, `db.update()`, `db.delete()`, `.values()`, `.set()`, `.where()`, `.returning()`, and raw `pool.query()` for metadata and invalid SQL inputs. Cleanup closes the connection through `pool.end()`.
-- `server/backend_tests/schema.test.ts` contains the proposed cases below and reuses `createTestUser()`, `hasPostgresErrorCode()`, and the existing `after()` cleanup hook.
+- `server/backend_tests/schema.test.ts` contains the cases below. It uses `createCollectionFixture()`, `createTestUser()`, `hasPostgresErrorCode()`, and the existing `after()` cleanup hook.
 - `server/backend_tests/test-utils.ts` supplies `assertTestDatabaseUrl()`, `createTestBookKey()`, and `eq`. Tests may import Drizzle `and` to identify a membership pair.
 - Schema setup uses `server/drizzle.config.ts` and the existing `db:push` script in `server/package.json`. Regression validation uses the existing server `test` script and root `typecheck` script.
+- `server/scripts/prepare-collection-ownership.ts` runs before Drizzle Kit through `db:push`. On existing parent tables it adds missing `(id, user_id)` unique constraints before Drizzle creates dependent foreign keys. Drizzle Kit 0.31 otherwise orders those foreign keys before the required constraints. On a fresh database the preparation skips absent tables, and Drizzle creates their constraints with the tables. The schema application check below covers this preparation and repeated pushes.
 - New Task 1 tests call no HTTP endpoint, authentication middleware, external book service, or UI element. Existing regression tests continue to exercise their current entry points.
 
 ## Requirements
@@ -70,7 +71,7 @@ Define and export `collections` and `collectionBooks` in `server/src/db/schema.t
 - Use the existing PostgreSQL database, Drizzle ORM, `pg` connection, and Drizzle Kit workflow. Apply the schema with `pnpm --dir server db:push`. Follow the existing direct schema-push approach without adding a migration system or dependencies.
 - Enforce required values, name validity, name uniqueness, membership uniqueness, reference existence, and matching ownership through database constraints. Application-only checks are insufficient.
 - Add indexes supporting collection lookup by owner and membership lookup by saved-book owner/ID for deletion cleanup. Reuse indexes supplied by primary keys and unique constraints where they already support the query.
-- Preserve existing users, sessions, saved-book records, ratings, columns, defaults, indexes, reading-status values, and deletion rules. The supporting `(user_id, id)` constraint on `saved_books` is additive. Applying this task must preserve pre-existing data.
+- Preserve existing users, sessions, saved-book records, ratings, columns, defaults, indexes, reading-status values, and deletion rules. The supporting `(id, user_id)` constraint on `saved_books` is additive. Applying this task must preserve pre-existing data.
 - Preserve `GET /api/library`, `POST /api/library`, `DELETE /api/library/:id`, and `PATCH /api/library/:id/reading-status` response contracts. Membership cleanup on saved-book deletion must follow automatically from the schema.
 - Keep session handling and `requireAuth` in `server/src/auth/middleware.ts` intact. Database ownership constraints establish valid relationships. Task 5 must separately authenticate requests, derive the owner from the session, and restrict collection reads and writes to that owner.
 - Use `node:test` and `node:assert/strict` for tests. Retain `assertTestDatabaseUrl()` and run database tests only against `bookworm_test`. Use unique temporary users and book keys, and clean up created records even if assertions fail.
@@ -95,7 +96,7 @@ Define and export `collections` and `collectionBooks` in `server/src/db/schema.t
 
 ## Tests
 
-The following cases are planned for implementation with Task 1. Each `COL-05-T-1` test in the table belongs in `server/backend_tests/schema.test.ts`. Use `node:test` and `node:assert/strict` with the existing database helpers.
+Each `COL-05-T-1` test in the table lives in `server/backend_tests/schema.test.ts`. Use `node:test` and `node:assert/strict` with the existing database helpers.
 
 Shared setup applies the schema to the separate `bookworm_test` database, invokes `assertTestDatabaseUrl()` before connecting, and creates uniquely named temporary users as needed. Book fixtures use `createTestBookKey()` and real `savedBooks` inserts. Cleanup removes temporary users, allowing foreign-key cascades to remove their dependent rows, and closes `pool` in the existing cleanup hook. Inspect PostgreSQL errors using `hasPostgresErrorCode()` to distinguish not-null (`23502`), foreign-key (`23503`), check (`23514`), and unique (`23505`) violations.
 
@@ -121,8 +122,8 @@ Shared setup applies the schema to the separate `bookworm_test` database, invoke
 
 | Check | File or entry point | Setup | Asserts | Criterion |
 | --- | --- | --- | --- | --- |
-| `COL-05-T-1 preserves existing data during schema push` (manual database check) | `server/src/db/schema.ts`, `server/drizzle.config.ts`, and `server/package.json` through `db:push` | In a disposable `bookworm_test` database with the pre-task schema, seed a user, session, saved book with a nondefault reading status, and rating. Record their full rows, apply the updated schema, then compare rows using direct SQL | Schema application succeeds, both new tables exist, and all seeded records retain their original values | 1, 14 |
-| Existing backend regression suite and new Task 1 cases | `server/backend_tests/schema.test.ts`, `auth.test.ts`, `library.test.ts`, `ratings.test.ts`, and `bookSuggestions.test.ts` via `pnpm --dir server test` | Point `DATABASE_URL` to the schema-synced `bookworm_test` database and run the existing server test script | All tests pass, including existing auth, library, reading-status, rating, and book-suggestion coverage | 15 |
+| `COL-05-T-1 preserves existing data during schema push` (manual database check) | `server/src/db/schema.ts`, `server/drizzle.config.ts`, and `server/package.json` through `db:push` | In a disposable `bookworm_test` database with the pre-task schema, seed a user, session, saved book with a nondefault reading status, and rating. Record their full rows, apply the updated schema, compare rows using direct SQL, then repeat `db:push` | Schema application succeeds, both new tables exist, all seeded records retain their original values, and the second push reports no changes | 1, 14 |
+| Existing backend regression suite and new Task 1 cases | `server/backend_tests/schema.test.ts`, `auth.test.ts`, `library.test.ts`, `ratings.test.ts`, `bookSuggestions.test.ts`, and `bookSearchFilters.test.ts` via `pnpm --dir server test` | Point `DATABASE_URL` to the schema-synced `bookworm_test` database and run the existing server test script | All tests pass, including existing auth, library, reading-status, rating, book-suggestion, and book-search coverage | 15 |
 | Project type checking | Root and server `package.json` through `pnpm typecheck` | Run with existing project dependencies installed | Frontend and backend type checking exit successfully | 15 |
 
 The pre-task schema application check is separate from the automated cases because ordinary tests run after schema synchronization. Existing regression test names and touchpoints remain defined in their respective test files. No additional API or UI test is introduced by this task.
