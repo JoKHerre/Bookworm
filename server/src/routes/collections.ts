@@ -17,14 +17,14 @@ const collectionNameBody = z.strictObject({
       const length = [...name].length;
       return length >= 1 && length <= 100 && !name.includes("\0");
     }),
-});  
+});
 
 // collection book body: bookKey string, must be a valid openLibraryWorkKey
 // used for adding a book to a collection
 const collectionBookBody = z.strictObject({ bookKey: openLibraryWorkKey });
 
 // collection list query: optional bookKey
-// used to list collections 
+// used to list collections
 const collectionListQuery = z.strictObject({
   bookKey: openLibraryWorkKey.optional(),
 });
@@ -159,12 +159,12 @@ collectionsRouter.post("/", async (req, res) => {
   }
   try {
     const [collection] = await db
-      .insert(collections)  // insert into the collections table
+      .insert(collections) // insert into the collections table
       .values({
-        userId: res.locals.user!.id,  // owner
-        name: parsed.data.name,  // collection name
+        userId: res.locals.user!.id, // owner
+        name: parsed.data.name, // collection name
       })
-      .returning(collectionFields);  // return the new collection's fields
+      .returning(collectionFields); // return the new collection's fields
     res.status(201).json({ ...collection, bookCount: 0 });
   } catch (error) {
     handleCollectionNameError(error, res);
