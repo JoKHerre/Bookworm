@@ -17,6 +17,7 @@ import {
   type BookSearchQuery,
   type BookSearchResponse,
 } from "../../../shared/books.ts";
+import { toTags } from "../../../shared/tags.ts";
 
 const BASE_URL = "https://openlibrary.org";
 
@@ -298,5 +299,6 @@ export async function getBookDetails(
     first_publish_date: work.first_publish_date,
     covers: work.covers,
     subjects: work.subjects,
+    tags: toTags(work.subjects),
   };
 }

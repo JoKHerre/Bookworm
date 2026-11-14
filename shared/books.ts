@@ -135,6 +135,7 @@ export const bookDetails = z.object({
   first_publish_date: z.string().optional(),
   covers: z.array(z.number()).optional(),
   subjects: z.array(z.string()).optional(),
+  tags: z.array(z.string()),
 });
 
 export type BookDetails = z.infer<typeof bookDetails>;

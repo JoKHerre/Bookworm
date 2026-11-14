@@ -7,7 +7,7 @@
     "start": "node --env-file-if-exists=.env src/index.ts",
     "typecheck": "tsc",
     "test": "node --test \"backend_tests/*.test.ts\"",
-    "db:push": "drizzle-kit push",
+    "db:push": "node --env-file-if-exists=.env scripts/prepare-collection-ownership.ts && drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
   "keywords": [],
