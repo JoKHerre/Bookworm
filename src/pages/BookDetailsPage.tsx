@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import type { BookISBNs, BookDetails } from "../../shared/books";
-import { getBookDetails, getBookISBNs, getBookAvailability } from "../booksApi";
+import type { AvailabilityResponse } from "../../shared/availability";
+import type { BookDetails } from "../../shared/books";
+import { getBookDetails, getBookAvailability } from "../booksApi";
+import BookISBNSection from "../components/BookISBNSection";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
@@ -43,15 +45,12 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [rating, setRating] = useState<number | null>(null); // the signed-in user's rating of this book
   const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
-  const [isbns, setISBNs] = useState<BookISBNs | null>(null);
-  const [isbnError, setISBNError] = useState<string | null>(null);
 
-  const [availability, setAvailability] = useState<
-    Awaited<ReturnType<typeof getBookAvailability>>["availability"] | undefined
-  >(undefined);
+  const [availability, setAvailability] = useState<AvailabilityResponse>();
   const [availabilityError, setAvailabilityError] = useState<string | null>(
     null,
   );
+  const [availabilityAttempt, setAvailabilityAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -80,29 +79,9 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     const controller = new AbortController();
     const { signal } = controller;
 
-    getBookISBNs(bookKey, signal)
-      .then((data) => {
-        if (!signal.aborted) setISBNs(data);
-      })
-      .catch((err) => {
-        if (!signal.aborted) {
-          setISBNError(
-            err instanceof Error ? err.message : "Unable to load ISBNs",
-          );
-        }
-      });
-
-    return () => controller.abort();
-  }, [bookKey, loading, book]);
-
-  useEffect(() => {
-    if (loading || !book) return;
-    const controller = new AbortController();
-    const { signal } = controller;
-
     getBookAvailability(bookKey, signal)
       .then((data) => {
-        if (!signal.aborted) setAvailability(data.availability);
+        if (!signal.aborted) setAvailability(data);
       })
       .catch((err) => {
         if (!signal.aborted) {
@@ -113,7 +92,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       });
 
     return () => controller.abort();
-  }, [bookKey, loading, book]);
+  }, [bookKey, loading, book, availabilityAttempt]);
   // load the signed-in user's existing rating for this book, if any
   const userId = user?.id;
   useEffect(() => {
@@ -136,6 +115,12 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   function goToLogin() {
     const state: AuthLocationState = { from: location };
     void navigate("/login", { state, replace: true });
+  }
+
+  function retryAvailability() {
+    setAvailability(undefined);
+    setAvailabilityError(null);
+    setAvailabilityAttempt((attempt) => attempt + 1);
   }
 
   // function to handle saving a book to the user's personal library
@@ -213,10 +198,16 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     : null;
 
   const title = book?.title ?? searchBook?.title ?? "Book details";
-
-  const isbn13List = isbns?.isbn_13 ?? [];
-  const isbn10List = isbns?.isbn_10 ?? [];
-  const totalIsbns = isbn13List.length + isbn10List.length;
+  const catalogRecord =
+    availability?.status === "matched" ? availability.availability : null;
+  const branches = Object.entries(catalogRecord?.branches ?? {});
+  const catalogMetadata = [catalogRecord?.author, catalogRecord?.format]
+    .filter(Boolean)
+    .join(" ·  ");
+  const canRetryAvailability =
+    Boolean(availabilityError) ||
+    (availability?.status === "incomplete" &&
+      availability.reason === "deadline");
 
   return (
     <main className="book-details" aria-busy={loading}>
@@ -303,63 +294,66 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       {book && (
         <section className="library-availability">
           <h2>Library Availability</h2>
-          {availabilityError ? (
-            <p role="alert">{availabilityError}</p>
-          ) : availability === undefined ? (
-            <p role="status">Checking library...</p>
-          ) : availability === null ? (
-            <p>Not found in the library catalog.</p>
-          ) : (
-            <ul className="branches">
-              {Object.entries(availability.branches).map(([name, b]) => (
-                <li key={name}>
-                  {name}: {b.available} of {b.total} available
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {book && (
-        <section className="book-isbns">
-          <h2>ISBNs</h2>
-          <details>
-            <summary>Show all{isbns ? ` (${totalIsbns})` : ""}</summary>
-
-            {isbnError ? (
-              <p role="alert">{isbnError}</p>
-            ) : !isbns ? (
-              <p role="status">Loading ISBNs...</p>
-            ) : totalIsbns > 0 ? (
-              <div className="isbn-columns">
-                {isbn13List.length > 0 && (
-                  <div className="isbn-group">
-                    <h3>ISBN-13 ({isbn13List.length})</h3>
-                    <ul>
-                      {isbn13List.map((isbn) => (
-                        <li key={`isbn13-${isbn}`}>{isbn}</li>
-                      ))}
-                    </ul>
-                  </div>
+          <div className="library-availability-content">
+            {availabilityError ? (
+              <p role="alert">{availabilityError}</p>
+            ) : availability === undefined ? (
+              <p role="status">Checking library...</p>
+            ) : availability.status === "not_found" ? (
+              <p>
+                {availability.reason === "no_isbns"
+                  ? "No ISBNs are available to check this book in the library catalog."
+                  : "No catalog match was found for the ISBNs checked."}
+              </p>
+            ) : availability.status === "incomplete" ? (
+              <p role="status">
+                {availability.reason === "deadline"
+                  ? "The library catalog check took too long to finish. A match may still exist."
+                  : "The library catalog check is incomplete. A match may still exist."}
+              </p>
+            ) : catalogRecord ? (
+              <>
+                <div className="library-record">
+                  <p className="library-record-title">
+                    <a
+                      href={`https://catalog.santacruzpl.org/polaris/search/title.aspx?ctx=1.1033.0.0.1&cn=${encodeURIComponent(catalogRecord.bibid)}`}
+                    >
+                      {catalogRecord.title}
+                    </a>
+                  </p>
+                  {catalogMetadata && (
+                    <p className="library-record-meta">{catalogMetadata}</p>
+                  )}
+                </div>
+                {branches.length === 0 ? (
+                  <p>
+                    Branch availability is not reported for this catalog record.
+                  </p>
+                ) : (
+                  <ul className="branches">
+                    {branches.map(([name, branch]) => (
+                      <li key={name}>
+                        {name}: {branch.available} of {branch.total} available
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                {isbn10List.length > 0 && (
-                  <div className="isbn-group">
-                    <h3>ISBN-10 ({isbn10List.length})</h3>
-                    <ul>
-                      {isbn10List.map((isbn) => (
-                        <li key={`isbn10-${isbn}`}>{isbn}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p>No ISBNs available for this book.</p>
+              </>
+            ) : null}
+            {canRetryAvailability && (
+              <button
+                className="availability-retry-button"
+                type="button"
+                onClick={retryAvailability}
+              >
+                Retry
+              </button>
             )}
-          </details>
+          </div>
         </section>
       )}
+
+      {book && <BookISBNSection bookKey={bookKey} />}
     </main>
   );
 }

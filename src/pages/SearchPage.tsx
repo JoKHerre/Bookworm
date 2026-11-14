@@ -277,78 +277,76 @@ function SearchPage() {
         </form>
       </section>
 
-      {searched && (
-        <section className="search-filters" aria-label="Filter search results">
-          <details className="genre-filter" ref={genreFilterRef}>
-            <summary>Genres</summary>
-            <div className="genre-filter-options">
-              {genreOptions.map((genre) => (
-                <label key={genre}>
-                  <input
-                    type="checkbox"
-                    checked={selectedGenres.includes(genre)}
-                    onChange={(event) =>
-                      setSelectedGenres((selected) =>
-                        event.target.checked
-                          ? [...selected, genre]
-                          : selected.filter((value) => value !== genre),
-                      )
-                    }
-                  />
-                  {genre}
-                </label>
-              ))}
-            </div>
-          </details>
+      <section className="search-filters" aria-label="Filter search results">
+        <details className="genre-filter" ref={genreFilterRef}>
+          <summary>Genres</summary>
+          <div className="genre-filter-options">
+            {genreOptions.map((genre) => (
+              <label key={genre}>
+                <input
+                  type="checkbox"
+                  checked={selectedGenres.includes(genre)}
+                  onChange={(event) =>
+                    setSelectedGenres((selected) =>
+                      event.target.checked
+                        ? [...selected, genre]
+                        : selected.filter((value) => value !== genre),
+                    )
+                  }
+                />
+                {genre}
+              </label>
+            ))}
+          </div>
+        </details>
 
-          <label className="search-filter">
-            Language
-            <select
-              value={language}
-              onChange={(event) =>
-                setLanguage(event.target.value as BookSearchQuery["language"])
-              }
-            >
-              <option value="">Any language</option>
-              <option>English</option>
-              <option>Spanish</option>
-              <option>French</option>
-            </select>
-          </label>
-
-          <label className="search-filter">
-            Publication year
-            <select
-              value={publicationYearRange}
-              onChange={(event) =>
-                setPublicationYearRange(
-                  event.target.value as BookSearchQuery["year"],
-                )
-              }
-            >
-              <option value="">Any year</option>
-              <option value="2020-present">2020-present</option>
-              <option value="2010-2019">2010-2019</option>
-              <option value="2000-2009">2000-2009</option>
-              <option value="1990-1999">1990-1999</option>
-              <option value="1980-1989">1980-1989</option>
-              <option value="1970-1979">1970-1979</option>
-              <option value="1950-1969">1950-1969</option>
-              <option value="1900-1949">1900-1949</option>
-              <option value="before-1900">Before 1900</option>
-            </select>
-          </label>
-
-          <button
-            type="button"
-            className="search-filter-reset"
-            onClick={resetFilters}
-            disabled={!hasActiveFilters}
+        <label className="search-filter">
+          Language
+          <select
+            value={language}
+            onChange={(event) =>
+              setLanguage(event.target.value as BookSearchQuery["language"])
+            }
           >
-            Reset
-          </button>
-        </section>
-      )}
+            <option value="">Any language</option>
+            <option>English</option>
+            <option>Spanish</option>
+            <option>French</option>
+          </select>
+        </label>
+
+        <label className="search-filter">
+          Publication year
+          <select
+            value={publicationYearRange}
+            onChange={(event) =>
+              setPublicationYearRange(
+                event.target.value as BookSearchQuery["year"],
+              )
+            }
+          >
+            <option value="">Any year</option>
+            <option value="2020-present">2020-present</option>
+            <option value="2010-2019">2010-2019</option>
+            <option value="2000-2009">2000-2009</option>
+            <option value="1990-1999">1990-1999</option>
+            <option value="1980-1989">1980-1989</option>
+            <option value="1970-1979">1970-1979</option>
+            <option value="1950-1969">1950-1969</option>
+            <option value="1900-1949">1900-1949</option>
+            <option value="before-1900">Before 1900</option>
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="search-filter-reset"
+          onClick={resetFilters}
+          disabled={!hasActiveFilters}
+        >
+          Reset
+        </button>
+      </section>
 
       {visibleError && (
         <p className="search-message search-message--error" role="alert">

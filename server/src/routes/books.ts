@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import {
   bookSuggestionsQuery,
   bookDetailsQuery,
+  bookISBNsQuery,
   bookSearchQuery,
   type BookDetails,
   type BookISBNs,
@@ -10,6 +11,7 @@ import {
 } from "../../../shared/books.ts";
 
 import { checkBookAvailability } from "../services/bookAvailability.ts";
+import type { AvailabilityResponse } from "../../../shared/availability.ts";
 
 import {
   searchOpenLibrarySuggestions,
@@ -109,14 +111,16 @@ booksRouter.get(
 booksRouter.get(
   "/isbns",
   async (req, res: Response<BookISBNs | BooksError>) => {
-    const parsed = bookDetailsQuery.safeParse(req.query);
+    const parsed = bookISBNsQuery.safeParse(req.query);
     if (!parsed.success) {
-      res.status(400).json({ error: "Invalid book key" });
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid ISBN query",
+      });
       return;
     }
 
     try {
-      res.json(await getISBNsForWork(parsed.data.key));
+      res.json(await getISBNsForWork(parsed.data));
     } catch (error) {
       console.error("Book ISBN lookup error:", error);
       res.status(502).json({ error: "Unable to retrieve ISBNs" });
@@ -124,19 +128,44 @@ booksRouter.get(
   },
 );
 
-booksRouter.get("/availability", async (req, res) => {
-  const parsed = bookDetailsQuery.pick({ key: true }).safeParse(req.query);
-  if (!parsed.success) {
-    res
-      .status(400)
-      .json({ error: parsed.error.issues[0]?.message ?? "Invalid Request" });
-    return;
-  }
+booksRouter.get(
+  "/availability",
+  async (req, res: Response<AvailabilityResponse | BooksError>) => {
+    const parsed = bookDetailsQuery.pick({ key: true }).safeParse(req.query);
+    if (!parsed.success) {
+      res
+        .status(400)
+        .json({ error: parsed.error.issues[0]?.message ?? "Invalid Request" });
+      return;
+    }
 
-  try {
-    res.json({ availability: await checkBookAvailability(parsed.data.key) });
-  } catch (error) {
-    console.error("Availability check failed:", error);
-    res.status(502).json({ error: "Could not check library availability" });
-  }
-});
+    const controller = new AbortController();
+    // A normal response also emits close; only an unfinished response means the
+    // caller disconnected and no longer needs upstream work to continue.
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.once("close", onClose);
+    const started = Date.now();
+
+    try {
+      const result = await checkBookAvailability(
+        parsed.data.key,
+        controller.signal,
+      );
+      if (!res.destroyed) res.json(result);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      console.error("Availability check failed:", {
+        workKey: parsed.data.key,
+        durationMs: Date.now() - started,
+        error,
+      });
+      if (!res.destroyed) {
+        res.status(502).json({ error: "Could not check library availability" });
+      }
+    } finally {
+      res.off("close", onClose);
+    }
+  },
+);
