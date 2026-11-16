@@ -1,0 +1,87 @@
+.book-isbns {
+  margin-top: 32px;
+  font-size: 14px;
+  text-align: left;
+}
+
+.book-isbns :is(summary, button) {
+  cursor: pointer;
+}
+
+.book-isbns h2 {
+  display: inline;
+  font-size: 20px;
+}
+
+.book-isbns :is(h3, h4, p) {
+  margin: 8px 0;
+  font-size: inherit;
+}
+
+.isbn-filters,
+.isbn-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+
+.isbn-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.book-isbns :is(select, button) {
+  padding: 6px 8px;
+  border: 1px solid var(--tan);
+  border-radius: 6px;
+  background: var(--cream);
+  color: inherit;
+  font: inherit;
+}
+
+.book-isbns button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.isbn-help {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.isbn-results {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 12px;
+  padding: 2px;
+}
+
+.isbn-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.isbn-group {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.isbn-group ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: 13px monospace;
+  overflow-wrap: anywhere;
+}
+
+.book-isbns :is(summary, select, button, .isbn-results):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}

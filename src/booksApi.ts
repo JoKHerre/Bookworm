@@ -1,11 +1,14 @@
-import type {
-  BookDetails,
-  BookISBNs,
-  BookSearchQuery,
-  BookSearchResponse,
+import {
+  ISBN_EDITIONS_PAGE_SIZE,
+  bookISBNs,
+  type BookDetails,
+  type BookISBNs,
+  type BookISBNsQuery,
+  type BookSearchQuery,
+  type BookSearchResponse,
 } from "../shared/books";
 
-import type { AvailabilityResponse } from "../shared/availability";
+import { availabilityResponse } from "../shared/availability";
 
 async function get<T>(
   path: string,
@@ -67,14 +70,48 @@ export function getBookDetails(
   );
 }
 
-export function getBookISBNs(key: string, signal: AbortSignal) {
-  return get<BookISBNs>("isbns", new URLSearchParams({ key }), signal);
+export async function getBookISBNs(
+  key: string,
+  signal: AbortSignal,
+  options: Partial<Omit<BookISBNsQuery, "key">> = {},
+) {
+  const {
+    language = "eng",
+    format = "all",
+    offset = 0,
+    limit = ISBN_EDITIONS_PAGE_SIZE,
+  } = options;
+  const data = await get<BookISBNs>(
+    "isbns",
+    new URLSearchParams({
+      key,
+      language,
+      format,
+      offset: String(offset),
+      limit: String(limit),
+    }),
+    signal,
+  );
+  const parsed = bookISBNs.safeParse(data);
+  if (
+    !parsed.success ||
+    parsed.data.pagination.offset !== offset ||
+    parsed.data.pagination.editionsChecked > limit
+  ) {
+    throw new Error("Unable to read ISBNs. Please try again.");
+  }
+  return parsed.data;
 }
 
-export function getBookAvailability(key: string, signal: AbortSignal) {
-  return get<AvailabilityResponse>(
+export async function getBookAvailability(key: string, signal: AbortSignal) {
+  const data = await get<unknown>(
     "availability",
     new URLSearchParams({ key }),
     signal,
   );
+  const parsed = availabilityResponse.safeParse(data);
+  if (!parsed.success) {
+    throw new Error("Unable to read library availability. Please try again.");
+  }
+  return parsed.data;
 }
