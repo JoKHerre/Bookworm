@@ -4,7 +4,11 @@ import {
   IMPORT_MAX_ROWS,
   checkImportFile,
 } from "../../shared/bookImport";
-import { parseImportCsv, type ImportRow } from "../../shared/csvImport";
+import {
+  parseImportCsv,
+  validateImportRows,
+  type ValidateImportResult,
+} from "../../shared/csvImport";
 import "./ImportBooksPage.css";
 
 function formatSize(bytes: number) {
@@ -15,13 +19,13 @@ function ImportBooksPage() {
   const [file, setFile] = useState<File | null>(null); // the chosen file, only set when it passes the checks
   const [error, setError] = useState(""); // problem with the chosen file or reading it
   const [reading, setReading] = useState(false); // whether the file is being read
-  const [rows, setRows] = useState<ImportRow[]>([]); // the books parsed from the file, validated by IMP-01-T-4
+  const [parsed, setParsed] = useState<ValidateImportResult | null>(null); // the valid rows and row errors found in the file
   const [readyName, setReadyName] = useState(""); // name of the file that was read
 
   // choosing (or clearing) a file replaces any previous result
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const chosen = event.target.files?.[0] ?? null;
-    setRows([]);
+    setParsed(null);
     setReadyName("");
     setError("");
     setFile(null);
@@ -32,19 +36,21 @@ function ImportBooksPage() {
     else setError(check.error);
   }
 
+  const total = parsed ? parsed.valid.length + parsed.errors.length : 0;
+
   async function handleUpload() {
     if (!file) return;
     setReading(true);
     setError("");
     setReadyName("");
     try {
-      const parsed = parseImportCsv(await file.text());
-      if (parsed.ok) {
-        setRows(parsed.rows);
+      const result = parseImportCsv(await file.text());
+      if (result.ok) {
+        setParsed(validateImportRows(result.rows));
         setReadyName(file.name);
       } else {
-        setRows([]);
-        setError(parsed.error);
+        setParsed(null);
+        setError(result.error);
       }
     } catch {
       setError("Could not read this file. Please try again.");
@@ -80,11 +86,26 @@ function ImportBooksPage() {
           </p>
         )}
 
-        {readyName && (
+        {readyName && parsed && (
           <p className="import-status" role="status">
-            {readyName} is ready to import. {rows.length}{" "}
-            {rows.length === 1 ? "book" : "books"} found.
+            {readyName} is ready to import. {total}{" "}
+            {total === 1 ? "book" : "books"} found. {parsed.valid.length} valid,{" "}
+            {parsed.errors.length} with problems.
           </p>
+        )}
+
+        {parsed && parsed.errors.length > 0 && (
+          <section aria-labelledby="import-problems-title">
+            <h2 id="import-problems-title">Rows with problems</h2>
+            <ul
+              className="import-problems"
+              aria-labelledby="import-problems-title"
+            >
+              {parsed.errors.map(({ row, message }) => (
+                <li key={row}>{message}</li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <button

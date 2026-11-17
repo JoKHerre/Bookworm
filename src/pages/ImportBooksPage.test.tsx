@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { IMPORT_MAX_FILE_BYTES } from "../../shared/bookImport";
@@ -132,5 +132,40 @@ describe("ImportBooksPage", () => {
       "Unknown column: rating.",
     );
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("IMP-01-T-4 page shows valid and problem counts", async () => {
+    setup();
+    await choose(csv("books.csv", "title,isbn\nDune,\nEmma,123\nUlysses,\n"));
+    await userEvent.click(upload());
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "3 books found. 2 valid, 1 with problems.",
+    );
+  });
+
+  it("IMP-01-T-4 page lists row problems", async () => {
+    setup();
+    await choose(csv("books.csv", "title,isbn\nDune,\nEmma,123\n"));
+    await userEvent.click(upload());
+
+    const list = await screen.findByRole("list", {
+      name: "Rows with problems",
+    });
+    expect(
+      within(list).getByText("Row 3: isbn is not a valid ISBN-10 or ISBN-13."),
+    ).toBeInTheDocument();
+    expect(within(list).getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("IMP-01-T-4 page has no problem list for a clean file", async () => {
+    setup();
+    await choose(csv());
+    await userEvent.click(upload());
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "1 valid, 0 with problems.",
+    );
+    expect(
+      screen.queryByRole("list", { name: "Rows with problems" }),
+    ).not.toBeInTheDocument();
   });
 });

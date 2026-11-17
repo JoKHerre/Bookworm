@@ -71,3 +71,14 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.import-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.import-problems {
+  margin: 0;
+  padding-left: 20px;
+  color: #9b2c2c;
+}
