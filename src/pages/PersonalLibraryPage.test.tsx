@@ -235,4 +235,12 @@ describe("PersonalLibraryPage", () => {
       within(group).getByRole("button", { name: "Clear tags" }),
     ).toBeDisabled();
   });
+
+  it("IMP-01-T-2 library links to the import page", async () => {
+    renderWithProviders(<PersonalLibraryPage />);
+    expect(screen.getByRole("link", { name: "Import books" })).toHaveAttribute(
+      "href",
+      "/import",
+    );
+  });
 });
