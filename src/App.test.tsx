@@ -38,4 +38,19 @@ describe("App routes", () => {
       screen.getByRole("heading", { name: "My Library" }),
     ).toBeInTheDocument();
   });
+
+  it("IMP-01-T-2 signed-out import page redirects", () => {
+    renderWithProviders(<App />, { route: "/import" });
+    expect(screen.getByRole("heading", { name: "Log in" })).toBeInTheDocument();
+  });
+
+  it("IMP-01-T-2 signed-in user reaches the import page", () => {
+    renderWithProviders(<App />, {
+      route: "/import",
+      user: { id: 1, email: "a@b.co" },
+    });
+    expect(
+      screen.getByRole("heading", { name: "Import books" }),
+    ).toBeInTheDocument();
+  });
 });
