@@ -82,3 +82,14 @@
   padding-left: 20px;
   color: #9b2c2c;
 }
+
+.import-link {
+  align-self: flex-start;
+  color: var(--olive);
+  font-weight: 600;
+}
+
+.import-link:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}

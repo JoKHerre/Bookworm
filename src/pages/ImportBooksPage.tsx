@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import {
   IMPORT_COLUMNS,
   IMPORT_MAX_ROWS,
@@ -9,6 +10,7 @@ import {
   validateImportRows,
   type ValidateImportResult,
 } from "../../shared/csvImport";
+import { importBooks, type ImportBooksResult } from "../libraryApi";
 import "./ImportBooksPage.css";
 
 function formatSize(bytes: number) {
@@ -21,12 +23,15 @@ function ImportBooksPage() {
   const [reading, setReading] = useState(false); // whether the file is being read
   const [parsed, setParsed] = useState<ValidateImportResult | null>(null); // the valid rows and row errors found in the file
   const [readyName, setReadyName] = useState(""); // name of the file that was read
+  const [importing, setImporting] = useState(false); // whether the books are being saved to the library
+  const [result, setResult] = useState<ImportBooksResult | null>(null); // counts returned after importing
 
   // choosing (or clearing) a file replaces any previous result
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const chosen = event.target.files?.[0] ?? null;
     setParsed(null);
     setReadyName("");
+    setResult(null);
     setError("");
     setFile(null);
     if (!chosen) return;
@@ -37,12 +42,16 @@ function ImportBooksPage() {
   }
 
   const total = parsed ? parsed.valid.length + parsed.errors.length : 0;
+  // only rows with an Open Library work key can be saved until title matching (IMP-02) exists
+  const importable = parsed?.valid.filter((row) => row.book_key) ?? [];
+  const unmatched = (parsed?.valid.length ?? 0) - importable.length;
 
   async function handleUpload() {
     if (!file) return;
     setReading(true);
     setError("");
     setReadyName("");
+    setResult(null);
     try {
       const result = parseImportCsv(await file.text());
       if (result.ok) {
@@ -56,6 +65,18 @@ function ImportBooksPage() {
       setError("Could not read this file. Please try again.");
     } finally {
       setReading(false);
+    }
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    setError("");
+    try {
+      setResult(await importBooks(importable.map((row) => row.book_key)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not import.");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -86,15 +107,33 @@ function ImportBooksPage() {
           </p>
         )}
 
-        {readyName && parsed && (
-          <p className="import-status" role="status">
-            {readyName} is ready to import. {total}{" "}
-            {total === 1 ? "book" : "books"} found. {parsed.valid.length} valid,{" "}
-            {parsed.errors.length} with problems.
+        {result ? (
+          <>
+            <p className="import-status" role="status">
+              {`Imported ${result.added} ${result.added === 1 ? "book" : "books"}. ${result.alreadySaved} already in your library.`}
+            </p>
+            <Link className="import-link" to="/personal-library">
+              Go to My Library
+            </Link>
+          </>
+        ) : (
+          readyName &&
+          parsed && (
+            <p className="import-status" role="status">
+              {readyName} is ready to import. {total}{" "}
+              {total === 1 ? "book" : "books"} found. {parsed.valid.length}{" "}
+              valid, {parsed.errors.length} with problems.
+            </p>
+          )
+        )}
+
+        {parsed && !result && unmatched > 0 && (
+          <p>
+            {`${unmatched} valid ${unmatched === 1 ? "book has" : "books have"} no book_key and cannot be imported until title matching is available.`}
           </p>
         )}
 
-        {parsed && parsed.errors.length > 0 && (
+        {parsed && !result && parsed.errors.length > 0 && (
           <section aria-labelledby="import-problems-title">
             <h2 id="import-problems-title">Rows with problems</h2>
             <ul
@@ -116,6 +155,19 @@ function ImportBooksPage() {
         >
           {reading ? "Reading…" : "Upload"}
         </button>
+
+        {parsed && !result && (
+          <button
+            className="import-upload"
+            type="button"
+            disabled={importable.length === 0 || importing}
+            onClick={() => void handleImport()}
+          >
+            {importing
+              ? "Importing…"
+              : `Import ${importable.length} ${importable.length === 1 ? "book" : "books"}`}
+          </button>
+        )}
       </div>
     </main>
   );
