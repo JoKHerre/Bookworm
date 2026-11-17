@@ -4,6 +4,7 @@ import {
   IMPORT_MAX_ROWS,
   checkImportFile,
 } from "../../shared/bookImport";
+import { parseImportCsv, type ImportRow } from "../../shared/csvImport";
 import "./ImportBooksPage.css";
 
 function formatSize(bytes: number) {
@@ -14,13 +15,13 @@ function ImportBooksPage() {
   const [file, setFile] = useState<File | null>(null); // the chosen file, only set when it passes the checks
   const [error, setError] = useState(""); // problem with the chosen file or reading it
   const [reading, setReading] = useState(false); // whether the file is being read
-  const [, setFileText] = useState<string | null>(null); // the file's contents once read, parsed by IMP-01-T-3
+  const [rows, setRows] = useState<ImportRow[]>([]); // the books parsed from the file, validated by IMP-01-T-4
   const [readyName, setReadyName] = useState(""); // name of the file that was read
 
   // choosing (or clearing) a file replaces any previous result
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const chosen = event.target.files?.[0] ?? null;
-    setFileText(null);
+    setRows([]);
     setReadyName("");
     setError("");
     setFile(null);
@@ -37,8 +38,14 @@ function ImportBooksPage() {
     setError("");
     setReadyName("");
     try {
-      setFileText(await file.text());
-      setReadyName(file.name);
+      const parsed = parseImportCsv(await file.text());
+      if (parsed.ok) {
+        setRows(parsed.rows);
+        setReadyName(file.name);
+      } else {
+        setRows([]);
+        setError(parsed.error);
+      }
     } catch {
       setError("Could not read this file. Please try again.");
     } finally {
@@ -75,7 +82,8 @@ function ImportBooksPage() {
 
         {readyName && (
           <p className="import-status" role="status">
-            {readyName} is ready to import.
+            {readyName} is ready to import. {rows.length}{" "}
+            {rows.length === 1 ? "book" : "books"} found.
           </p>
         )}
 

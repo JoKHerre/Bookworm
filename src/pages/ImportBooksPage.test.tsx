@@ -108,4 +108,29 @@ describe("ImportBooksPage", () => {
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("IMP-01-T-3 page shows the number of books found", async () => {
+    setup();
+    await choose(csv("books.csv", "title\nDune\nEmma\n"));
+    await userEvent.click(upload());
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "2 books found.",
+    );
+
+    await choose(csv("one.csv", "title\nDune\n"));
+    await userEvent.click(upload());
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "1 book found.",
+    );
+  });
+
+  it("IMP-01-T-3 page shows the parser error", async () => {
+    setup();
+    await choose(csv("books.csv", "title,rating\nDune,5\n"));
+    await userEvent.click(upload());
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unknown column: rating.",
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
 });
