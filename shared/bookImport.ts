@@ -39,7 +39,7 @@ export function checkImportHeaders(
   headers: readonly string[],
 ): { ok: true; columns: string[] } | { ok: false; error: string } {
   const columns = headers.map((header, i) =>
-    (i === 0 ? header.replace(/^﻿/, "") : header).trim().toLowerCase(),
+    (i === 0 ? header.replace(/^\ufeff/, "") : header).trim().toLowerCase(),
   );
 
   const known: readonly string[] = IMPORT_COLUMNS;
