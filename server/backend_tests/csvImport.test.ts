@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { IMPORT_MAX_ROWS } from "../../shared/bookImport.ts";
-import { parseImportCsv } from "../../shared/csvImport.ts";
+import {
+  parseImportCsv,
+  validateImportRows,
+  type ImportRow,
+} from "../../shared/csvImport.ts";
 
 function rowsOf(text: string) {
   const result = parseImportCsv(text);
@@ -114,4 +118,151 @@ test("IMP-01-T-3 rejects too many rows", () => {
     ok: false,
     error: "Too many rows. The limit is 500.",
   });
+});
+
+const book = (n: number, fields: Partial<ImportRow> = {}): ImportRow => ({
+  row: n,
+  title: `Book ${n}`,
+  author: "",
+  isbn: "",
+  book_key: "",
+  ...fields,
+});
+
+test("IMP-01-T-4 accepts rows with only a title", () => {
+  const rows = [book(2), book(3), book(4)];
+  assert.deepEqual(validateImportRows(rows), { valid: rows, errors: [] });
+});
+
+test("IMP-01-T-4 requires a title", () => {
+  assert.deepEqual(validateImportRows([book(2, { title: "" })]).errors, [
+    { row: 2, message: "Row 2: title is required." },
+  ]);
+});
+
+test("IMP-01-T-4 limits title and author length", () => {
+  const { valid, errors } = validateImportRows([
+    book(2, { title: "x".repeat(300) }),
+    book(3, { title: "x".repeat(301) }),
+    book(4, { author: "y".repeat(200) }),
+    book(5, { author: "y".repeat(201) }),
+  ]);
+  assert.deepEqual(
+    valid.map((r) => r.row),
+    [2, 4],
+  );
+  assert.deepEqual(errors, [
+    { row: 3, message: "Row 3: title is longer than 300 characters." },
+    { row: 5, message: "Row 5: author is longer than 200 characters." },
+  ]);
+});
+
+test("IMP-01-T-4 accepts valid ISBNs and normalizes them", () => {
+  const { valid, errors } = validateImportRows([
+    book(2, { isbn: "978-0-306-40615-7" }),
+    book(3, { isbn: "0306406152" }),
+    book(4, { isbn: "0 8044 2957 X" }),
+  ]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(
+    valid.map((r) => r.isbn),
+    ["9780306406157", "0306406152", "080442957X"],
+  );
+});
+
+test("IMP-01-T-4 rejects invalid ISBNs", () => {
+  const message = (n: number) =>
+    `Row ${n}: isbn is not a valid ISBN-10 or ISBN-13.`;
+  const { valid, errors } = validateImportRows([
+    book(2, { isbn: "12345" }), // wrong length
+    book(3, { isbn: "97803064O6157" }), // letter in the digits
+    book(4, { isbn: "9780306406158" }), // bad ISBN-13 checksum
+    book(5, { isbn: "0306406153" }), // bad ISBN-10 checksum
+    book(6, { isbn: "03064X6152" }), // X is only allowed in the check digit
+  ]);
+  assert.deepEqual(valid, []);
+  assert.deepEqual(
+    errors,
+    [2, 3, 4, 5, 6].map((n) => ({ row: n, message: message(n) })),
+  );
+});
+
+test("IMP-01-T-4 checks the book key", () => {
+  const { valid, errors } = validateImportRows([
+    book(2, { book_key: "/works/OL45883W" }),
+    book(3, { book_key: "/books/OL1M" }),
+    book(4, { book_key: "OL1W" }),
+  ]);
+  assert.deepEqual(
+    valid.map((r) => r.row),
+    [2],
+  );
+  assert.deepEqual(errors, [
+    {
+      row: 3,
+      message: "Row 3: book_key is not a valid Open Library work key.",
+    },
+    {
+      row: 4,
+      message: "Row 4: book_key is not a valid Open Library work key.",
+    },
+  ]);
+});
+
+test("IMP-01-T-4 reports duplicate book keys", () => {
+  const { valid, errors } = validateImportRows([
+    book(2, { book_key: "/works/OL1W" }),
+    book(3, { title: "Other", book_key: "/works/OL1W" }),
+  ]);
+  assert.equal(valid.length, 1);
+  assert.deepEqual(errors, [{ row: 3, message: "Row 3: duplicate of row 2." }]);
+});
+
+test("IMP-01-T-4 reports duplicate ISBNs and titles", () => {
+  const { errors } = validateImportRows([
+    book(2, { isbn: "9780306406157" }),
+    book(3, { title: "Different", isbn: "978-0-306-40615-7" }),
+    book(4, { title: "Dune", author: "Frank Herbert" }),
+    book(5, { title: "DUNE", author: "frank herbert" }),
+  ]);
+  assert.deepEqual(errors, [
+    { row: 3, message: "Row 3: duplicate of row 2." },
+    { row: 5, message: "Row 5: duplicate of row 4." },
+  ]);
+});
+
+test("IMP-01-T-4 does not treat different books as duplicates", () => {
+  const { valid, errors } = validateImportRows([
+    book(2, { title: "Emma", author: "Jane Austen" }),
+    book(3, { title: "Emma", author: "Someone Else" }),
+  ]);
+  assert.equal(valid.length, 2);
+  assert.deepEqual(errors, []);
+});
+
+test("IMP-01-T-4 reports only the first error per row", () => {
+  const { errors } = validateImportRows([
+    book(2, { title: "", isbn: "12345", book_key: "nope" }),
+  ]);
+  assert.deepEqual(errors, [{ row: 2, message: "Row 2: title is required." }]);
+});
+
+test("IMP-01-T-4 keeps every row in exactly one list", () => {
+  const rows = [
+    book(2),
+    book(3, { title: "" }),
+    book(4),
+    book(5, { isbn: "1" }),
+    book(7),
+  ];
+  const { valid, errors } = validateImportRows(rows);
+  assert.deepEqual(
+    valid.map((r) => r.row),
+    [2, 4, 7],
+  );
+  assert.deepEqual(
+    errors.map((e) => e.row),
+    [3, 5],
+  );
+  assert.equal(valid.length + errors.length, rows.length);
 });

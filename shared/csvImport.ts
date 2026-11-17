@@ -1,4 +1,5 @@
 import { IMPORT_MAX_ROWS, checkImportHeaders } from "./bookImport.ts";
+import { openLibraryWorkKey } from "./books.ts";
 
 // One book line from an import file. `row` is the spreadsheet row number
 // (the header is row 1), so errors can point at the right line.
@@ -103,4 +104,99 @@ export function parseImportCsv(text: string): ParseImportResult {
     };
   }
   return { ok: true, rows };
+}
+
+export interface ImportRowError {
+  row: number;
+  message: string;
+}
+
+export interface ValidateImportResult {
+  valid: ImportRow[];
+  errors: ImportRowError[];
+}
+
+const MAX_TITLE_LENGTH = 300;
+const MAX_AUTHOR_LENGTH = 200;
+
+// Strip hyphens and spaces and return the ISBN if its length, characters, and checksum are valid.
+function normalizeIsbn(value: string): string | null {
+  const isbn = value.replace(/[-\s]/g, "").toUpperCase();
+
+  if (/^\d{13}$/.test(isbn)) {
+    const sum = [...isbn].reduce(
+      (total, digit, i) => total + Number(digit) * (i % 2 === 0 ? 1 : 3),
+      0,
+    );
+    return sum % 10 === 0 ? isbn : null;
+  }
+
+  if (/^\d{9}[\dX]$/.test(isbn)) {
+    const sum = [...isbn].reduce(
+      (total, char, i) => total + (char === "X" ? 10 : Number(char)) * (10 - i),
+      0,
+    );
+    return sum % 11 === 0 ? isbn : null;
+  }
+
+  return null;
+}
+
+// Check every row. Each row lands in exactly one list, in file order, and gets
+// at most one error (the first rule it breaks).
+export function validateImportRows(
+  rows: readonly ImportRow[],
+): ValidateImportResult {
+  const valid: ImportRow[] = [];
+  const errors: ImportRowError[] = [];
+  const firstRowByIdentity = new Map<string, number>();
+
+  for (const row of rows) {
+    const fail = (message: string) =>
+      errors.push({ row: row.row, message: `Row ${row.row}: ${message}` });
+
+    if (!row.title) {
+      fail("title is required.");
+      continue;
+    }
+    if (row.title.length > MAX_TITLE_LENGTH) {
+      fail(`title is longer than ${MAX_TITLE_LENGTH} characters.`);
+      continue;
+    }
+    if (row.author.length > MAX_AUTHOR_LENGTH) {
+      fail(`author is longer than ${MAX_AUTHOR_LENGTH} characters.`);
+      continue;
+    }
+
+    let isbn = "";
+    if (row.isbn) {
+      const normalized = normalizeIsbn(row.isbn);
+      if (!normalized) {
+        fail("isbn is not a valid ISBN-10 or ISBN-13.");
+        continue;
+      }
+      isbn = normalized;
+    }
+    if (row.book_key && !openLibraryWorkKey.safeParse(row.book_key).success) {
+      fail("book_key is not a valid Open Library work key.");
+      continue;
+    }
+
+    // a row's identity is its book key, else its ISBN, else its title and author
+    const identity = row.book_key
+      ? `key:${row.book_key}`
+      : isbn
+        ? `isbn:${isbn}`
+        : `title:${row.title.toLowerCase()}|${row.author.toLowerCase()}`;
+    const duplicateOf = firstRowByIdentity.get(identity);
+    if (duplicateOf !== undefined) {
+      fail(`duplicate of row ${duplicateOf}.`);
+      continue;
+    }
+
+    firstRowByIdentity.set(identity, row.row);
+    valid.push({ ...row, isbn });
+  }
+
+  return { valid, errors };
 }
