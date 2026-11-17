@@ -24,12 +24,14 @@ export const openLibraryWork = z.object({
 
 export const openLibraryEdition = z.object({
   key: z.string(),
+  languages: z.array(z.object({ key: z.string() })).optional(),
+  physical_format: z.string().optional(),
   isbn_13: z.array(z.string()).optional(),
   isbn_10: z.array(z.string()).optional(),
 });
 
 export const openLibraryEditionsResponse = z.object({
-  size: z.number(),
+  size: z.number().int().nonnegative(),
   entries: z.array(openLibraryEdition),
 });
 
