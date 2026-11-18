@@ -1,6 +1,6 @@
 .search-page {
   flex: 1;
-  padding: 40px 20px;
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
   background: var(--cream);
   color: var(--olive);
   min-height: 100vh;
@@ -8,8 +8,7 @@
 }
 
 .search-intro {
-  margin-bottom: 30px;
-  max-width: 1200px;
+  margin-bottom: 12px;
   margin-inline: auto;
 }
 
@@ -70,14 +69,13 @@
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 24px;
   padding: 0;
-  max-width: 1200px;
   margin-inline: auto;
 }
 
 .search-message {
   color: var(--olive);
   text-align: center;
-  margin-top: 40px;
+  margin-top: 32px;
 }
 
 p.search-message,
@@ -106,10 +104,6 @@ p.search-message,
 }
 
 @media (max-width: 480px) {
-  .search-page {
-    padding: 24px 16px;
-  }
-
   .book-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
@@ -125,8 +119,7 @@ p.search-message,
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  max-width: 1200px;
-  margin: 0 auto 20px;
+  margin: 24px auto 16px;
 }
 
 .search-results-count {
@@ -168,7 +161,6 @@ p.search-message,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -412,8 +404,7 @@ p.search-message,
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  max-width: 1200px;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
   text-align: left;
 }
 
@@ -439,8 +430,7 @@ p.search-message,
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  max-width: 1200px;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
   padding: 0;
   list-style: none;
 }

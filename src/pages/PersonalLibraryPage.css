@@ -9,9 +9,7 @@
 }
 
 .personal-library-page {
-  width: min(100% - 48px, 1120px);
-  margin: 0 auto;
-  padding: 40px 0 64px;
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
 }
 
 .personal-library-welcome {
@@ -80,20 +78,19 @@
 
 .personal-library-empty-state p {
   max-width: 390px;
-  margin: 7px 0 18px;
+  margin: 8px 0 20px;
   color: var(--olive-text-soft);
-  font-size: 0.8rem;
+  font-size: 0.95rem;
 }
 
 .personal-library-empty-state button {
-  min-height: 38px;
-  padding: 7px 14px;
+  min-height: 44px;
+  padding: 10px 20px;
   border: 1px solid var(--olive);
-  border-radius: 5px;
+  border-radius: 10px;
   background: var(--olive);
   color: var(--cream);
   font: inherit;
-  font-size: 0.78rem;
   font-weight: 650;
   cursor: pointer;
 }
@@ -305,13 +302,6 @@
 @media (prefers-reduced-motion: reduce) {
   .personal-library-book-cover--loading {
     animation: none;
-  }
-}
-
-@media (max-width: 760px) {
-  .personal-library-page {
-    width: min(100% - 32px, 1120px);
-    padding: 30px 0 48px;
   }
 }
 
