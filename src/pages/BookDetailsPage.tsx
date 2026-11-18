@@ -105,7 +105,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     if (userId === undefined) return;
     const controller = new AbortController();
 
-    getRatings(controller.signal)
+    getRatings(controller.signal, bookKey)
       .then((ratings) => {
         const existing = ratings.find((r) => r.bookKey === bookKey);
         // don't overwrite a rating the user has already picked while this loaded

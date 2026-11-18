@@ -26,12 +26,14 @@ export async function saveRating(
   }
 }
 
-// fetch all of the signed-in user's ratings
+// fetch the signed-in user's ratings: all of them, or only bookKey's
 export async function getRatings(
   signal?: AbortSignal,
+  bookKey?: string,
 ): Promise<BookRatingResponse[]> {
+  const query = bookKey ? `?${new URLSearchParams({ bookKey })}` : "";
   try {
-    const data = await apiRequest<BookRatingsResponse>("/api/ratings", {
+    const data = await apiRequest<BookRatingsResponse>(`/api/ratings${query}`, {
       signal,
     });
     return data.ratings;

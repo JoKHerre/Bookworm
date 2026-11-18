@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Router, type Response } from "express";
 import { db } from "../db/index.ts";
 import { bookRatings } from "../db/schema.ts";
 import { requireAuth } from "../auth/middleware.ts";
 import type { ApiError } from "../../../shared/api.ts";
 import {
+  ratingsQuery,
   saveRatingBody,
   type BookRatingResponse,
   type BookRatingsResponse,
@@ -13,15 +14,27 @@ import {
 // create an express router for rating-related endpoints
 export const ratingsRouter: Router = Router();
 
-// define GET /api/ratings endpoint for retrieving all of the signed-in user's ratings
+// GET /api/ratings: the signed-in user's ratings, or with ?bookKey= just that book's
 ratingsRouter.get(
   "/",
   requireAuth,
-  async (_req, res: Response<BookRatingsResponse>) => {
+  async (req, res: Response<BookRatingsResponse | ApiError>) => {
+    const parsed = ratingsQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid book key" });
+      return;
+    }
+    const { bookKey } = parsed.data;
+
     const ratings = await db
       .select({ bookKey: bookRatings.bookKey, rating: bookRatings.rating })
       .from(bookRatings)
-      .where(eq(bookRatings.userId, res.locals.user!.id));
+      .where(
+        and(
+          eq(bookRatings.userId, res.locals.user!.id),
+          bookKey === undefined ? undefined : eq(bookRatings.bookKey, bookKey),
+        ),
+      );
 
     res.json({ ratings });
   },

@@ -17,6 +17,11 @@ export interface BookRatingResponse {
   rating: number;
 }
 
+// GET /api/ratings?bookKey=... query: optionally just one book's rating
+export const ratingsQuery = z.strictObject({
+  bookKey: openLibraryWorkKey.optional(),
+});
+
 // GET /api/ratings response: all of the signed-in user's ratings
 export interface BookRatingsResponse {
   ratings: BookRatingResponse[];

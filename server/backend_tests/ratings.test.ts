@@ -57,10 +57,10 @@ async function putRating(body: unknown, token?: string) {
 }
 
 // send a GET request to /api/ratings; include a session cookie if a token is provided
-async function getRatings(token?: string) {
+async function getRatings(token?: string, query = "") {
   const headers = new Headers();
   if (token) headers.set("cookie", `session=${token}`);
-  return fetch(`${baseUrl}/api/ratings`, { headers });
+  return fetch(`${baseUrl}/api/ratings${query}`, { headers });
 }
 
 // return all rating rows for a given bookKey
@@ -224,4 +224,39 @@ test("COL-04-T-4 lists an updated rating once with its latest value", async () =
   assert.deepEqual(await response.json(), {
     ratings: [{ bookKey, rating: 4 }],
   });
+});
+
+test("returns only the requested book's rating", async () => {
+  const user = await createSignedInUser();
+  const [first, second] = [createTestBookKey(), createTestBookKey()];
+  await putRating({ bookKey: first, rating: 2 }, user.token);
+  await putRating({ bookKey: second, rating: 5 }, user.token);
+
+  const response = await getRatings(
+    user.token,
+    `?bookKey=${encodeURIComponent(second)}`,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ratings: [{ bookKey: second, rating: 5 }],
+  });
+
+  const unrated = await getRatings(
+    user.token,
+    `?bookKey=${encodeURIComponent(createTestBookKey())}`,
+  );
+  assert.deepEqual(await unrated.json(), { ratings: [] });
+});
+
+test("rejects an invalid bookKey filter", async () => {
+  const user = await createSignedInUser();
+  for (const query of [
+    "?bookKey=OL1W",
+    "?bookKey=/works/OL1W&bookKey=/works/OL2W",
+    "?other=1",
+  ]) {
+    const response = await getRatings(user.token, query);
+    assert.equal(response.status, 400, query);
+    assert.deepEqual(await response.json(), { error: "Invalid book key" });
+  }
 });

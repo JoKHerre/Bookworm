@@ -56,4 +56,13 @@ describe("api/ratings", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 500)));
     await expect(getRatings()).rejects.toThrow("Could not load your ratings.");
   });
+
+  it("asks for one book's rating", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ratings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await getRatings(undefined, "/works/OL1W");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/ratings?bookKey=%2Fworks%2FOL1W",
+    );
+  });
 });
