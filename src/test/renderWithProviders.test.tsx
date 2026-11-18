@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import { renderWithProviders } from "./renderWithProviders";
 import { screen } from "@testing-library/react";
 

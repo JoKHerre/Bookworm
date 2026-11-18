@@ -12,7 +12,7 @@ import { errorMessage } from "../api/client";
 import { saveBook } from "../api/library";
 import { getRatings, saveRating } from "../api/ratings";
 import StarRating from "../components/StarRating";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import "./BookDetailsPage.css";
 import SimilarAtLibrarySection from "../components/SimilarAtLibrarySection";
 

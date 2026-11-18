@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import "./AuthForm.css";
 
 interface AuthFormProps {

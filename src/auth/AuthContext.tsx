@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { type PublicUser } from "../shared/auth";
-import * as authApi from "./api/auth";
+import { type PublicUser } from "../../shared/auth";
+import * as authApi from "../api/auth";
 import { AuthContext, type AuthContextValue } from "./useAuth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {

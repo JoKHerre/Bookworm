@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation } from "react-router";
 import type { AuthLocationState } from "../routes";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import "./Header.css";
 
 // NavLink sets aria-current="page" on the link matching the current URL
