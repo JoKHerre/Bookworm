@@ -12,16 +12,19 @@ export interface CollectionMembershipSummary extends CollectionSummary {
   containsBook: boolean;
 }
 
+const collectionSummary = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  createdAt: z.string(),
+  bookCount: z.number().int().nonnegative(),
+});
+
+const collectionListResponse = z.object({
+  collections: z.array(collectionSummary),
+});
+
 const membershipListResponse = z.object({
-  collections: z.array(
-    z.object({
-      id: z.number().int().positive(),
-      name: z.string(),
-      createdAt: z.string(),
-      bookCount: z.number().int().nonnegative(),
-      containsBook: z.boolean(),
-    }),
-  ),
+  collections: z.array(collectionSummary.extend({ containsBook: z.boolean() })),
 });
 
 export class CollectionApiError extends Error {
@@ -78,8 +81,22 @@ export async function listCollections(
   signal?: AbortSignal,
 ): Promise<CollectionSummary[]> {
   const response = await request("", { signal });
-  const data = (await response.json()) as { collections: CollectionSummary[] };
+  const data = await readResponse(
+    response,
+    collectionListResponse,
+    "Could not read your collections. Please try again.",
+  );
   return data.collections;
+}
+
+async function readResponse<T extends z.ZodType>(
+  response: Response,
+  schema: T,
+  message: string,
+): Promise<z.infer<T>> {
+  const parsed = schema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) throw new Error(message);
+  return parsed.data;
 }
 
 export async function createCollection(
@@ -90,7 +107,11 @@ export async function createCollection(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: name.trim() }),
   });
-  return response.json() as Promise<CollectionSummary>;
+  return readResponse(
+    response,
+    collectionSummary,
+    "Could not read the created collection. Please try again.",
+  );
 }
 
 export async function renameCollection(
@@ -102,7 +123,11 @@ export async function renameCollection(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: name.trim() }),
   });
-  return response.json() as Promise<CollectionSummary>;
+  return readResponse(
+    response,
+    collectionSummary,
+    "Could not read the renamed collection. Please try again.",
+  );
 }
 
 export async function deleteCollection(id: number): Promise<void> {
@@ -115,14 +140,12 @@ export async function listCollectionsForBook(
 ): Promise<CollectionMembershipSummary[]> {
   const query = new URLSearchParams({ bookKey });
   const response = await request(`?${query}`, { signal }, "membership");
-  const parsed = membershipListResponse.safeParse(
-    await response.json().catch(() => null),
+  const data = await readResponse(
+    response,
+    membershipListResponse,
+    "Could not read your collection options. Please try again.",
   );
-  if (!parsed.success)
-    throw new Error(
-      "Could not read your collection options. Please try again.",
-    );
-  return parsed.data.collections;
+  return data.collections;
 }
 
 // The server saves the work to My Library if needed in the same transaction.

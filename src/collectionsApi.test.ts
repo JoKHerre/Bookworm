@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createCollection,
   deleteCollection,
@@ -15,9 +15,59 @@ const collection = {
   createdAt: "2026-01-01",
   bookCount: 0,
 };
-afterEach(() => vi.unstubAllGlobals());
-
 describe("collectionsApi", () => {
+  it.each([
+    null,
+    {},
+    { collections: {} },
+    { collections: [{ ...collection, bookCount: -1 }] },
+  ])("rejects malformed collection lists", async (body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
+    await expect(listCollections()).rejects.toThrow(
+      "Could not read your collections",
+    );
+  });
+  it.each(["create", "rename"])(
+    "rejects malformed %s responses",
+    async (operation) => {
+      for (const body of [
+        null,
+        {},
+        { ...collection, id: "7" },
+        { ...collection, name: null },
+        { ...collection, bookCount: -1 },
+      ]) {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
+        const result =
+          operation === "create"
+            ? createCollection("Favorites")
+            : renameCollection(7, "Favorites");
+        await expect(result).rejects.toThrow(
+          operation === "create"
+            ? "Could not read the created collection"
+            : "Could not read the renamed collection",
+        );
+      }
+    },
+  );
+  it.each(["list", "create", "rename"])(
+    "handles invalid JSON in %s responses",
+    async (operation) => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(new Response("invalid JSON", { status: 200 })),
+      );
+      const result =
+        operation === "list"
+          ? listCollections()
+          : operation === "create"
+            ? createCollection("Favorites")
+            : renameCollection(7, "Favorites");
+      await expect(result).rejects.toThrow("Could not read");
+    },
+  );
   it.each([
     null,
     {},
