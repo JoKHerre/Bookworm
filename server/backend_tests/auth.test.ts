@@ -1,13 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import type { NextFunction, Request, Response } from "express";
-import type { Server } from "node:http";
-import {
-  assertTestDatabaseUrl,
-  cookieParser,
-  eq,
-  express,
-} from "./test-utils.ts";
+import { assertTestDatabaseUrl, eq, startTestServer } from "./test-utils.ts";
 
 assertTestDatabaseUrl();
 
@@ -15,21 +8,19 @@ const [
   { db, pool },
   { sessions, users },
   { hashPassword, verifyPassword },
-  { loadSession },
-  { authRouter },
+  { createApp },
 ] = await Promise.all([
   import("../src/db/index.ts"),
   import("../src/db/schema.ts"),
   import("../src/auth/password.ts"),
-  import("../src/auth/middleware.ts"),
-  import("../src/routes/auth.ts"),
+  import("../src/app.ts"),
 ]);
 
 //https://xkcd.com/936/
 const PASSWORD = "correct-horse-battery";
 const createdEmails = new Set<string>();
 let emailCounter = 0;
-let server: Server;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 
 function uniqueEmail() {
@@ -75,33 +66,12 @@ async function register(email = uniqueEmail(), password = PASSWORD) {
 }
 
 before(async () => {
-  const app = express();
-  app.use(express.json());
-  app.use(cookieParser());
-  app.use(loadSession);
-  app.use("/api/auth", authRouter);
-  app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
-    if (res.headersSent) return next(error);
-    res.status(500).json({ error: "Internal server error" });
-  });
-
-  server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
-    listener.once("error", reject);
-  });
-
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 after(async () => {
   try {
-    if (server?.listening) {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      });
-    }
+    await closeServer();
   } finally {
     try {
       // sessions cascade-delete with the user

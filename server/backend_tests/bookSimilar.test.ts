@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import type { Server } from "node:http";
 import { after, afterEach, before, test } from "node:test";
-import express from "express";
 import { similarBooksResponse } from "../../shared/books.ts";
-import { booksRouter } from "../src/routes/books.ts";
+import { createApp } from "../src/app.ts";
+import { startTestServer } from "./test-utils.ts";
 import {
   clearOpenLibraryCache,
   getSimilarBooks,
@@ -16,7 +15,7 @@ const sourceWork = {
   title: "Source Book",
   subjects: ["Fantasy", "Adventure", "Friendship"],
 };
-let server: Server;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 let upstreamRequests: URL[];
 
@@ -65,23 +64,11 @@ function untilAborted(signal: AbortSignal): Promise<never> {
 }
 
 before(async () => {
-  const app = express();
-  app.use("/api/books", booksRouter);
-  server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
-    listener.once("error", reject);
-  });
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 after(async () => {
-  if (server?.listening) {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
-  }
+  await closeServer();
 });
 
 afterEach(() => {
