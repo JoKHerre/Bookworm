@@ -7,7 +7,7 @@ import {
   openLibraryWork,
   openLibraryAuthor,
   openLibraryEditionsResponse,
-} from "../../../shared/openLibrary.ts";
+} from "./openLibrarySchemas.ts";
 
 import {
   bookISBNs,
