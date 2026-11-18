@@ -9,10 +9,7 @@ import {
 } from "../shared/books";
 
 import { availabilityResponse } from "../shared/availability";
-import {
-  titleSearchResponse,
-  type BookFormat,
-} from "../shared/titleSearch";
+import { titleSearchResponse, type BookFormat } from "../shared/titleSearch";
 
 async function get<T>(
   path: string,

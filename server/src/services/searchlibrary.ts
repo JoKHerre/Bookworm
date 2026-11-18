@@ -209,7 +209,6 @@ export async function checkIsbnAvailability(
   return availability.parse({ ...match, branches });
 }
 
-
 const LIBRARY_SEARCH_MAX_RESULTS = 15;
 const LIBRARY_BOOK_FORMAT_TYPES: Record<BookFormat, string> = {
   book: "TOM=bks",
@@ -240,7 +239,10 @@ export async function searchLibraryByTitle(
     if (xhr) headers["X-Requested-With"] = "XMLHttpRequest";
     const timeout = AbortSignal.timeout(TITLESEARCH_REQUEST_TIMEOUT_MS);
     const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
-    const res = await fetchc(url.toString(), { headers, signal: requestSignal });
+    const res = await fetchc(url.toString(), {
+      headers,
+      signal: requestSignal,
+    });
     if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
     return { text: await res.text(), url: res.url };
   };
@@ -248,13 +250,12 @@ export async function searchLibraryByTitle(
   const search = await get("searchresults.aspx", {
     ctx: CTX,
     type: "Keyword",
-    by: "TI", // search by title on SCPL 
+    by: "TI", // search by title on SCPL
     term,
     sort: "RELEVANCE",
     limit: LIBRARY_BOOK_FORMAT_TYPES[format],
     query: "",
     page: 0,
-
   });
 
   const searchUrl = new URL(search.url);
@@ -315,7 +316,10 @@ export async function searchLibraryByTitle(
       title: clean(link.text()),
       author:
         clean(
-          item.find(".nsm-brief-primary-author-group .nsm-browse-text").first().text(),
+          item
+            .find(".nsm-brief-primary-author-group .nsm-browse-text")
+            .first()
+            .text(),
         ) || undefined,
       format: item.find(MATERIAL_FORMAT_SELECTOR).first().attr("alt")?.trim(),
     });

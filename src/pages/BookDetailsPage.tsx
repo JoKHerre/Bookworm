@@ -356,7 +356,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
       {book && <BookISBNSection bookKey={bookKey} />}
 
-       {book && (
+      {book && (
         <SimilarAtLibrarySection
           title={book.title}
           format="book"
