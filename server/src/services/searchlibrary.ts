@@ -5,11 +5,19 @@ import {
   type Availability,
 } from "../../../shared/availability.ts";
 
+import {
+  titleSearchResult,
+  type BookFormat,
+  type TitleSearchResult,
+} from "../../../shared/titleSearch.ts";
+
 const BASE = "https://catalog.santacruzpl.org/polaris/search/";
 const CTX = "1.1033.0.0.1";
 const MATERIAL_FORMAT_SELECTOR =
   'img.c-title-detail-formats__img[src*="/formats/"][alt]';
 export const CATALOG_REQUEST_TIMEOUT_MS = 5000;
+export const TITLESEARCH_REQUEST_TIMEOUT_MS = 20_000;
+// searching by title requires a longer timeout window based on local testing
 
 type Branches = Availability["branches"];
 type Match = Omit<Availability, "branches">;
@@ -199,4 +207,123 @@ export async function checkIsbnAvailability(
     throw new Error("Library catalog did not return branch availability");
   }
   return availability.parse({ ...match, branches });
+}
+
+
+const LIBRARY_SEARCH_MAX_RESULTS = 15;
+const LIBRARY_BOOK_FORMAT_TYPES: Record<BookFormat, string> = {
+  book: "TOM=bks",
+  ebook: "TOM=ebk",
+};
+
+export async function searchLibraryByTitle(
+  title: string,
+  format: BookFormat,
+  signal?: AbortSignal,
+): Promise<TitleSearchResult[]> {
+  const term = title.replace(/\s+/g, " ").trim();
+  if (!term) throw new Error("Provide a title to search");
+  signal?.throwIfAborted();
+
+  const clean = (s: string) => s.replace(/\s+/g, " ").trim();
+  const fetchc = makeFetchCookie(fetch);
+
+  const get = async (
+    path: string,
+    params: Record<string, string | number>,
+    xhr = false,
+  ) => {
+    const url = new URL(path, BASE);
+    for (const [k, v] of Object.entries(params))
+      url.searchParams.set(k, String(v));
+    const headers: Record<string, string> = { "User-Agent": "Mozilla/5.0" };
+    if (xhr) headers["X-Requested-With"] = "XMLHttpRequest";
+    const timeout = AbortSignal.timeout(TITLESEARCH_REQUEST_TIMEOUT_MS);
+    const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const res = await fetchc(url.toString(), { headers, signal: requestSignal });
+    if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
+    return { text: await res.text(), url: res.url };
+  };
+
+  const search = await get("searchresults.aspx", {
+    ctx: CTX,
+    type: "Keyword",
+    by: "TI", // search by title on SCPL 
+    term,
+    sort: "RELEVANCE",
+    limit: LIBRARY_BOOK_FORMAT_TYPES[format],
+    query: "",
+    page: 0,
+
+  });
+
+  const searchUrl = new URL(search.url);
+  if (searchUrl.origin !== new URL(BASE).origin) {
+    throw new Error("Unexpected library catalog redirect");
+  }
+  const $search = cheerio.load(search.text);
+  const path = searchUrl.pathname.toLowerCase();
+
+  // A single hit redirects straight to the record's title page.
+  if (path.endsWith("/title.aspx")) {
+    const parsed = titleSearchResult.safeParse({
+      bibid: searchUrl.searchParams.get("cn") ?? "",
+      title: clean($search(".nsm-long-item.nsm-e35").first().text()),
+      author:
+        clean(
+          $search(".nsm-long-item.nsm-e18 .nsm-browse-text").first().text(),
+        ) || undefined,
+      format: $search(MATERIAL_FORMAT_SELECTOR).first().attr("alt")?.trim(),
+    });
+    return parsed.success ? [parsed.data] : [];
+  }
+
+  if (!path.endsWith("/searchresults.aspx")) {
+    throw new Error("Unrecognized library catalog search page");
+  }
+  if (/No titles found\s*\(0 hits\)/i.test(clean($search(".Header").text()))) {
+    return [];
+  }
+  if (
+    !$search("body.page-searchresults").length ||
+    !$search("#searchResults").length
+  ) {
+    throw new Error("Unrecognized library catalog search page");
+  }
+
+  const { text } = await get(
+    "components/ajaxResults.aspx",
+    { page: 1, hpp: 20 },
+    true,
+  );
+  const $ = cheerio.load(text);
+  const items = $("div.content-module--search-result");
+  if (!items.length) {
+    throw new Error("Unrecognized library catalog results page");
+  }
+
+  const results: TitleSearchResult[] = [];
+  const seen = new Set<string>();
+  for (const el of items.toArray()) {
+    const item = $(el);
+    const link = item.find("a.nsm-brief-action-link").first();
+    const href = link.attr("href");
+    if (!href) continue;
+    const recordUrl = new URL(href, searchUrl);
+    const parsed = titleSearchResult.safeParse({
+      bibid: recordUrl.searchParams.get("cn") ?? "",
+      title: clean(link.text()),
+      author:
+        clean(
+          item.find(".nsm-brief-primary-author-group .nsm-browse-text").first().text(),
+        ) || undefined,
+      format: item.find(MATERIAL_FORMAT_SELECTOR).first().attr("alt")?.trim(),
+    });
+    // Skip malformed rows instead of failing the whole search.
+    if (!parsed.success || seen.has(parsed.data.bibid)) continue;
+    seen.add(parsed.data.bibid);
+    results.push(parsed.data);
+    if (results.length >= LIBRARY_SEARCH_MAX_RESULTS) break;
+  }
+  return results;
 }

@@ -9,6 +9,7 @@ import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
+import SimilarAtLibrarySection from "../components/SimilarAtLibrarySection";
 
 function BookDetailsPage() {
   const params = useParams();
@@ -354,8 +355,24 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       )}
 
       {book && <BookISBNSection bookKey={bookKey} />}
+
+       {book && (
+        <SimilarAtLibrarySection
+          title={book.title}
+          format="book"
+          heading="Similar Books available at Santa Cruz Public Library"
+        />
+      )}
+      {book && (
+        <SimilarAtLibrarySection
+          title={book.title}
+          format="ebook"
+          heading="Similar eBooks available at Santa Cruz Public Library"
+        />
+      )}
+
+      {book && <BookISBNSection bookKey={bookKey} />}
     </main>
   );
 }
-
 export default BookDetailsPage;

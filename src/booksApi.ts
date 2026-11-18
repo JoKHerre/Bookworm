@@ -9,6 +9,10 @@ import {
 } from "../shared/books";
 
 import { availabilityResponse } from "../shared/availability";
+import {
+  titleSearchResponse,
+  type BookFormat,
+} from "../shared/titleSearch";
 
 async function get<T>(
   path: string,
@@ -112,6 +116,23 @@ export async function getBookAvailability(key: string, signal: AbortSignal) {
   const parsed = availabilityResponse.safeParse(data);
   if (!parsed.success) {
     throw new Error("Unable to read library availability. Please try again.");
+  }
+  return parsed.data;
+}
+
+export async function searchLibraryByTitle(
+  title: string,
+  format: BookFormat,
+  signal: AbortSignal,
+) {
+  const data = await get<unknown>(
+    "library-search",
+    new URLSearchParams({ title, format }),
+    signal,
+  );
+  const parsed = titleSearchResponse.safeParse(data);
+  if (!parsed.success) {
+    throw new Error("Unable to read library search results. Please try again.");
   }
   return parsed.data;
 }
