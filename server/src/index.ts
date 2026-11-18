@@ -11,7 +11,6 @@ import { authRouter } from "./routes/auth.ts";
 import { deleteExpiredSessions } from "./db/session.ts";
 import cookieParser from "cookie-parser";
 import { booksRouter } from "./routes/books.ts";
-import { collectionsRouter } from "./routes/collections.ts";
 import { libraryRouter } from "./routes/library.ts";
 import { ratingsRouter } from "./routes/ratings.ts";
 
@@ -23,7 +22,6 @@ app.use(loadSession);
 app.use("/api/auth", authRouter);
 app.use("/api/books", booksRouter);
 app.use("/api/library", libraryRouter);
-app.use("/api/collections", collectionsRouter);
 app.use("/api/ratings", ratingsRouter);
 
 app.get("/api/test", (req: Request, res: Response) => {
