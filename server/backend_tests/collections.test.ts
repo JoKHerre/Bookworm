@@ -810,7 +810,7 @@ test("COL-05-T-5 hides missing and foreign resources", async () => {
 // test that deleting a saved book deletes its memberships as well
 test("COL-05-T-5 reflects removal from the personal library", async () => {
   const { user, first, second, book } = await createTwoMemberships();
-  
+
   // remove the saved book from the user's library
   await assertNoContent(
     await request("DELETE", `/api/library/${book.id}`, user.token),
