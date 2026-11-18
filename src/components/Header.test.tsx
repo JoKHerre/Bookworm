@@ -23,4 +23,17 @@ describe("Header", () => {
     await userEvent.click(screen.getByRole("button", { name: "Log Out" }));
     expect(auth.logout).toHaveBeenCalledTimes(1);
   });
+
+  it("REF-01-T-3 header links only to pages that exist", () => {
+    renderWithProviders(<Header />);
+    const links = screen
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(links).toEqual([
+      ["Bookworm", "/"],
+      ["Discover", "/search"],
+      ["My Library", "/personal-library"],
+      ["Log In", "/login"],
+    ]);
+  });
 });

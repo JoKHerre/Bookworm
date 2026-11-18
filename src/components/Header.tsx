@@ -17,12 +17,8 @@ function Header() {
       </NavLink>
 
       <nav className="main-nav" aria-label="Main navigation">
-        <NavLink to="/" end>
-          Home
-        </NavLink>
         <NavLink to="/search">Discover</NavLink>
         <NavLink to="/personal-library">My Library</NavLink>
-        <NavLink to="/account">Account</NavLink>
         {user ? (
           <button className="nav-auth-button" type="button" onClick={logout}>
             Log Out
