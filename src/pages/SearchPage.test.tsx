@@ -195,7 +195,7 @@ describe("SearchPage", () => {
       renderSearch();
       fireEvent.focus(searchBox());
       fireEvent.change(searchBox(), { target: { value: text } });
-      await act(() => vi.advanceTimersByTimeAsync(1000));
+      await act(() => vi.advanceTimersByTimeAsync(250));
     }
 
     it("TST-01-T-1 search page suggests books while typing", async () => {

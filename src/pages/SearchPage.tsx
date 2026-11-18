@@ -13,6 +13,9 @@ import BookCard from "../components/BookCard";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
+// long enough to skip a request per keystroke, short enough to keep up with typing
+const SUGGESTION_DELAY_MS = 250;
+
 type ViewMode = "grid" | "list";
 type Filters = Omit<BookSearchQuery, "q">;
 
@@ -151,7 +154,7 @@ function SearchPage() {
         .catch(() => {
           if (!signal.aborted) setSuggestions([]);
         });
-    }, 1000);
+    }, SUGGESTION_DELAY_MS);
 
     return () => {
       window.clearTimeout(timeout);
