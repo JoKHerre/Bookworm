@@ -28,6 +28,12 @@
   color: var(--olive);
 }
 
+.auth-pending {
+  margin: -12px 0 0;
+  font-size: 15px;
+  opacity: 0.8;
+}
+
 .auth-field {
   display: flex;
   flex-direction: column;

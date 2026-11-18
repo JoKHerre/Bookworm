@@ -6,3 +6,14 @@ export const READING_STATUSES = [
 ] as const;
 
 export type ReadingStatus = (typeof READING_STATUSES)[number];
+
+export const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
+  to_be_read: "To Be Read",
+  currently_reading: "Currently Reading",
+  finished: "Finished",
+};
+
+export const READING_STATUS_OPTIONS = READING_STATUSES.map((value) => ({
+  value,
+  label: READING_STATUS_LABELS[value],
+}));

@@ -152,26 +152,60 @@ describe("BookDetailsPage", () => {
   });
 
   describe("signed out", () => {
-    it("TST-01-T-1 details page asks signed-out users to log in", async () => {
+    it("TST-01-T-1 details page saves after signed-out users log in", async () => {
       renderDetails();
       await userEvent.click(
-        await screen.findByRole("button", { name: "Log in to save" }),
+        await screen.findByRole("button", { name: "Save to My Library" }),
       );
       expect(
         screen.getByText("Login page, back to /books/works/OL1W"),
       ).toBeInTheDocument();
-      expect(screen.queryByText("Your rating")).not.toBeInTheDocument();
+    });
+
+    it("TST-01-T-1 details page rates after signed-out users log in", async () => {
+      renderDetails();
+      await userEvent.click(
+        await screen.findByRole("radio", { name: "4 stars" }),
+      );
+      expect(
+        screen.getByText("Login page, back to /books/works/OL1W"),
+      ).toBeInTheDocument();
+      expect(saveRating).not.toHaveBeenCalled();
     });
   });
 
   describe("signed in", () => {
+    const SAVED = {
+      id: 7,
+      bookKey: "/works/OL1W",
+      readingStatus: "to_be_read",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    // GET /api/library answers with `library`; the save answers with `status`
+    function stubLibrary(
+      status: number,
+      body: unknown,
+      library: { books: unknown[] } = { books: [] },
+    ) {
+      const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+        Promise.resolve(
+          init?.method === "POST"
+            ? jsonResponse(body, status)
+            : jsonResponse(library),
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    }
+
     const save = () =>
       userEvent.click(
         screen.getByRole("button", { name: "Save to My Library" }),
       );
 
-    async function renderSignedIn() {
-      renderDetails({ user: USER });
+    async function renderSignedIn(state?: unknown) {
+      renderDetails({ user: USER, state });
       await screen.findByRole("heading", { name: "Dune", level: 1 });
       await waitFor(() =>
         expect(
@@ -180,26 +214,77 @@ describe("BookDetailsPage", () => {
       );
     }
 
+    it("TST-01-T-1 details page save shows the book as saved", async () => {
+      const fetchMock = stubLibrary(201, SAVED);
+      await renderSignedIn();
+      await save();
+      expect(
+        await screen.findByRole("combobox", { name: "In your library" }),
+      ).toHaveValue("to_be_read");
+      expect(
+        screen.queryByRole("button", { name: "Save to My Library" }),
+      ).not.toBeInTheDocument();
+
+      const post = fetchMock.mock.calls.find(
+        ([, init]) => init?.method === "POST",
+      );
+      expect(post?.[0]).toBe("/api/library");
+      expect(JSON.parse(post?.[1]?.body as string)).toEqual({
+        bookKey: "/works/OL1W",
+      });
+    });
+
+    it("TST-01-T-1 details page shows a book that is already saved", async () => {
+      stubLibrary(201, SAVED, {
+        books: [{ ...SAVED, readingStatus: "finished" }],
+      });
+      renderDetails({ user: USER });
+      expect(
+        await screen.findByRole("combobox", { name: "In your library" }),
+      ).toHaveValue("finished");
+    });
+
+    it("TST-01-T-1 details page treats a 409 save as saved", async () => {
+      const library = { books: [] as unknown[] };
+      stubLibrary(409, {}, library);
+      await renderSignedIn();
+      library.books = [SAVED];
+      await save();
+      expect(
+        await screen.findByRole("combobox", { name: "In your library" }),
+      ).toBeInTheDocument();
+    });
+
+    it("TST-01-T-1 details page finishes a save started before login", async () => {
+      const fetchMock = stubLibrary(201, SAVED);
+      renderDetails({ user: USER, state: { pendingSave: "/works/OL1W" } });
+      expect(
+        await screen.findByRole("combobox", { name: "In your library" }),
+      ).toBeInTheDocument();
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+      ).toHaveLength(1);
+    });
+
+    it("TST-01-T-1 details page finishes a rating started before login", async () => {
+      stubLibrary(201, SAVED);
+      renderDetails({ user: USER, state: { pendingRating: 4 } });
+      expect(await screen.findByText("Rating saved.")).toBeInTheDocument();
+      expect(saveRating).toHaveBeenCalledTimes(1);
+      expect(saveRating).toHaveBeenCalledWith("/works/OL1W", 4);
+    });
+
     it.each([
-      [201, {}, "Book saved to your library."],
-      [409, {}, "This book is already in your library."],
-      [401, {}, "Please sign in to save books to your library."],
+      [401, {}, "Your session has expired. Please log in again."],
       [500, { error: "Database down" }, "Database down"],
       [500, null, "Could not save this book."],
     ])(
       "TST-01-T-1 details page save responds to status %i",
       async (status, body, message) => {
-        const fetchMock = vi.fn().mockResolvedValue(jsonResponse(body, status));
-        vi.stubGlobal("fetch", fetchMock);
+        stubLibrary(status, body);
         await renderSignedIn();
         await save();
         expect(await screen.findByText(message)).toBeInTheDocument();
-
-        const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-        expect(url).toBe("/api/library");
-        expect(JSON.parse(init.body as string)).toEqual({
-          bookKey: "/works/OL1W",
-        });
       },
     );
 

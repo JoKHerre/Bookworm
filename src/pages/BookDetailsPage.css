@@ -104,6 +104,30 @@
   cursor: wait;
 }
 
+.saved-book-status {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  font-weight: 650;
+  color: var(--olive);
+}
+
+.saved-book-status span::before {
+  content: "✓ ";
+}
+
+.saved-book-status select {
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 10px;
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 8px;
+}
+
 .book-year {
   color: var(--olive);
   opacity: 0.6;

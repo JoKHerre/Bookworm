@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "../auth/useAuth";
+import type { AuthLocationState, PendingActionState } from "../routes";
 import "./AuthForm.css";
 
 interface AuthFormProps {
@@ -35,13 +36,21 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
-  //JANK NONSENSE REFACTOR LATER
   const isLogin = mode === "login";
+  // what the user was doing when they were sent here, finished after they log in
+  const pending = (location.state as AuthLocationState | null)?.from?.state as
+    PendingActionState | null | undefined;
+  const pendingMessage = pending?.pendingSave
+    ? "We'll save the book to your library as soon as you're in."
+    : pending?.pendingRating
+      ? "We'll save your rating as soon as you're in."
+      : null;
 
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={handleSubmit}>
         <h2>{isLogin ? "Log in" : "Register"}</h2>
+        {pendingMessage && <p className="auth-pending">{pendingMessage}</p>}
 
         <label className="auth-field">
           <span>Email</span>

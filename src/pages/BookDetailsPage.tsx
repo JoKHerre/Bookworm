@@ -7,10 +7,17 @@ import {
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
 import BookISBNSection from "../components/BookISBNSection";
-import type { AuthLocationState, BookDetailsLocationState } from "../routes";
-import { errorMessage } from "../api/client";
-import { saveBook } from "../api/library";
+import type { BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../api/ratings";
+import {
+  useLoginToFinish,
+  usePendingAction,
+  useSavedBooks,
+} from "../library/useSavedBooks";
+import {
+  READING_STATUS_OPTIONS,
+  type ReadingStatus,
+} from "../../shared/readingStatus";
 import StarRating from "../components/StarRating";
 import { useAuth } from "../auth/useAuth";
 import "./BookDetailsPage.css";
@@ -46,8 +53,10 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false); // used to control save button's availability
-  const [saveMessage, setSaveMessage] = useState(""); // used to display message to user after attempting to save a book
+  const { saved, busyKeys, errors, save, setReadingStatus } = useSavedBooks();
+  const savedBook = saved.get(bookKey);
+  const savingBook = busyKeys.has(bookKey);
+  const loginToFinish = useLoginToFinish();
   const [rating, setRating] = useState<number | null>(null); // the signed-in user's rating of this book
   const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
@@ -118,42 +127,18 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     return () => controller.abort();
   }, [bookKey, userId]);
 
-  function goToLogin() {
-    const state: AuthLocationState = { from: location };
-    void navigate("/login", { state, replace: true });
-  }
-
   function retryAvailability() {
     setAvailability(undefined);
     setAvailabilityError(null);
     setAvailabilityAttempt((attempt) => attempt + 1);
   }
 
-  async function handleSave() {
-    setSaving(true);
-    setSaveMessage("");
-
-    try {
-      await saveBook(bookKey);
-      setSaveMessage("Book saved to your library.");
-    } catch (err) {
-      setSaveMessage(
-        errorMessage(err, {
-          fallback: "Could not save this book.",
-          byStatus: {
-            401: "Please sign in to save books to your library.",
-            409: "This book is already in your library.",
-          },
-          useServerMessage: true,
-        }),
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
   // function to handle rating a book: optimistically show the new rating, roll back if saving fails
   async function handleRate(newRating: number) {
+    if (!user) {
+      loginToFinish({ pendingRating: newRating });
+      return;
+    }
     const previousRating = rating;
     setRating(newRating);
     setRatingSaving(true);
@@ -171,6 +156,8 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       setRatingSaving(false);
     }
   }
+
+  usePendingAction("pendingRating", handleRate);
 
   const summary =
     typeof book?.description === "string"
@@ -217,35 +204,44 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
               book?.authors.join(", ") ||
               "Unknown author"}
           </p>
-          {user ? (
-            <button
-              className="save-library-button"
-              type="button"
-              onClick={handleSave}
-              disabled={saving || loading || !book}
-            >
-              {saving ? "Saving..." : "Save to My Library"}
-            </button>
+          {savedBook ? (
+            <label className="saved-book-status">
+              <span>In your library</span>
+              <select
+                value={savedBook.readingStatus}
+                aria-busy={savingBook}
+                disabled={savingBook}
+                onChange={(event) =>
+                  void setReadingStatus(
+                    bookKey,
+                    event.target.value as ReadingStatus,
+                  )
+                }
+              >
+                {READING_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : (
             <button
               className="save-library-button"
               type="button"
-              onClick={goToLogin}
+              onClick={() => void save(bookKey)}
+              disabled={savingBook || loading || !book}
             >
-              Log in to save
+              {savingBook ? "Saving..." : "Save to My Library"}
             </button>
           )}
-          {saveMessage && <p role="status">{saveMessage}</p>}
-          {user && (
-            <>
-              <StarRating
-                value={rating}
-                onChange={(value) => void handleRate(value)}
-                disabled={ratingSaving || loading || !book}
-              />
-              {ratingMessage && <p role="status">{ratingMessage}</p>}
-            </>
-          )}
+          {errors[bookKey] && <p role="alert">{errors[bookKey]}</p>}
+          <StarRating
+            value={rating}
+            onChange={(value) => void handleRate(value)}
+            disabled={ratingSaving || loading || !book}
+          />
+          {ratingMessage && <p role="status">{ratingMessage}</p>}
         </div>
       </section>
 

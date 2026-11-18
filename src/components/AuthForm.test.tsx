@@ -57,4 +57,23 @@ describe("AuthForm", () => {
       await screen.findByRole("heading", { name: "Register" }),
     ).toBeInTheDocument();
   });
+
+  it("TST-01-T-1 auth form explains a save waiting on login", () => {
+    renderWithProviders(<AuthForm mode="login" />, {
+      route: {
+        pathname: "/login",
+        state: {
+          from: {
+            pathname: "/books/works/OL1W",
+            state: { pendingSave: "/works/OL1W" },
+          },
+        },
+      },
+    });
+    expect(
+      screen.getByText(
+        "We'll save the book to your library as soon as you're in.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
