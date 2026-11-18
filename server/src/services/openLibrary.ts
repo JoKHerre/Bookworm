@@ -134,9 +134,12 @@ export function searchOpenLibrary(
     constraints.push(`first_publish_year:[${range}]`);
   }
 
+  // Escape the user's text so characters like ")" can't break out of the
+  // group and skip the filters. Words such as OR still work as operators.
+  const q = escapeOpenLibraryQueryText(query.q);
   const filteredQuery = constraints.length
-    ? `(${query.q}) AND ${constraints.join(" AND ")}`
-    : query.q;
+    ? `(${q}) AND ${constraints.join(" AND ")}`
+    : q;
   return searchOpenLibraryQuery(filteredQuery, 20);
 }
 

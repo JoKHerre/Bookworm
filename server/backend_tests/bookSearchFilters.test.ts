@@ -128,6 +128,20 @@ test("SRC-04-T-2 applies every first-publication year range", async () => {
   }
 });
 
+test("SRC-04-T-2 keeps query syntax from escaping the filters", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+
+  const res = await get(
+    new URLSearchParams({ q: "dune) OR (harry", genre: "Fantasy" }),
+  );
+
+  assert.equal(res.status, 200);
+  assert.equal(
+    upstreamRequests[0]?.searchParams.get("q"),
+    '(dune\\) OR \\(harry) AND subject:("fantasy")',
+  );
+});
+
 // Criterion 2: OR within genres, AND between different filters and the query.
 
 test("SRC-04-T-2 combines genres with OR and other filters with AND", async () => {
