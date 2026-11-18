@@ -28,7 +28,7 @@ import {
   titleSearchQuery,
   type TitleSearchResponse,
 } from "../../../shared/titleSearch.ts";
-import { searchLibraryByTitle } from "../services/searchlibrary.ts";
+import { searchLibraryByTitle } from "../services/libraryCatalog.ts";
 
 export const booksRouter: Router = Router();
 

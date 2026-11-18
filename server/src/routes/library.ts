@@ -16,79 +16,63 @@ import type {
   SaveBookResponse,
 } from "../../../shared/library.ts";
 
-// .strict() rejects extra fields such as a userId
-const saveBookBody = z
-  .object({
-    bookKey: openLibraryWorkKey,
-  })
-  .strict();
+// strict objects reject extra fields such as a userId
+const saveBookBody = z.strictObject({ bookKey: openLibraryWorkKey });
 
-const updateReadingStatusBody = z
-  .object({
-    readingStatus: z.enum(READING_STATUSES),
-  })
-  .strict();
+const updateReadingStatusBody = z.strictObject({
+  readingStatus: z.enum(READING_STATUSES),
+});
 
-const importBooksBody = z
-  .object({
-    bookKeys: z.array(openLibraryWorkKey).min(1).max(IMPORT_MAX_ROWS),
-  })
-  .strict();
+const importBooksBody = z.strictObject({
+  bookKeys: z.array(openLibraryWorkKey).min(1).max(IMPORT_MAX_ROWS),
+});
 
 const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
 
 export const libraryRouter: Router = Router();
+libraryRouter.use(requireAuth);
 
 // GET /api/library: the signed-in user's saved books
-libraryRouter.get(
-  "/",
-  requireAuth,
-  async (_req, res: Response<LibraryResponse<Date>>) => {
-    const books = await db
-      .select({
-        id: savedBooks.id,
-        bookKey: savedBooks.bookKey,
-        createdAt: savedBooks.createdAt,
-        readingStatus: savedBooks.readingStatus,
-      })
-      .from(savedBooks)
-      .where(eq(savedBooks.userId, res.locals.user!.id));
+libraryRouter.get("/", async (_req, res: Response<LibraryResponse<Date>>) => {
+  const books = await db
+    .select({
+      id: savedBooks.id,
+      bookKey: savedBooks.bookKey,
+      createdAt: savedBooks.createdAt,
+      readingStatus: savedBooks.readingStatus,
+    })
+    .from(savedBooks)
+    .where(eq(savedBooks.userId, res.locals.user!.id));
 
-    res.json({ books });
-  },
-);
+  res.json({ books });
+});
 
 // DELETE /api/library/:id: remove a saved book
-libraryRouter.delete(
-  "/:id",
-  requireAuth,
-  async (req, res: Response<ApiError>) => {
-    const id = parsePositiveId(req.params.id);
-    if (id === null) {
-      res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
-      return;
-    }
+libraryRouter.delete("/:id", async (req, res: Response<ApiError>) => {
+  const id = parsePositiveId(req.params.id);
+  if (id === null) {
+    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
+    return;
+  }
 
-    const [deletedBook] = await db
-      .delete(savedBooks)
-      .where(
-        and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
-      )
-      .returning({ id: savedBooks.id });
+  const [deletedBook] = await db
+    .delete(savedBooks)
+    .where(
+      and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
+    )
+    .returning({ id: savedBooks.id });
 
-    if (!deletedBook) {
-      res.status(404).json({ error: "Book not found in your library" });
-      return;
-    }
+  if (!deletedBook) {
+    res.status(404).json({ error: "Book not found in your library" });
+    return;
+  }
 
-    res.status(204).end();
-  },
-);
+  res.status(204).end();
+});
 
 // PATCH /api/library/:id/reading-status
 libraryRouter.patch(
   "/:id/reading-status",
-  requireAuth,
   async (req, res: Response<ReadingStatusResponse | ApiError>) => {
     const id = parsePositiveId(req.params.id);
     if (id === null) {
@@ -125,7 +109,6 @@ libraryRouter.patch(
 // POST /api/library: save a book
 libraryRouter.post(
   "/",
-  requireAuth,
   async (req, res: Response<SaveBookResponse<Date> | ApiError>) => {
     const parsed = saveBookBody.safeParse(req.body);
     if (!parsed.success) {
@@ -162,7 +145,6 @@ libraryRouter.post(
 // POST /api/library/import: save many books at once (the book importer)
 libraryRouter.post(
   "/import",
-  requireAuth,
   async (req, res: Response<ImportBooksResponse | ApiError>) => {
     const parsed = importBooksBody.safeParse(req.body);
     if (!parsed.success) {

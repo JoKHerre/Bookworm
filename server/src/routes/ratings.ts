@@ -11,13 +11,12 @@ import {
   type BookRatingsResponse,
 } from "../../../shared/ratings.ts";
 
-// create an express router for rating-related endpoints
 export const ratingsRouter: Router = Router();
+ratingsRouter.use(requireAuth);
 
 // GET /api/ratings: the signed-in user's ratings, or with ?bookKey= just that book's
 ratingsRouter.get(
   "/",
-  requireAuth,
   async (req, res: Response<BookRatingsResponse | ApiError>) => {
     const parsed = ratingsQuery.safeParse(req.query);
     if (!parsed.success) {
@@ -43,9 +42,8 @@ ratingsRouter.get(
 // define PUT /api/ratings endpoint for saving or updating the user's rating of a book
 ratingsRouter.put(
   "/",
-  requireAuth,
   async (req, res: Response<BookRatingResponse | ApiError>) => {
-    // validate bookKey format and rating (integer 1-5); .strict() rejects extra fields such as a userId
+    // a strict object rejects extra fields such as a userId
     const parsed = saveRatingBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid rating" });

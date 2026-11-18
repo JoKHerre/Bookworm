@@ -2,7 +2,7 @@ import { ISBN_EDITIONS_PAGE_SIZE } from "../../../shared/books.ts";
 import type { AvailabilityResponse } from "../../../shared/availability.ts";
 import { cleanIsbn, hasIsbnShape } from "../../../shared/isbn.ts";
 import { getISBNsForWork } from "./openLibrary.ts";
-import { checkIsbnAvailability } from "./searchlibrary.ts";
+import { checkIsbnAvailability } from "./libraryCatalog.ts";
 
 // Reaching a search limit is an incomplete lookup, not a catalog miss.
 const MAX_CATALOG_LOOKUPS = 10;
