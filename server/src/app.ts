@@ -4,6 +4,7 @@ import express, {
   type Request,
   type Response,
 } from "express";
+import { STATUS_CODES } from "node:http";
 import cookieParser from "cookie-parser";
 import { sql } from "drizzle-orm";
 import { db } from "./db/index.ts";
@@ -40,10 +41,14 @@ export function createApp(): Express {
       typeof (err as { status?: unknown })?.status === "number"
         ? (err as { status: number }).status
         : 500;
-    if (status >= 500) console.error(err);
-    res
-      .status(status)
-      .json({ error: status >= 500 ? "Internal server error" : "Bad request" });
+    if (status >= 500) {
+      console.error(err);
+      res.status(status).json({ error: "Internal server error" });
+      return;
+    }
+    // e.g. 413 "Payload Too Large" for an oversized body
+    const reason = status === 400 ? undefined : STATUS_CODES[status];
+    res.status(status).json({ error: reason ?? "Bad request" });
   });
 
   return app;
