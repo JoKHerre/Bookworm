@@ -7,6 +7,7 @@ import {
 } from "../../shared/readingStatus";
 import { filterByTags, libraryTags } from "../../shared/tags";
 import StarDisplay from "../components/StarDisplay";
+import CollectionsManager from "../components/CollectionsManager";
 import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
@@ -482,6 +483,7 @@ function PersonalLibraryPage() {
             </>
           )}
         </section>
+        <CollectionsManager />
       </main>
     </div>
   );

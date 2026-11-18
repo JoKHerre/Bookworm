@@ -36,6 +36,9 @@ function stubApi(
 ) {
   const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
+    if (input === "/api/collections" && method === "GET") {
+      return jsonResponse({ collections: [] });
+    }
     if (input === "/api/library" && method === "GET") {
       if (libraryStatus !== 200) return jsonResponse({}, libraryStatus);
       return jsonResponse({
@@ -90,13 +93,60 @@ describe("PersonalLibraryPage", () => {
     stubApi(FIXTURES);
   });
 
+  it("COL-05-T-2 keeps books usable when collections fail to load", async () => {
+    const fetchMock = stubApi(FIXTURES);
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) =>
+      input === "/api/collections"
+        ? jsonResponse({}, 500)
+        : original(input, init),
+    );
+    renderWithProviders(<PersonalLibraryPage />);
+    const collections = screen.getByRole("region", { name: "Collections" });
+    expect(await within(collections).findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByText("Dune")).toBeInTheDocument();
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Reading status for Dune" }),
+      "finished",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Reading status for Dune" }),
+    ).toHaveValue("finished");
+  });
+
+  it("COL-05-T-2 allows collection creation when books fail to load", async () => {
+    const fetchMock = stubApi(FIXTURES, { libraryStatus: 500 });
+    renderWithProviders(<PersonalLibraryPage />);
+    expect(
+      await screen.findByText("We couldn’t load your books"),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "New collection" }),
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Collection name" }),
+      "School",
+    );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { id: 1, name: "School", createdAt: "2026-01-01", bookCount: 0 },
+        201,
+      ),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create collection" }),
+    );
+    expect(await screen.findByText("School")).toBeInTheDocument();
+    expect(screen.getByText("We couldn’t load your books")).toBeInTheDocument();
+  });
+
   it("TST-01-T-1 library shows saved books", async () => {
     renderWithProviders(<PersonalLibraryPage />, {
       route: "/personal-library",
     });
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Loading your personal library...",
-    );
+    expect(
+      screen.getByText("Loading your personal library..."),
+    ).toHaveAttribute("role", "status");
     expect(await screen.findByText("Dune")).toBeInTheDocument();
     expect(titles()).toEqual(["Dune", "Emma", "Cosmos"]);
     expect(
