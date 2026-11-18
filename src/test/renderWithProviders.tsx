@@ -6,7 +6,7 @@ import type { PublicUser } from "../../shared/auth";
 import { AuthContext, type AuthContextValue } from "../useAuth";
 
 interface Options {
-  route?: string;
+  route?: string | { pathname: string; state?: unknown };
   user?: PublicUser | null;
   loading?: boolean;
 }
