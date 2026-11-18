@@ -1,0 +1,6 @@
+# The frontend lives at the repo root; the API is the server package.
+packages:
+  - server
+
+allowBuilds:
+  esbuild: true

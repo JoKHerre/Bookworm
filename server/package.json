@@ -9,14 +9,6 @@
     "db:push": "node --env-file-if-exists=.env scripts/prepare-collection-ownership.ts && drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "12.11.2",
-      "onFail": "download"
-    }
-  },
-  "packageManager": "pnpm@12.11.2",
   "type": "module",
   "dependencies": {
     "cheerio": "^1.2.0",
