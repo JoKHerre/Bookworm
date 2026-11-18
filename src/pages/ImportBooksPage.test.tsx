@@ -2,7 +2,7 @@ import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { IMPORT_MAX_FILE_BYTES } from "../../shared/bookImport";
-import { renderWithProviders } from "../test/renderWithProviders";
+import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import ImportBooksPage from "./ImportBooksPage";
 
 const choose = (file: File) =>
@@ -167,5 +167,87 @@ describe("ImportBooksPage", () => {
     expect(
       screen.queryByRole("list", { name: "Rows with problems" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("IMP-01-T-5 page counts rows without a book key", async () => {
+    setup();
+    await choose(csv("books.csv", "title,book_key\nDune,\nEmma,/works/OL2W\n"));
+    await userEvent.click(upload());
+    expect(
+      await screen.findByText(
+        "1 valid book has no book_key and cannot be imported until title matching is available.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("IMP-01-T-5 page offers import for rows with a book key", async () => {
+    setup();
+    await choose(
+      csv("books.csv", "title,book_key\nDune,/works/OL1W\nEmma,/works/OL2W\n"),
+    );
+    await userEvent.click(upload());
+    expect(
+      await screen.findByRole("button", { name: "Import 2 books" }),
+    ).toBeEnabled();
+
+    await choose(csv("none.csv", "title\nDune\n"));
+    await userEvent.click(upload());
+    await screen.findByRole("status");
+    expect(
+      screen.getByRole("button", { name: "Import 0 books" }),
+    ).toBeDisabled();
+  });
+
+  it("IMP-01-T-5 page imports and shows the result", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    setup();
+    await choose(
+      csv("books.csv", "title,book_key\nDune,/works/OL1W\nEmma,/works/OL2W\n"),
+    );
+    await userEvent.click(upload());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Import 2 books" }),
+    );
+
+    expect(
+      await screen.findByText("Imported 1 book. 1 already in your library."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Go to My Library" }),
+    ).toHaveAttribute("href", "/personal-library");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/library/import");
+    expect(JSON.parse(init.body as string)).toEqual({
+      bookKeys: ["/works/OL1W", "/works/OL2W"],
+    });
+  });
+
+  it("IMP-01-T-5 page shows an import error and can retry", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}, 500))
+      .mockResolvedValueOnce(jsonResponse({ added: 1, alreadySaved: 0 }));
+    vi.stubGlobal("fetch", fetchMock);
+    setup();
+    await choose(csv("books.csv", "title,book_key\nDune,/works/OL1W\n"));
+    await userEvent.click(upload());
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Import 1 book" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not import these books. Please try again.",
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Import 1 book" }),
+    );
+    expect(
+      await screen.findByText("Imported 1 book. 0 already in your library."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
