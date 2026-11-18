@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
-import { getBookSuggestions, searchBooks } from "../api/books";
+import { getBookDetails, getBookSuggestions, searchBooks } from "../api/books";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
@@ -74,6 +74,7 @@ describe("SearchPage", () => {
       total: 2,
     });
     vi.mocked(getBookSuggestions).mockResolvedValue({ books: [], total: 0 });
+    localStorage.clear();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -220,6 +221,74 @@ describe("SearchPage", () => {
     expect(
       screen.getByText("Details at /books/works/OL1W"),
     ).toBeInTheDocument();
+  });
+
+  describe("before a search", () => {
+    it("TST-01-T-1 search page suggests example searches", async () => {
+      renderSearch();
+      expect(
+        screen.getByRole("heading", { name: "Try searching for" }),
+      ).toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Pride and Prejudice" }),
+      );
+      await waitFor(() =>
+        expect(searchBooks).toHaveBeenCalledWith(
+          "Pride and Prejudice",
+          expect.anything(),
+          expect.anything(),
+        ),
+      );
+    });
+
+    it("TST-01-T-1 search page remembers recent searches", async () => {
+      const first = renderSearch();
+      await submitSearch("dune");
+      await screen.findByText("Showing 2 of 2 results");
+      first.unmount();
+
+      renderSearch();
+      expect(
+        screen.getByRole("heading", { name: "Recent searches" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "dune" })).toBeInTheDocument();
+    });
+
+    it("TST-01-T-1 search page shows what the user is reading", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            books: [
+              {
+                id: 1,
+                bookKey: "/works/OL1W",
+                readingStatus: "currently_reading",
+              },
+              { id: 2, bookKey: "/works/OL2W", readingStatus: "finished" },
+            ],
+          }),
+        ),
+      );
+      vi.mocked(getBookDetails).mockResolvedValue({
+        key: "/works/OL1W",
+        title: "Dune",
+        authors: ["Frank Herbert"],
+        tags: [],
+      });
+      renderSearch("/search", { id: 1, email: "a@b.co" });
+
+      const shelf = await screen.findByRole("region", {
+        name: "Currently reading",
+      });
+      await userEvent.click(
+        within(shelf).getByRole("button", { name: "Dune" }),
+      );
+      expect(
+        screen.getByText("Details at /books/works/OL1W"),
+      ).toBeInTheDocument();
+      expect(getBookDetails).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("saving from results", () => {

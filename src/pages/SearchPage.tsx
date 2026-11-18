@@ -10,12 +10,32 @@ import {
 } from "../../shared/books";
 import { getBookSuggestions, searchBooks } from "../api/books";
 import BookCard from "../components/BookCard";
+import SearchStart from "../components/SearchStart";
 import { useSavedBooks } from "../library/useSavedBooks";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
 // long enough to skip a request per keystroke, short enough to keep up with typing
 const SUGGESTION_DELAY_MS = 250;
+
+const RECENT_SEARCHES_KEY = "bookworm:recent-searches";
+const RECENT_SEARCHES_LIMIT = 6;
+
+// Recent searches are a per-browser convenience; without storage there are none.
+function readRecentSearches(): string[] {
+  try {
+    const stored: unknown = JSON.parse(
+      localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]",
+    );
+    return Array.isArray(stored)
+      ? stored
+          .filter((value) => typeof value === "string")
+          .slice(0, RECENT_SEARCHES_LIMIT)
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 type ViewMode = "grid" | "list";
 type Filters = Omit<BookSearchQuery, "q">;
@@ -48,6 +68,7 @@ function SearchPage() {
   const submittedQuery = searchParams.get("q") ?? "";
   const navigate = useNavigate();
   const { saved, busyKeys, errors, save } = useSavedBooks();
+  const [recentSearches, setRecentSearches] = useState(readRecentSearches);
 
   const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [total, setTotal] = useState(0);
@@ -198,16 +219,37 @@ function SearchPage() {
     }
   }
 
+  function rememberSearch(q: string) {
+    if (!q) return;
+    const next = [
+      q,
+      ...recentSearches.filter(
+        (recent) => recent.toLowerCase() !== q.toLowerCase(),
+      ),
+    ].slice(0, RECENT_SEARCHES_LIMIT);
+    setRecentSearches(next);
+    try {
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+    } catch {
+      // not remembered this time
+    }
+  }
+
+  function runSearch(q: string) {
+    rememberSearch(q);
+    if (q === submittedQuery) {
+      setSearchAttempt((attempt) => attempt + 1);
+    } else {
+      setSearchParams(paramsFor(q, filters));
+    }
+  }
+
   function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     closeSuggestions();
     const trimmed = query.trim();
     setQuery(trimmed);
-    if (trimmed === submittedQuery) {
-      setSearchAttempt((attempt) => attempt + 1);
-    } else {
-      setSearchParams(paramsFor(trimmed, filters));
-    }
+    runSearch(trimmed);
   }
 
   function viewBook(book: BookSearchResult) {
@@ -381,6 +423,22 @@ function SearchPage() {
           Reset
         </button>
       </section>
+
+      {!searched && (
+        <SearchStart
+          reading={[...saved.values()].filter(
+            (book) => book.readingStatus === "currently_reading",
+          )}
+          recentSearches={recentSearches}
+          onSearch={runSearch}
+          onOpenBook={(bookKey) => {
+            const state: BookDetailsLocationState = {
+              backLabel: "Back to Search",
+            };
+            void navigate(bookDetailsPath(bookKey), { state });
+          }}
+        />
+      )}
 
       {visibleError && (
         <p className="search-message search-message--error" role="alert">
