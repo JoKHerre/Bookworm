@@ -153,13 +153,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         setSaveMessage("Please sign in to save books to your library.");
       } else {
         // other error: generic error msg
-        setSaveMessage(
-          data.error ?? "Could not save this book. Please try again.",
-        );
+        setSaveMessage(data.error ?? "Could not save this book.");
       }
     } catch {
       // network or other error: generic error msg
-      setSaveMessage("Could not save this book. Please try again.");
+      setSaveMessage("Could not save this book.");
     } finally {
       // re-enable save button after request is complete, by setting saving to false
       setSaving(false);
@@ -179,9 +177,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     } catch (err) {
       setRating(previousRating);
       setRatingMessage(
-        err instanceof Error
-          ? err.message
-          : "Could not save your rating. Please try again.",
+        err instanceof Error ? err.message : "Could not save your rating.",
       );
     } finally {
       setRatingSaving(false);
@@ -267,29 +263,24 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
       {error && <p role="alert">{error}</p>}
 
-      {book && (
-        <>
-          <section className="book-summary">
-            <h2>Summary</h2>
-            <p>{summary || "No summary available."}</p>
-          </section>
+      {book && summary && (
+        <section className="book-summary">
+          <h2>Summary</h2>
+          <p>{summary}</p>
+        </section>
+      )}
 
-          <section className="book-genres">
-            <h2>Tags</h2>
-
-            {book.tags.length > 0 ? (
-              <div className="genre-list">
-                {book.tags.map((tag) => (
-                  <span className="genre-tag" key={tag}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p>No tags available.</p>
-            )}
-          </section>
-        </>
+      {book && book.tags.length > 0 && (
+        <section className="book-genres">
+          <h2>Tags</h2>
+          <div className="genre-list">
+            {book.tags.map((tag) => (
+              <span className="genre-tag" key={tag}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
       )}
 
       {book && (

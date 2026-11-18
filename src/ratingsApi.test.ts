@@ -36,12 +36,12 @@ describe("ratingsApi", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(null, 500)));
     await expect(saveRating("/works/OL1W", 4)).rejects.toThrow(
-      "Could not save your rating. Please try again.",
+      "Could not save your rating.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(saveRating("/works/OL1W", 4)).rejects.toThrow(
-      "Unable to connect. Please try again.",
+      "Unable to connect.",
     );
   });
 

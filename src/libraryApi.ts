@@ -1,4 +1,4 @@
-const IMPORT_ERROR = "Could not import these books. Please try again.";
+const IMPORT_ERROR = "Could not import these books.";
 
 export interface ImportBooksResult {
   added: number;

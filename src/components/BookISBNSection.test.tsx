@@ -59,7 +59,7 @@ describe("BookISBNSection", () => {
       screen.getByRole("heading", { name: "ISBN-13 (2)" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
-      "10 editions checked. No more editions remain.",
+      "10 editions checked.",
     );
     expect(getBookISBNs).toHaveBeenCalledWith(
       "/works/OL1W",
@@ -105,9 +105,7 @@ describe("BookISBNSection", () => {
     render(<BookISBNSection bookKey="/works/OL1W" />);
     await openSection();
     await screen.findByText("9780306406157");
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "More editions remain.",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("5 editions checked.");
 
     await userEvent.click(screen.getByRole("button", { name: "Load more" }));
 

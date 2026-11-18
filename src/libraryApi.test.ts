@@ -30,12 +30,12 @@ describe("libraryApi", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 500)));
     await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
-      "Could not import these books. Please try again.",
+      "Could not import these books.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
-      "Could not import these books. Please try again.",
+      "Could not import these books.",
     );
   });
 });

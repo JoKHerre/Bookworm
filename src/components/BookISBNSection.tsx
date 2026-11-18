@@ -143,15 +143,6 @@ export default function BookISBNSection({ bookKey }: { bookKey: string }) {
             </select>
           </label>
         </div>
-        <details className="isbn-help">
-          <summary>About these filters</summary>
-          <p>
-            English includes editions marked as English. All languages includes
-            missing language information. Formats use edition metadata, not
-            online scans; Other / unknown includes audio and missing or
-            unrecognized formats.
-          </p>
-        </details>
 
         {groups.length > 0 && (
           <div
@@ -191,8 +182,7 @@ export default function BookISBNSection({ bookKey }: { bookKey: string }) {
         {error && <p role="alert">{error}</p>}
         <div className="isbn-status-bar">
           <p role="status">
-            {pages.length > 0 &&
-              `${editionsChecked} editions checked. ${nextOffset !== null ? "More editions remain." : "No more editions remain."} `}
+            {pages.length > 0 && `${editionsChecked} editions checked. `}
             {loading && "Loading ISBNs..."}
           </p>
           {(error || nextOffset !== null) && (

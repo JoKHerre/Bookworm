@@ -62,7 +62,7 @@ function ImportBooksPage() {
         setError(result.error);
       }
     } catch {
-      setError("Could not read this file. Please try again.");
+      setError("Could not read this file.");
     } finally {
       setReading(false);
     }
@@ -84,9 +84,8 @@ function ImportBooksPage() {
     <main className="import-page">
       <h1>Import books</h1>
       <p>
-        Upload a CSV file with a header row. Supported columns:{" "}
-        {IMPORT_COLUMNS.join(", ")} (only title is required). Files can have up
-        to {IMPORT_MAX_ROWS} rows and be up to 1 MB.
+        CSV with a header row. Supported columns: {IMPORT_COLUMNS.join(", ")}{" "}
+        (only title is required). Up to {IMPORT_MAX_ROWS} rows and 1 MB.
       </p>
 
       <div className="import-card">
@@ -120,16 +119,15 @@ function ImportBooksPage() {
           readyName &&
           parsed && (
             <p className="import-status" role="status">
-              {readyName} is ready to import. {total}{" "}
-              {total === 1 ? "book" : "books"} found. {parsed.valid.length}{" "}
-              valid, {parsed.errors.length} with problems.
+              {parsed.valid.length} of {total}{" "}
+              {total === 1 ? "book is" : "books are"} valid.
             </p>
           )
         )}
 
         {parsed && !result && unmatched > 0 && (
           <p>
-            {`${unmatched} valid ${unmatched === 1 ? "book has" : "books have"} no book_key and cannot be imported until title matching is available.`}
+            {`${unmatched} ${unmatched === 1 ? "book has" : "books have"} no book_key and will be skipped.`}
           </p>
         )}
 

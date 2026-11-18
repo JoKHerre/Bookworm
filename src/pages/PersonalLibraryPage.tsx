@@ -14,8 +14,9 @@ import "./PersonalLibraryPage.css";
 // define error messages
 const SESSION_EXPIRED_MESSAGE =
   "Your session has expired. Please sign in again.";
+const LOAD_ERROR = "Could not load your personal library.";
 const STATUS_UPDATE_ERROR_MESSAGE =
-  "Could not update this book's reading status. Please try again.";
+  "Could not update this book's reading status.";
 
 const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
   to_be_read: "To Be Read",
@@ -62,7 +63,7 @@ function PersonalLibraryPage() {
 
   // remove a book:
   async function removeBook(id: number, title: string) {
-    const genericRemovalError = `Could not remove “${title}” from your library. Please try again.`;
+    const genericRemovalError = `Could not remove “${title}” from your library.`;
     let requestError = "";
 
     // clear any previous removal error msg + add book's id to set of books being removed
@@ -197,7 +198,7 @@ function PersonalLibraryPage() {
           throw new Error(SESSION_EXPIRED_MESSAGE);
         }
         if (!response.ok) {
-          throw new Error("Could not load your personal library.");
+          throw new Error(LOAD_ERROR);
         }
 
         // else, successful response: parse the JSON and fetch details for each saved book
@@ -238,11 +239,7 @@ function PersonalLibraryPage() {
       } catch (loadError) {
         // load error: store error msg
         if (isCurrentRequest) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Could not load your personal library.",
-          );
+          setError(loadError instanceof Error ? loadError.message : LOAD_ERROR);
         }
       } finally {
         // set loading to false, to signify that request is complete
@@ -299,10 +296,7 @@ function PersonalLibraryPage() {
           aria-labelledby="personal-library-books-title"
         >
           <div className="personal-library-books-heading">
-            <div>
-              <h2 id="personal-library-books-title">Books</h2>
-              <p>Books you’ve saved to your personal library.</p>
-            </div>
+            <h2 id="personal-library-books-title">Books</h2>
           </div>
 
           {removalError && (
@@ -314,12 +308,12 @@ function PersonalLibraryPage() {
           {/* display loading msg, error + try again button if failure, empty state if no saved books, or the list of saved books */}
           {loading ? (
             <p className="personal-library-message" role="status">
-              Loading your personal library...
+              Loading…
             </p>
           ) : error ? (
             <div className="personal-library-empty-state" role="alert">
               <h3>We couldn’t load your books</h3>
-              <p>{error}</p>
+              {error !== LOAD_ERROR && <p>{error}</p>}
               <button
                 type="button"
                 onClick={() => setLoadAttempt((attempt) => attempt + 1)}
@@ -330,7 +324,6 @@ function PersonalLibraryPage() {
           ) : books.length === 0 ? (
             <div className="personal-library-empty-state">
               <h3>Your library is ready for its first book</h3>
-              <p>Explore books and save the ones you’re interested in.</p>
               <button type="button" onClick={() => void navigate("/search")}>
                 Discover books
               </button>

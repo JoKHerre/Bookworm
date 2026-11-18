@@ -40,12 +40,12 @@ describe("booksApi", () => {
       vi.fn().mockResolvedValue(new Response("nope", { status: 500 })),
     );
     await expect(getBookDetails("/works/OL1W", signal)).rejects.toThrow(
-      "Unable to load books. Please try again.",
+      "Unable to load books.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(getBookDetails("/works/OL1W", signal)).rejects.toThrow(
-      "Unable to connect. Please try again.",
+      "Unable to connect.",
     );
   });
 });

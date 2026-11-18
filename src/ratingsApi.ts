@@ -16,7 +16,7 @@ export async function saveRating(
       body: JSON.stringify({ bookKey, rating }),
     });
   } catch (err) {
-    throw new Error("Unable to connect. Please try again.", { cause: err });
+    throw new Error("Unable to connect.", { cause: err });
   }
 
   if (response.status === 401) {
@@ -28,7 +28,7 @@ export async function saveRating(
     throw new Error(
       typeof data?.error === "string"
         ? data.error
-        : "Could not save your rating. Please try again.",
+        : "Could not save your rating.",
     );
   }
   return data as BookRatingResponse;

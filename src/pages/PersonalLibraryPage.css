@@ -55,12 +55,6 @@
   letter-spacing: -0.03em;
 }
 
-.personal-library-books-heading p {
-  margin: 4px 0 0;
-  color: var(--olive-text-muted);
-  font-size: 0.78rem;
-}
-
 .personal-library-message {
   padding: 32px 0;
   color: var(--olive-text-secondary);

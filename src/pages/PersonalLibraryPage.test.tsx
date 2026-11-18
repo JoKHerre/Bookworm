@@ -94,9 +94,7 @@ describe("PersonalLibraryPage", () => {
     renderWithProviders(<PersonalLibraryPage />, {
       route: "/personal-library",
     });
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Loading your personal library...",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("Loading…");
     expect(await screen.findByText("Dune")).toBeInTheDocument();
     expect(titles()).toEqual(["Dune", "Emma", "Cosmos"]);
     expect(
@@ -108,7 +106,7 @@ describe("PersonalLibraryPage", () => {
     const fetchMock = stubApi(FIXTURES, { libraryStatus: 500 });
     renderWithProviders(<PersonalLibraryPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not load your personal library.",
+      "We couldn’t load your books",
     );
 
     stubApi(FIXTURES);

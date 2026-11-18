@@ -97,10 +97,9 @@ describe("BookDetailsPage", () => {
       tags: [],
     });
     renderDetails();
-    expect(
-      await screen.findByText("No summary available."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("No tags available.")).toBeInTheDocument();
+    await screen.findByText("Library Availability");
+    expect(screen.queryByText("Summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tags")).not.toBeInTheDocument();
   });
 
   it("TST-01-T-1 details page reads a summary object", async () => {
@@ -185,7 +184,7 @@ describe("BookDetailsPage", () => {
       [409, {}, "This book is already in your library."],
       [401, {}, "Please sign in to save books to your library."],
       [500, { error: "Database down" }, "Database down"],
-      [500, null, "Could not save this book. Please try again."],
+      [500, null, "Could not save this book."],
     ])(
       "TST-01-T-1 details page save responds to status %i",
       async (status, body, message) => {
@@ -208,7 +207,7 @@ describe("BookDetailsPage", () => {
       await renderSignedIn();
       await save();
       expect(
-        await screen.findByText("Could not save this book. Please try again."),
+        await screen.findByText("Could not save this book."),
       ).toBeInTheDocument();
     });
 
