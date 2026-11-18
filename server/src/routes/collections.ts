@@ -10,6 +10,7 @@ import type {
 } from "../../../shared/collections.ts";
 import type { SavedBook } from "../../../shared/library.ts";
 import { requireAuth } from "../auth/middleware.ts";
+import { parsePositiveId } from "./params.ts";
 import { db } from "../db/index.ts";
 import { collectionBooks, collections, savedBooks } from "../db/schema.ts";
 
@@ -41,7 +42,6 @@ const COLLECTION_NOT_FOUND = "Collection not found";
 const ADD_TARGET_NOT_FOUND = "Collection or saved book not found";
 const INVALID_NAME = "Invalid collection name";
 const INVALID_BOOK_KEY = "Invalid book key";
-const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 // fields to return from collections and savedBooks tables
 const collectionFields = {
@@ -67,12 +67,6 @@ const membershipSavedBook = and(
 );
 
 // helper functions
-function parsePositivePostgresId(value: string): number | null {
-  if (!/^\d+$/.test(value)) return null;
-  const id = Number(value);
-  return id >= 1 && id <= MAX_POSTGRES_INTEGER ? id : null;
-}
-
 function ownedCollection(collectionId: number, userId: number) {
   return and(eq(collections.id, collectionId), eq(collections.userId, userId));
 }
@@ -111,14 +105,14 @@ collectionsRouter.use(requireAuth);
 
 // validate collectionId and savedBookId params to be positive integers within PostgreSQL range
 collectionsRouter.param("collectionId", (_req, res, next, value: string) => {
-  if (parsePositivePostgresId(value) === null) {
+  if (parsePositiveId(value) === null) {
     res.status(400).json({ error: "Invalid collection ID" });
     return;
   }
   next();
 });
 collectionsRouter.param("savedBookId", (_req, res, next, value: string) => {
-  if (parsePositivePostgresId(value) === null) {
+  if (parsePositiveId(value) === null) {
     res.status(400).json({ error: "Invalid saved book ID" });
     return;
   }

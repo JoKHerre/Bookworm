@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
+  BOOK_GENRES,
+  BOOK_LANGUAGES,
+  PUBLICATION_YEAR_RANGES,
   bookSuggestionsQuery,
   type BookSearchQuery,
   type BookSearchResult,
@@ -11,20 +14,6 @@ import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
 type ViewMode = "grid" | "list";
-
-const genreOptions: BookSearchQuery["genre"] = [
-  "Fantasy",
-  "Sci-fi",
-  "Mystery",
-  "Romance",
-  "Horror",
-  "History",
-  "Thriller",
-  "Adventure",
-  "Biography",
-  "Non-fiction",
-  "Poetry",
-];
 
 function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -281,7 +270,7 @@ function SearchPage() {
         <details className="genre-filter" ref={genreFilterRef}>
           <summary>Genres</summary>
           <div className="genre-filter-options">
-            {genreOptions.map((genre) => (
+            {BOOK_GENRES.map((genre) => (
               <label key={genre}>
                 <input
                   type="checkbox"
@@ -309,9 +298,9 @@ function SearchPage() {
             }
           >
             <option value="">Any language</option>
-            <option>English</option>
-            <option>Spanish</option>
-            <option>French</option>
+            {BOOK_LANGUAGES.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
           </select>
         </label>
 
@@ -326,15 +315,11 @@ function SearchPage() {
             }
           >
             <option value="">Any year</option>
-            <option value="2020-present">2020-present</option>
-            <option value="2010-2019">2010-2019</option>
-            <option value="2000-2009">2000-2009</option>
-            <option value="1990-1999">1990-1999</option>
-            <option value="1980-1989">1980-1989</option>
-            <option value="1970-1979">1970-1979</option>
-            <option value="1950-1969">1950-1969</option>
-            <option value="1900-1949">1900-1949</option>
-            <option value="before-1900">Before 1900</option>
+            {PUBLICATION_YEAR_RANGES.map((range) => (
+              <option key={range} value={range}>
+                {range === "before-1900" ? "Before 1900" : range}
+              </option>
+            ))}
           </select>
         </label>
 

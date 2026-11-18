@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import type { AvailabilityResponse } from "../../shared/availability";
+import {
+  libraryCatalogRecordUrl,
+  type AvailabilityResponse,
+} from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
 import BookISBNSection from "../components/BookISBNSection";
@@ -292,9 +295,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
               <>
                 <div className="library-record">
                   <p className="library-record-title">
-                    <a
-                      href={`https://catalog.santacruzpl.org/polaris/search/title.aspx?ctx=1.1033.0.0.1&cn=${encodeURIComponent(catalogRecord.bibid)}`}
-                    >
+                    <a href={libraryCatalogRecordUrl(catalogRecord.bibid)}>
                       {catalogRecord.title}
                     </a>
                   </p>

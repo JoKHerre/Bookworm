@@ -4,6 +4,7 @@ import z from "zod";
 import { db } from "../db/index.ts";
 import { savedBooks } from "../db/schema.ts";
 import { requireAuth } from "../auth/middleware.ts";
+import { parsePositiveId } from "./params.ts";
 import { IMPORT_MAX_ROWS } from "../../../shared/bookImport.ts";
 import { openLibraryWorkKey } from "../../../shared/books.ts";
 import { READING_STATUSES } from "../../../shared/readingStatus.ts";
@@ -35,20 +36,6 @@ const importBooksBody = z
   .strict();
 
 const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
-const MAX_POSTGRES_INTEGER = 2_147_483_647;
-
-function parseSavedBookId(idParam: unknown): number | null {
-  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
-    return null;
-  }
-
-  const id = Number(idParam);
-  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
-    return null;
-  }
-
-  return id;
-}
 
 export const libraryRouter: Router = Router();
 
@@ -76,7 +63,7 @@ libraryRouter.delete(
   "/:id",
   requireAuth,
   async (req, res: Response<ApiError>) => {
-    const id = parseSavedBookId(req.params.id);
+    const id = parsePositiveId(req.params.id);
     if (id === null) {
       res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
       return;
@@ -103,7 +90,7 @@ libraryRouter.patch(
   "/:id/reading-status",
   requireAuth,
   async (req, res: Response<ReadingStatusResponse | ApiError>) => {
-    const id = parseSavedBookId(req.params.id);
+    const id = parsePositiveId(req.params.id);
     if (id === null) {
       res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
       return;
