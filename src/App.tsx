@@ -5,6 +5,7 @@ import SearchPage from "./pages/SearchPage";
 import Header from "./components/Header";
 import PersonalLibraryPage from "./pages/PersonalLibraryPage";
 import BookDetailsPage from "./pages/BookDetailsPage";
+import ImportBooksPage from "./pages/ImportBooksPage";
 import type { AuthLocationState } from "./routes";
 
 function MainLayout() {
@@ -59,6 +60,7 @@ function App() {
 
         <Route element={<RequireAuth />}>
           <Route path="/personal-library" element={<PersonalLibraryPage />} />
+          <Route path="/import" element={<ImportBooksPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

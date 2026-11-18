@@ -1,0 +1,95 @@
+.import-page {
+  flex: 1;
+  width: min(100% - 48px, 720px);
+  margin: 0 auto;
+  padding: 40px 0 64px;
+  color: var(--olive);
+  text-align: left;
+}
+
+.import-page h1 {
+  margin: 0 0 12px;
+  font-family: var(--heading);
+  font-size: clamp(2rem, 4vw, 2.7rem);
+  letter-spacing: -0.05em;
+  line-height: 1.1;
+}
+
+.import-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 28px;
+  background: #fffaf0;
+  border: 1px solid var(--tan);
+  border-radius: 16px;
+}
+
+.import-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.import-field input:focus-visible,
+.import-upload:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}
+
+.import-file,
+.import-status,
+.import-error {
+  margin: 0;
+}
+
+.import-error {
+  color: #9b2c2c;
+  font-weight: 600;
+}
+
+.import-status {
+  font-weight: 600;
+}
+
+.import-upload {
+  align-self: flex-start;
+  padding: 10px 22px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--cream);
+  background: var(--olive);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.import-upload:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.import-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.import-problems {
+  margin: 0;
+  padding-left: 20px;
+  color: #9b2c2c;
+}
+
+.import-link {
+  align-self: flex-start;
+  color: var(--olive);
+  font-weight: 600;
+}
+
+.import-link:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}
