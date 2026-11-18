@@ -54,6 +54,10 @@ function filtersFromParams(params: URLSearchParams): Filters {
   };
 }
 
+function yearLabel(range: (typeof PUBLICATION_YEAR_RANGES)[number]) {
+  return range === "before-1900" ? "Before 1900" : range;
+}
+
 function paramsFor(q: string, { genre, language, year }: Filters) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
@@ -357,72 +361,117 @@ function SearchPage() {
         </form>
       </section>
 
-      <section className="search-filters" aria-label="Filter search results">
-        <details className="genre-filter" ref={genreFilterRef}>
-          <summary>Genres</summary>
-          <div className="genre-filter-options">
-            {BOOK_GENRES.map((genre) => (
-              <label key={genre}>
-                <input
-                  type="checkbox"
-                  checked={selectedGenres.includes(genre)}
-                  onChange={(event) =>
-                    updateFilters({
-                      genre: event.target.checked
-                        ? [...selectedGenres, genre]
-                        : selectedGenres.filter((value) => value !== genre),
-                    })
-                  }
-                />
-                {genre}
-              </label>
-            ))}
-          </div>
-        </details>
+      {searched && (
+        <section className="search-filters" aria-label="Filter search results">
+          <details className="genre-filter" ref={genreFilterRef}>
+            <summary>Genres</summary>
+            <div className="genre-filter-options">
+              {BOOK_GENRES.map((genre) => (
+                <label key={genre}>
+                  <input
+                    type="checkbox"
+                    checked={selectedGenres.includes(genre)}
+                    onChange={(event) =>
+                      updateFilters({
+                        genre: event.target.checked
+                          ? [...selectedGenres, genre]
+                          : selectedGenres.filter((value) => value !== genre),
+                      })
+                    }
+                  />
+                  {genre}
+                </label>
+              ))}
+            </div>
+          </details>
 
-        <label className="search-filter">
-          Language
-          <select
-            value={language}
-            onChange={(event) =>
-              updateFilters({
-                language: event.target.value as Filters["language"],
-              })
-            }
-          >
-            <option value="">Any language</option>
-            {BOOK_LANGUAGES.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-        </label>
+          <label className="search-filter">
+            Language
+            <select
+              value={language}
+              onChange={(event) =>
+                updateFilters({
+                  language: event.target.value as Filters["language"],
+                })
+              }
+            >
+              <option value="">Any language</option>
+              {BOOK_LANGUAGES.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </label>
 
-        <label className="search-filter">
-          Publication year
-          <select
-            value={publicationYearRange}
-            onChange={(event) =>
-              updateFilters({ year: event.target.value as Filters["year"] })
-            }
-          >
-            <option value="">Any year</option>
-            {PUBLICATION_YEAR_RANGES.map((range) => (
-              <option key={range} value={range}>
-                {range === "before-1900" ? "Before 1900" : range}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label className="search-filter">
+            Publication year
+            <select
+              value={publicationYearRange}
+              onChange={(event) =>
+                updateFilters({ year: event.target.value as Filters["year"] })
+              }
+            >
+              <option value="">Any year</option>
+              {PUBLICATION_YEAR_RANGES.map((range) => (
+                <option key={range} value={range}>
+                  {yearLabel(range)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+      )}
 
-        <button
-          type="button"
-          className="search-filter-reset"
-          onClick={resetFilters}
-          disabled={!hasActiveFilters}
-        >
-          Reset
-        </button>
-      </section>
+      {searched && hasActiveFilters && (
+        <ul className="search-filter-chips" aria-label="Active filters">
+          {selectedGenres.map((genre) => (
+            <li key={genre}>
+              <button
+                type="button"
+                aria-label={`Remove ${genre} filter`}
+                onClick={() =>
+                  updateFilters({
+                    genre: selectedGenres.filter((value) => value !== genre),
+                  })
+                }
+              >
+                {genre} <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          ))}
+          {language && (
+            <li>
+              <button
+                type="button"
+                aria-label={`Remove ${language} filter`}
+                onClick={() => updateFilters({ language: "" })}
+              >
+                {language} <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          )}
+          {publicationYearRange && (
+            <li>
+              <button
+                type="button"
+                aria-label={`Remove ${yearLabel(publicationYearRange)} filter`}
+                onClick={() => updateFilters({ year: "" })}
+              >
+                {yearLabel(publicationYearRange)}{" "}
+                <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          )}
+          <li>
+            <button
+              type="button"
+              className="search-filter-reset"
+              onClick={resetFilters}
+            >
+              Clear all
+            </button>
+          </li>
+        </ul>
+      )}
 
       {!searched && (
         <SearchStart

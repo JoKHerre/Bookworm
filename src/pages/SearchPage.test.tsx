@@ -84,7 +84,9 @@ describe("SearchPage", () => {
     renderSearch();
     expect(searchBooks).not.toHaveBeenCalled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(
+      screen.queryByRole("region", { name: "Filter search results" }),
+    ).not.toBeInTheDocument();
   });
 
   it("TST-01-T-1 search page lists results for a query", async () => {
@@ -166,7 +168,30 @@ describe("SearchPage", () => {
       }),
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset" }));
+    const chips = screen.getByRole("list", { name: "Active filters" });
+    expect(
+      within(chips)
+        .getAllByRole("button")
+        .map((chip) => chip.getAttribute("aria-label") ?? chip.textContent),
+    ).toEqual([
+      "Remove Fantasy filter",
+      "Remove French filter",
+      "Remove 2010-2019 filter",
+      "Clear all",
+    ]);
+
+    await userEvent.click(
+      within(chips).getByRole("button", { name: "Remove French filter" }),
+    );
+    await waitFor(() =>
+      expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+        genre: ["Fantasy"],
+        language: "",
+        year: "2010-2019",
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear all" }));
     await waitFor(() =>
       expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
         genre: [],
@@ -174,7 +199,9 @@ describe("SearchPage", () => {
         year: "",
       }),
     );
-    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+    expect(
+      screen.queryByRole("list", { name: "Active filters" }),
+    ).not.toBeInTheDocument();
   });
 
   it("REF-01-T-2 search page restores filters from the URL", async () => {

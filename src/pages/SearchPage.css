@@ -425,8 +425,7 @@ p.search-message,
 }
 
 .search-filter select,
-.genre-filter summary,
-.search-filter-reset {
+.genre-filter summary {
   padding: 8px 10px;
   font: inherit;
   color: var(--olive);
@@ -436,9 +435,39 @@ p.search-message,
   cursor: pointer;
 }
 
-.search-filter-reset:disabled {
-  opacity: 0.5;
-  cursor: default;
+.search-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 1200px;
+  margin: 0 auto 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.search-filter-chips button {
+  min-height: 36px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--cream);
+  background: var(--olive);
+  border: 1.5px solid var(--olive);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.search-filter-chips .search-filter-reset {
+  color: var(--olive);
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.search-filter-chips button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .genre-filter {
@@ -475,8 +504,7 @@ p.search-message,
 
 .search-filter select:focus-visible,
 .genre-filter summary:focus-visible,
-.genre-filter-options input:focus-visible,
-.search-filter-reset:focus-visible {
+.genre-filter-options input:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 2px;
 }
