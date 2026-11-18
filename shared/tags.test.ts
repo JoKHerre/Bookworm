@@ -1,6 +1,5 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
-import { filterByTags, libraryTags } from "../../shared/tags.ts";
+import { expect, test } from "vitest";
+import { filterByTags, libraryTags } from "./tags.ts";
 
 const books = [
   { id: 1, details: { tags: ["fantasy", "magic"] } },
@@ -10,7 +9,7 @@ const books = [
 ];
 
 test("COL-06-T-3 lists sorted unique library tags", () => {
-  assert.deepEqual(libraryTags(books), [
+  expect(libraryTags(books)).toStrictEqual([
     "adventure",
     "fantasy",
     "history",
@@ -19,27 +18,27 @@ test("COL-06-T-3 lists sorted unique library tags", () => {
 });
 
 test("COL-06-T-3 filters books by one tag", () => {
-  assert.deepEqual(
-    filterByTags(books, ["magic"]).map((book) => book.id),
-    [1, 4],
-  );
+  expect(filterByTags(books, ["magic"]).map((book) => book.id)).toStrictEqual([
+    1, 4,
+  ]);
 });
 
 test("COL-06-T-4 requires every selected tag", () => {
-  assert.deepEqual(
+  expect(
     filterByTags(books, ["fantasy", "magic"]).map((book) => book.id),
-    [1],
-  );
+  ).toStrictEqual([1]);
 });
 
 test("COL-06-T-4 empty selection returns every book", () => {
-  assert.deepEqual(filterByTags(books, []), books);
+  expect(filterByTags(books, [])).toStrictEqual(books);
 });
 
 test("COL-06-T-4 books without details never match a selection", () => {
-  assert.ok(!filterByTags(books, ["magic"]).some((book) => book.id === 3));
+  expect(
+    filterByTags(books, ["magic"]).some((book) => book.id === 3),
+  ).toBeFalsy();
 });
 
 test("COL-06-T-4 a combination with no common book returns nothing", () => {
-  assert.deepEqual(filterByTags(books, ["history", "magic"]), []);
+  expect(filterByTags(books, ["history", "magic"])).toStrictEqual([]);
 });
