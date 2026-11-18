@@ -25,7 +25,7 @@ describe("api/ratings", () => {
   it("TST-01-T-1 saveRating maps failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 401)));
     await expect(saveRating("/works/OL1W", 4)).rejects.toThrow(
-      "Please sign in to rate books.",
+      "Please log in to rate books.",
     );
 
     vi.stubGlobal(

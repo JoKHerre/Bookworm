@@ -47,7 +47,7 @@ export async function importBooks(
   } catch (err) {
     throw userError(err, {
       fallback: IMPORT_ERROR,
-      byStatus: { 401: "Your session has expired. Please sign in again." },
+      byStatus: { 401: "Your session has expired. Please log in again." },
     });
   }
   if (

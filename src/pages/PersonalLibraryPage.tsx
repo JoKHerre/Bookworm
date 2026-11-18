@@ -21,7 +21,7 @@ import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
 const SESSION_EXPIRED_MESSAGE =
-  "Your session has expired. Please sign in again.";
+  "Your session has expired. Please log in again.";
 const LOAD_ERROR = "Could not load your personal library.";
 const STATUS_UPDATE_ERROR_MESSAGE =
   "Could not update this book's reading status.";

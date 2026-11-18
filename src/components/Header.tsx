@@ -21,11 +21,11 @@ function Header() {
         <NavLink to="/personal-library">My Library</NavLink>
         {user ? (
           <button className="nav-auth-button" type="button" onClick={logout}>
-            Log Out
+            Log out
           </button>
         ) : (
           <Link to="/login" state={loginState} replace>
-            Log In
+            Log in
           </Link>
         )}
       </nav>

@@ -19,7 +19,7 @@ export async function saveRating(
       fallback: "Could not save your rating.",
       byStatus: {
         0: "Unable to connect.",
-        401: "Please sign in to rate books.",
+        401: "Please log in to rate books.",
       },
       useServerMessage: true,
     });
