@@ -1,17 +1,29 @@
 import { screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import userEvent from "@testing-library/user-event";
-import { Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation, useNavigate } from "react-router";
+import { AuthContext, useAuth } from "../useAuth";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AvailabilityResponse } from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
 import { getBookAvailability, getBookDetails, getBookISBNs } from "../booksApi";
 import { getRatings, saveRating } from "../ratingsApi";
+import {
+  addBookToCollection,
+  CollectionApiError,
+  listCollectionsForBook,
+} from "../collectionsApi";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import BookDetailsPage from "./BookDetailsPage";
 
 vi.mock("../booksApi");
 vi.mock("../ratingsApi");
+vi.mock("../collectionsApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../collectionsApi")>()),
+  listCollectionsForBook: vi.fn(),
+  addBookToCollection: vi.fn(),
+}));
 
 const BOOK: BookDetails = {
   key: "/works/OL1W",
@@ -56,6 +68,8 @@ function renderDetails(
 
 describe("BookDetailsPage", () => {
   beforeEach(() => {
+    vi.mocked(listCollectionsForBook).mockResolvedValue([]);
+    vi.mocked(addBookToCollection).mockResolvedValue(undefined);
     vi.mocked(getBookDetails).mockResolvedValue(BOOK);
     vi.mocked(getBookAvailability).mockResolvedValue(NOT_FOUND);
     vi.mocked(getRatings).mockResolvedValue([]);
@@ -64,6 +78,192 @@ describe("BookDetailsPage", () => {
       rating: 4,
     });
     vi.mocked(getBookISBNs).mockRejectedValue(new Error("unused"));
+  });
+
+  it("COL-05-T-3 adds a book directly without a separate library save", async () => {
+    vi.mocked(listCollectionsForBook).mockResolvedValue([
+      {
+        id: 7,
+        name: "Favorites",
+        createdAt: "2026-01-01",
+        bookCount: 0,
+        containsBook: false,
+      },
+    ]);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderDetails({ user: USER });
+    const picker = await screen.findByRole("combobox", { name: "Collection" });
+    await userEvent.selectOptions(picker, "7");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add to collection" }),
+    );
+    expect(
+      await screen.findByText(/Added “Dune” to “Favorites”/),
+    ).toBeInTheDocument();
+    expect(addBookToCollection).toHaveBeenCalledExactlyOnceWith(
+      7,
+      "/works/OL1W",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Save to My Library" }),
+    ).toBeEnabled();
+    expect(screen.getByText("A desert planet.")).toBeInTheDocument();
+  });
+
+  it("COL-05-T-3 keeps details and ratings usable when collection loading fails", async () => {
+    vi.mocked(listCollectionsForBook).mockRejectedValue(
+      new Error("Could not load collections"),
+    );
+    renderDetails({ user: USER });
+    const panel = await screen.findByRole("region", { name: "Collections" });
+    expect(await within(panel).findByRole("alert")).toHaveTextContent(
+      "Could not load collections",
+    );
+    expect(screen.getByText("A desert planet.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Save to My Library" }),
+    ).toBeEnabled();
+    await userEvent.click(screen.getByRole("radio", { name: "4 stars" }));
+    expect(await screen.findByText("Rating saved.")).toBeInTheDocument();
+  });
+
+  it("COL-05-T-3 asks signed-out users to log in without requesting private data", async () => {
+    renderDetails();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Log in to organize" }),
+    );
+    expect(
+      screen.getByText("Login page, back to /books/works/OL1W"),
+    ).toBeInTheDocument();
+    expect(listCollectionsForBook).not.toHaveBeenCalled();
+    expect(addBookToCollection).not.toHaveBeenCalled();
+  });
+
+  it("COL-05-T-3 keeps the book return destination after an expired session", async () => {
+    vi.mocked(listCollectionsForBook).mockRejectedValue(
+      new CollectionApiError(
+        401,
+        "Your session has expired. Please sign in again.",
+      ),
+    );
+    const { auth } = renderDetails({ user: USER });
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Log in to organize" }),
+    );
+    expect(
+      await screen.findByText("Login page, back to /books/works/OL1W"),
+    ).toBeInTheDocument();
+    expect(auth.logout).toHaveBeenCalledOnce();
+  });
+
+  it("COL-05-T-3 resets membership and selection when navigating between books", async () => {
+    function BookNavigation() {
+      const navigate = useNavigate();
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => void navigate("/books/works/OL2W")}
+          >
+            Next book
+          </button>
+          <BookDetailsPage />
+        </>
+      );
+    }
+    vi.mocked(getBookDetails).mockImplementation(async (key) => ({
+      ...BOOK,
+      key,
+      title: key === BOOK.key ? "Dune" : "Emma",
+    }));
+    vi.mocked(listCollectionsForBook).mockResolvedValue([
+      {
+        id: 7,
+        name: "Favorites",
+        createdAt: "2026-01-01",
+        bookCount: 0,
+        containsBook: false,
+      },
+    ]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/books/*" element={<BookNavigation />} />
+      </Routes>,
+      { route: "/books/works/OL1W", user: USER },
+    );
+    await userEvent.selectOptions(
+      await screen.findByRole("combobox", { name: "Collection" }),
+      "7",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Next book" }));
+    const picker = await screen.findByRole("combobox", { name: "Collection" });
+    expect(picker).toHaveValue("");
+    await userEvent.selectOptions(picker, "7");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Add to collection" }),
+    );
+    expect(await screen.findByText(/Added “Emma”/)).toBeInTheDocument();
+    expect(addBookToCollection).toHaveBeenCalledExactlyOnceWith(
+      7,
+      "/works/OL2W",
+    );
+  });
+
+  it("COL-05-T-3 clears private membership when changing accounts or signing out", async () => {
+    function AccountSwitch() {
+      const auth = useAuth();
+      const [user, setUser] = useState<typeof USER | null>(USER);
+      return (
+        <AuthContext value={{ ...auth, user }}>
+          <button
+            type="button"
+            onClick={() => setUser({ id: 2, email: "second@example.test" })}
+          >
+            Change account
+          </button>
+          <button type="button" onClick={() => setUser(null)}>
+            Sign out
+          </button>
+          <BookDetailsPage />
+        </AuthContext>
+      );
+    }
+    vi.mocked(listCollectionsForBook)
+      .mockResolvedValueOnce([
+        {
+          id: 7,
+          name: "Private collection",
+          createdAt: "2026-01-01",
+          bookCount: 1,
+          containsBook: true,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/books/*" element={<AccountSwitch />} />
+      </Routes>,
+      { route: "/books/works/OL1W", user: USER },
+    );
+    expect(
+      await screen.findByRole("option", {
+        name: "Private collection — Already added",
+      }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Change account" }),
+    );
+    expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: /Private collection/ }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(
+      screen.getByRole("button", { name: "Log in to organize" }),
+    ).toBeInTheDocument();
+    expect(listCollectionsForBook).toHaveBeenCalledTimes(2);
   });
 
   it("TST-01-T-1 details page shows the book", async () => {

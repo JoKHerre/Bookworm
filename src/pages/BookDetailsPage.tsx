@@ -4,6 +4,7 @@ import type { AvailabilityResponse } from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../booksApi";
 import BookISBNSection from "../components/BookISBNSection";
+import BookCollectionAssignment from "../components/BookCollectionAssignment";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
@@ -21,7 +22,7 @@ function BookDetailsPage() {
 function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const backLabel =
     (location.state as BookDetailsLocationState | null)?.backLabel ?? "Back";
 
@@ -115,6 +116,12 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   function goToLogin() {
     const state: AuthLocationState = { from: location };
     void navigate("/login", { state, replace: true });
+  }
+
+  async function signInAgain() {
+    // Clear the stale auth state so the login route will not redirect us back.
+    await logout();
+    goToLogin();
   }
 
   function retryAvailability() {
@@ -216,51 +223,93 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       </button>
 
       <section className="book-header">
-        {coverUrl && (
-          <img
-            className="book-cover"
-            src={coverUrl}
-            alt={`Cover of ${title}`}
-          />
-        )}
+        <div className="book-cover-frame">
+          {coverUrl ? (
+            <img
+              className="book-cover"
+              src={coverUrl}
+              alt={`Cover of ${title}`}
+            />
+          ) : (
+            <div
+              className="book-cover-placeholder"
+              role="img"
+              aria-label={`Cover unavailable for ${title}`}
+            >
+              <span>Cover unavailable</span>
+            </div>
+          )}
+        </div>
 
         <div className="book-info">
-          <h1 className="book-details-title">{title}</h1>
-
-          <p className="book-details-author">
-            {searchBook?.author_name?.join(", ") ||
-              book?.authors.join(", ") ||
-              "Unknown author"}
-          </p>
-          {user ? (
-            <button
-              className="save-library-button"
-              type="button"
-              onClick={handleSave}
-              disabled={saving || loading || !book}
-            >
-              {saving ? "Saving..." : "Save to My Library"}
-            </button>
-          ) : (
-            <button
-              className="save-library-button"
-              type="button"
-              onClick={goToLogin}
-            >
-              Log in to save
-            </button>
-          )}
-          {saveMessage && <p role="status">{saveMessage}</p>}
+          <div className="book-identity">
+            <h1 className="book-details-title">{title}</h1>
+            <p className="book-details-author">
+              {searchBook?.author_name?.join(", ") ||
+                book?.authors.join(", ") ||
+                "Unknown author"}
+            </p>
+          </div>
           {user && (
-            <>
+            <div className="book-rating-group">
               <StarRating
                 value={rating}
                 onChange={(value) => void handleRate(value)}
                 disabled={ratingSaving || loading || !book}
               />
               {ratingMessage && <p role="status">{ratingMessage}</p>}
-            </>
+            </div>
           )}
+          <section
+            className="book-save-group"
+            aria-labelledby="book-save-title"
+          >
+            <h2 id="book-save-title">Save and organize</h2>
+            {user ? (
+              <button
+                className="save-library-button"
+                type="button"
+                onClick={handleSave}
+                disabled={saving || loading || !book}
+              >
+                {saving ? "Saving..." : "Save to My Library"}
+              </button>
+            ) : (
+              <button
+                className="save-library-button"
+                type="button"
+                onClick={goToLogin}
+              >
+                Log in to save
+              </button>
+            )}
+            {saveMessage && (
+              <p className="book-save-message" role="status">
+                {saveMessage}
+              </p>
+            )}
+            {book &&
+              !loading &&
+              (user ? (
+                <BookCollectionAssignment
+                  key={`${bookKey}:${user.id}`}
+                  bookKey={bookKey}
+                  title={title}
+                  onLogin={signInAgain}
+                />
+              ) : (
+                <section
+                  className="book-collection-assignment"
+                  aria-label="Collections"
+                >
+                  <h3>Add to a collection</h3>
+                  <p>Sign in to add this book to your collections.</p>
+                  <button type="button" onClick={goToLogin}>
+                    Log in to organize
+                  </button>
+                </section>
+              ))}
+          </section>
         </div>
       </section>
 
