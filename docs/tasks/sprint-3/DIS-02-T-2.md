@@ -52,6 +52,3 @@ Test file: `src/components/SimilarBooksSection.test.tsx`, using the existing Vit
 | `DIS-02-T-2 selects the book whose card was clicked`       | Click the second card, then the first                                                 | The callback receives the corresponding complete book data in click order               | 4         |
 | `DIS-02-T-2 shows an empty message without cards or retry` | Supply an empty list with no error and loading finished                               | The empty message appears without cards, Retry, loading, or an error                    | 5         |
 | `DIS-02-T-2 shows the error and calls retry when clicked`  | Supply books and an error, then click Retry                                           | The error replaces the cards; clicking Retry calls its callback once                    | 6         |
-| Horizontal scrolling (manual)                              | Temporarily preview six books in a narrow container; scroll and Tab through the cards | Cards stay in one row, scroll horizontally, and remain reachable by keyboard            | 3         |
-
-The horizontal-scrolling check has not yet been performed. It requires a browser preview because the unit tests do not measure layout. Remove any temporary preview before committing.
