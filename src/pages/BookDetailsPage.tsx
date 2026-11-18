@@ -358,6 +358,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
       {book && (
         <SimilarAtLibrarySection
+          key={`${book.title}-book`}
           title={book.title}
           format="book"
           heading="Similar Books available at Santa Cruz Public Library"
@@ -365,13 +366,12 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       )}
       {book && (
         <SimilarAtLibrarySection
+          key={`${book.title}-ebook`}
           title={book.title}
           format="ebook"
           heading="Similar eBooks available at Santa Cruz Public Library"
         />
       )}
-
-      {book && <BookISBNSection bookKey={bookKey} />}
     </main>
   );
 }

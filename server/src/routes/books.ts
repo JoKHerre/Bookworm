@@ -231,11 +231,11 @@ booksRouter.get(
     const started = Date.now();
 
     try {
-      // The catalog search makes two requests of up to 20s each, so allow 35s overall.
+      // 20 second limit for both requests
       const results = await searchLibraryByTitle(
         parsed.data.title,
         parsed.data.format,
-        AbortSignal.any([controller.signal, AbortSignal.timeout(35_000)]),
+        AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
       );
       if (!res.destroyed) res.json({ results });
     } catch (error) {

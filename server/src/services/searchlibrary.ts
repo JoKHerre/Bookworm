@@ -209,7 +209,7 @@ export async function checkIsbnAvailability(
   return availability.parse({ ...match, branches });
 }
 
-const LIBRARY_SEARCH_MAX_RESULTS = 15;
+const LIBRARY_SEARCH_MAX_RESULTS = 5;
 const LIBRARY_BOOK_FORMAT_TYPES: Record<BookFormat, string> = {
   book: "TOM=bks",
   ebook: "TOM=ebk",
@@ -223,7 +223,7 @@ export async function searchLibraryByTitle(
   const term = title.replace(/\s+/g, " ").trim();
   if (!term) throw new Error("Provide a title to search");
   signal?.throwIfAborted();
-
+  const limit = AbortSignal.timeout(TITLESEARCH_REQUEST_TIMEOUT_MS);
   const clean = (s: string) => s.replace(/\s+/g, " ").trim();
   const fetchc = makeFetchCookie(fetch);
 
@@ -237,8 +237,7 @@ export async function searchLibraryByTitle(
       url.searchParams.set(k, String(v));
     const headers: Record<string, string> = { "User-Agent": "Mozilla/5.0" };
     if (xhr) headers["X-Requested-With"] = "XMLHttpRequest";
-    const timeout = AbortSignal.timeout(TITLESEARCH_REQUEST_TIMEOUT_MS);
-    const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+    const requestSignal = signal ? AbortSignal.any([signal, limit]) : limit;
     const res = await fetchc(url.toString(), {
       headers,
       signal: requestSignal,

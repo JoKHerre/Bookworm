@@ -17,7 +17,6 @@ function SimilarAtLibrarySection({
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
-
     searchLibraryByTitle(title, format, signal)
       .then((data) => {
         if (!signal.aborted) setResults(data.results);
