@@ -1,7 +1,14 @@
 import { Router, type Response } from "express";
 import { and, count, eq, sql } from "drizzle-orm";
 import z from "zod";
+import type { ApiError } from "../../../shared/api.ts";
 import { openLibraryWorkKey } from "../../../shared/books.ts";
+import type {
+  CollectionDetailResponse,
+  CollectionListResponse,
+  CollectionSummary,
+} from "../../../shared/collections.ts";
+import type { SavedBook } from "../../../shared/library.ts";
 import { requireAuth } from "../auth/middleware.ts";
 import { db } from "../db/index.ts";
 import { collectionBooks, collections, savedBooks } from "../db/schema.ts";
@@ -119,206 +126,224 @@ collectionsRouter.param("savedBookId", (_req, res, next, value: string) => {
 });
 
 // GET /api/collections: to list a user's collections, optionally filtered by a bookKey
-collectionsRouter.get("/", async (req, res) => {
-  // validate query parameters using zod
-  const parsed = collectionListQuery.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: INVALID_BOOK_KEY });
-    return;
-  }
-  const userId = res.locals.user!.id;
-  const { bookKey } = parsed.data;
-  // build list query
-  const query = db
-    .select({
-      ...collectionFields,
-      bookCount: count(collectionBooks.savedBookId),
-      ...(bookKey === undefined
-        ? {}
-        : {
-            containsBook: sql<boolean>`coalesce(bool_or(${savedBooks.bookKey} = ${bookKey}), false)`,
-          }),
-    })
-    .from(collections)
-    .leftJoin(collectionBooks, collectionMembership) // to keep empty collections in the result set
-    .$dynamic();
-  if (bookKey !== undefined) query.leftJoin(savedBooks, membershipSavedBook);
-  const summaries = await query
-    .where(eq(collections.userId, userId))
-    .groupBy(collections.id)
-    .orderBy(collections.id);
-  res.json({ collections: summaries });
-});
+collectionsRouter.get(
+  "/",
+  async (req, res: Response<CollectionListResponse<Date> | ApiError>) => {
+    // validate query parameters using zod
+    const parsed = collectionListQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: INVALID_BOOK_KEY });
+      return;
+    }
+    const userId = res.locals.user!.id;
+    const { bookKey } = parsed.data;
+    // build list query
+    const query = db
+      .select({
+        ...collectionFields,
+        bookCount: count(collectionBooks.savedBookId),
+        ...(bookKey === undefined
+          ? {}
+          : {
+              containsBook: sql<boolean>`coalesce(bool_or(${savedBooks.bookKey} = ${bookKey}), false)`,
+            }),
+      })
+      .from(collections)
+      .leftJoin(collectionBooks, collectionMembership) // to keep empty collections in the result set
+      .$dynamic();
+    if (bookKey !== undefined) query.leftJoin(savedBooks, membershipSavedBook);
+    const summaries = await query
+      .where(eq(collections.userId, userId))
+      .groupBy(collections.id)
+      .orderBy(collections.id);
+    res.json({ collections: summaries });
+  },
+);
 
 // POST /api/collections: to create a new collection
-collectionsRouter.post("/", async (req, res) => {
-  const parsed = collectionNameBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: INVALID_NAME });
-    return;
-  }
-  try {
-    const [collection] = await db
-      .insert(collections) // insert into the collections table
-      .values({
-        userId: res.locals.user!.id, // owner
-        name: parsed.data.name, // collection name
-      })
-      .returning(collectionFields); // return the new collection's fields
-    res.status(201).json({ ...collection, bookCount: 0 });
-  } catch (error) {
-    handleCollectionNameError(error, res);
-  }
-});
+collectionsRouter.post(
+  "/",
+  async (req, res: Response<CollectionSummary<Date> | ApiError>) => {
+    const parsed = collectionNameBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: INVALID_NAME });
+      return;
+    }
+    try {
+      const [collection] = await db
+        .insert(collections) // insert into the collections table
+        .values({
+          userId: res.locals.user!.id, // owner
+          name: parsed.data.name, // collection name
+        })
+        .returning(collectionFields); // return the new collection's fields
+      res.status(201).json({ ...collection!, bookCount: 0 });
+    } catch (error) {
+      handleCollectionNameError(error, res);
+    }
+  },
+);
 
 // GET /api/collections/:collectionId: to get a specific collection and its books
-collectionsRouter.get("/:collectionId", async (req, res) => {
-  // a left join keeps an empty collection distinguishable from a missing one.
-  // start with requested collection, then left join to collectionBooks and savedBooks to get its books.
-  const rows = await db
-    .select({ collection: collectionFields, book: savedBookFields })
-    .from(collections)
-    .leftJoin(collectionBooks, collectionMembership)
-    .leftJoin(savedBooks, membershipSavedBook)
-    .where(
-      ownedCollection(Number(req.params.collectionId), res.locals.user!.id),
-    )
-    .orderBy(savedBooks.id);
-  // turn the rows into a collection summary and a list of books
-  const first = rows[0];
-  if (!first) {
-    res.status(404).json({ error: COLLECTION_NOT_FOUND });
-    return;
-  }
-  const books = rows.flatMap(({ book }) => (book ? [book] : []));
-  res.json({
-    collection: { ...first.collection, bookCount: books.length },
-    books,
-  });
-});
-
-// PATCH /api/collections/:collectionId: to rename a collection
-collectionsRouter.patch("/:collectionId", async (req, res) => {
-  // validate name in request body using zod
-  const parsed = collectionNameBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: INVALID_NAME });
-    return;
-  }
-  const collectionId = Number(req.params.collectionId);
-  const userId = res.locals.user!.id;
-  try {
-    // update collection name in a transaction
-    const summary = await db.transaction(async (tx) => {
-      const [collection] = await tx
-        .update(collections)
-        .set({ name: parsed.data.name })
-        .where(ownedCollection(collectionId, userId))
-        .returning(collectionFields);
-      if (!collection) return null;
-      const [membershipCount] = await tx
-        .select({ value: count() })
-        .from(collectionBooks)
-        .where(
-          and(
-            eq(collectionBooks.collectionId, collectionId),
-            eq(collectionBooks.userId, userId),
-          ),
-        );
-      return { ...collection, bookCount: membershipCount!.value };
-    });
-    if (!summary) {
+collectionsRouter.get(
+  "/:collectionId",
+  async (req, res: Response<CollectionDetailResponse<Date> | ApiError>) => {
+    // a left join keeps an empty collection distinguishable from a missing one.
+    // start with requested collection, then left join to collectionBooks and savedBooks to get its books.
+    const rows = await db
+      .select({ collection: collectionFields, book: savedBookFields })
+      .from(collections)
+      .leftJoin(collectionBooks, collectionMembership)
+      .leftJoin(savedBooks, membershipSavedBook)
+      .where(
+        ownedCollection(Number(req.params.collectionId), res.locals.user!.id),
+      )
+      .orderBy(savedBooks.id);
+    // turn the rows into a collection summary and a list of books
+    const first = rows[0];
+    if (!first) {
       res.status(404).json({ error: COLLECTION_NOT_FOUND });
       return;
     }
-    res.json(summary);
-  } catch (error) {
-    handleCollectionNameError(error, res);
-  }
-});
-
-// DELETE /api/collections/:collectionId: to delete a collection
-collectionsRouter.delete("/:collectionId", async (req, res) => {
-  // delete from collections table, cascade deletes collectionBooks memberships, but not savedBooks
-  const [deleted] = await db
-    .delete(collections)
-    .where(
-      ownedCollection(Number(req.params.collectionId), res.locals.user!.id),
-    )
-    .returning({ id: collections.id });
-  if (!deleted) {
-    res.status(404).json({ error: COLLECTION_NOT_FOUND });
-    return;
-  }
-  res.status(204).end();
-});
-
-// POST /api/collections/:collectionId/books: to add a book to a collection
-collectionsRouter.post("/:collectionId/books", async (req, res) => {
-  const parsed = collectionBookBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: INVALID_BOOK_KEY });
-    return;
-  }
-  const collectionId = Number(req.params.collectionId);
-  const userId = res.locals.user!.id;
-  try {
-    // save book to an existing collection in a transaction
-    const result = await db.transaction(async (tx) => {
-      const [book] = await tx
-        .select(savedBookFields)
-        .from(collections)
-        .innerJoin(
-          savedBooks,
-          and(
-            eq(savedBooks.userId, collections.userId),
-            eq(savedBooks.bookKey, parsed.data.bookKey),
-          ),
-        )
-        .where(ownedCollection(collectionId, userId));
-      if (!book) return null;
-      const [membership] = await tx
-        .insert(collectionBooks)
-        .values({ collectionId, savedBookId: book.id, userId })
-        .onConflictDoNothing({
-          target: [collectionBooks.collectionId, collectionBooks.savedBookId],
-        })
-        .returning({ savedBookId: collectionBooks.savedBookId });
-      return { book, membership };
+    const books = rows.flatMap(({ book }) => (book ? [book] : []));
+    res.json({
+      collection: { ...first.collection, bookCount: books.length },
+      books,
     });
-    // interpret result
-    if (!result) {
-      res.status(404).json({ error: ADD_TARGET_NOT_FOUND });
-    } else if (!result.membership) {
-      res.status(409).json({ error: "Book is already in this collection" });
-    } else {
-      res.status(201).json(result.book);
-    }
-  } catch (error) {
-    // a parent row may be deleted after the lookup but before insertion.
-    if (
-      matchesPgConstraint(
-        error,
-        "23503",
-        "collection_books_collection_owner_fk",
-      ) ||
-      matchesPgConstraint(
-        error,
-        "23503",
-        "collection_books_saved_book_owner_fk",
-      )
-    ) {
-      res.status(404).json({ error: ADD_TARGET_NOT_FOUND });
+  },
+);
+
+// PATCH /api/collections/:collectionId: to rename a collection
+collectionsRouter.patch(
+  "/:collectionId",
+  async (req, res: Response<CollectionSummary<Date> | ApiError>) => {
+    // validate name in request body using zod
+    const parsed = collectionNameBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: INVALID_NAME });
       return;
     }
-    throw error;
-  }
-});
+    const collectionId = Number(req.params.collectionId);
+    const userId = res.locals.user!.id;
+    try {
+      // update collection name in a transaction
+      const summary = await db.transaction(async (tx) => {
+        const [collection] = await tx
+          .update(collections)
+          .set({ name: parsed.data.name })
+          .where(ownedCollection(collectionId, userId))
+          .returning(collectionFields);
+        if (!collection) return null;
+        const [membershipCount] = await tx
+          .select({ value: count() })
+          .from(collectionBooks)
+          .where(
+            and(
+              eq(collectionBooks.collectionId, collectionId),
+              eq(collectionBooks.userId, userId),
+            ),
+          );
+        return { ...collection, bookCount: membershipCount!.value };
+      });
+      if (!summary) {
+        res.status(404).json({ error: COLLECTION_NOT_FOUND });
+        return;
+      }
+      res.json(summary);
+    } catch (error) {
+      handleCollectionNameError(error, res);
+    }
+  },
+);
+
+// DELETE /api/collections/:collectionId: to delete a collection
+collectionsRouter.delete(
+  "/:collectionId",
+  async (req, res: Response<ApiError>) => {
+    // delete from collections table, cascade deletes collectionBooks memberships, but not savedBooks
+    const [deleted] = await db
+      .delete(collections)
+      .where(
+        ownedCollection(Number(req.params.collectionId), res.locals.user!.id),
+      )
+      .returning({ id: collections.id });
+    if (!deleted) {
+      res.status(404).json({ error: COLLECTION_NOT_FOUND });
+      return;
+    }
+    res.status(204).end();
+  },
+);
+
+// POST /api/collections/:collectionId/books: to add a book to a collection
+collectionsRouter.post(
+  "/:collectionId/books",
+  async (req, res: Response<SavedBook<Date> | ApiError>) => {
+    const parsed = collectionBookBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: INVALID_BOOK_KEY });
+      return;
+    }
+    const collectionId = Number(req.params.collectionId);
+    const userId = res.locals.user!.id;
+    try {
+      // save book to an existing collection in a transaction
+      const result = await db.transaction(async (tx) => {
+        const [book] = await tx
+          .select(savedBookFields)
+          .from(collections)
+          .innerJoin(
+            savedBooks,
+            and(
+              eq(savedBooks.userId, collections.userId),
+              eq(savedBooks.bookKey, parsed.data.bookKey),
+            ),
+          )
+          .where(ownedCollection(collectionId, userId));
+        if (!book) return null;
+        const [membership] = await tx
+          .insert(collectionBooks)
+          .values({ collectionId, savedBookId: book.id, userId })
+          .onConflictDoNothing({
+            target: [collectionBooks.collectionId, collectionBooks.savedBookId],
+          })
+          .returning({ savedBookId: collectionBooks.savedBookId });
+        return { book, membership };
+      });
+      // interpret result
+      if (!result) {
+        res.status(404).json({ error: ADD_TARGET_NOT_FOUND });
+      } else if (!result.membership) {
+        res.status(409).json({ error: "Book is already in this collection" });
+      } else {
+        res.status(201).json(result.book);
+      }
+    } catch (error) {
+      // a parent row may be deleted after the lookup but before insertion.
+      if (
+        matchesPgConstraint(
+          error,
+          "23503",
+          "collection_books_collection_owner_fk",
+        ) ||
+        matchesPgConstraint(
+          error,
+          "23503",
+          "collection_books_saved_book_owner_fk",
+        )
+      ) {
+        res.status(404).json({ error: ADD_TARGET_NOT_FOUND });
+        return;
+      }
+      throw error;
+    }
+  },
+);
 
 // DELETE /api/collections/:collectionId/books/:savedBookId: to remove a book from a collection
 collectionsRouter.delete(
   "/:collectionId/books/:savedBookId",
-  async (req, res) => {
+  async (req, res: Response<ApiError>) => {
     const [deleted] = await db
       .delete(collectionBooks)
       .where(

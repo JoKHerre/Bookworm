@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
+import type { ApiError } from "../../shared/api.ts";
 import { after, afterEach, before, test } from "node:test";
 import type { Server } from "node:http";
 import express from "express";
 import type {
   BookSearchResponse,
   BookSearchResult,
-  BooksError,
 } from "../../shared/books.ts";
 import { booksRouter } from "../src/routes/books.ts";
 
@@ -234,7 +234,7 @@ test("SRC-04-T-2 rejects invalid filters without calling Open Library", async ()
 
   for (const query of invalidQueries) {
     const res = await get(query);
-    const body = (await res.json()) as BooksError;
+    const body = (await res.json()) as ApiError;
     assert.equal(res.status, 400, query);
     assert.equal(typeof body.error, "string", query);
     assert.ok(body.error.length > 0, query);

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
+import type { ApiError } from "../../shared/api.ts";
 import { after, afterEach, before, test } from "node:test";
 import type { Server } from "node:http";
 import type {
   BookSearchResponse,
   BookSearchResult,
-  BooksError,
 } from "../../shared/books.ts";
 import { booksRouter } from "../src/routes/books.ts";
 import { express } from "./test-utils.ts";
@@ -104,7 +104,7 @@ test("SRC-03-T-2 rejects invalid suggestion queries without calling Open Library
 
   for (const path of invalidPaths) {
     const res = await get(path);
-    const body = (await res.json()) as BooksError;
+    const body = (await res.json()) as ApiError;
     assert.equal(res.status, 400, path);
     assert.equal(typeof body.error, "string", path);
   }
@@ -157,7 +157,7 @@ test("SRC-03-T-2 keeps submitted search requests at twenty results", async () =>
   );
 
   const res = await get("/api/books/search?q=harry%20potter");
-  const body = (await res.json()) as BookSearchResponse | BooksError;
+  const body = (await res.json()) as BookSearchResponse | ApiError;
 
   assert.equal(res.status, 200);
   assert.ok("books" in body);

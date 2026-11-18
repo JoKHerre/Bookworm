@@ -217,9 +217,3 @@ export const bookISBNs = z.object({
 });
 
 export type BookISBNs = z.infer<typeof bookISBNs>;
-
-// Error body returned by any books route on failure
-
-export interface BooksError {
-  error: string;
-}
