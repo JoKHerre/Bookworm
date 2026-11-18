@@ -1,9 +1,9 @@
-import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookDetails } from "../../shared/books";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
-import PersonalLibraryPage from "./PersonalLibraryPage";
+import PersonalLibraryPage, { UNDO_REMOVE_MS } from "./PersonalLibraryPage";
 
 interface Fixture {
   id: number;
@@ -89,6 +89,9 @@ describe("PersonalLibraryPage", () => {
   beforeEach(() => {
     stubApi(FIXTURES);
   });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it("TST-01-T-1 library shows saved books", async () => {
     renderWithProviders(<PersonalLibraryPage />, {
@@ -143,7 +146,8 @@ describe("PersonalLibraryPage", () => {
     });
   });
 
-  it("TST-01-T-1 library removes a book", async () => {
+  it("TST-01-T-1 library removes a book after the undo window", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = stubApi(FIXTURES);
     renderWithProviders(<PersonalLibraryPage />);
     await userEvent.click(
@@ -152,10 +156,119 @@ describe("PersonalLibraryPage", () => {
       }),
     );
 
-    await waitFor(() => expect(titles()).toEqual(["Emma", "Cosmos"]));
+    expect(titles()).toEqual(["Emma", "Cosmos"]);
+    expect(screen.getByText("Removed “Dune”.")).toBeInTheDocument();
+    const deletes = () =>
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");
+    expect(deletes()).toHaveLength(0);
+
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
     expect(fetchMock).toHaveBeenCalledWith("/api/library/1", {
       method: "DELETE",
     });
+    await waitFor(() =>
+      expect(screen.queryByText("Removed “Dune”.")).not.toBeInTheDocument(),
+    );
+    expect(titles()).toEqual(["Emma", "Cosmos"]);
+  });
+
+  it("TST-01-T-1 library undoes a removal", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = stubApi(FIXTURES);
+    renderWithProviders(<PersonalLibraryPage />);
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "Remove Dune from my library",
+      }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    expect(titles()).toEqual(["Dune", "Emma", "Cosmos"]);
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE"),
+    ).toHaveLength(0);
+  });
+
+  it("TST-01-T-1 library removes a book when leaving the page", async () => {
+    const fetchMock = stubApi(FIXTURES);
+    const { unmount } = renderWithProviders(<PersonalLibraryPage />);
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "Remove Dune from my library",
+      }),
+    );
+    unmount();
+    expect(fetchMock).toHaveBeenCalledWith("/api/library/1", {
+      method: "DELETE",
+    });
+  });
+
+  it("TST-01-T-1 library groups books by reading status", async () => {
+    const statuses: Record<number, string> = {
+      1: "finished",
+      3: "currently_reading",
+    };
+    stubApi(
+      FIXTURES.map((fixture) => ({
+        ...fixture,
+        readingStatus: statuses[fixture.id],
+      })),
+    );
+    renderWithProviders(<PersonalLibraryPage />);
+    await screen.findByText("Dune");
+
+    const shelves = screen.getAllByRole("list");
+    expect(shelves.map((list) => list.getAttribute("aria-labelledby"))).toEqual(
+      ["shelf-currently_reading", "shelf-to_be_read", "shelf-finished"],
+    );
+    expect(titles()).toEqual(["Cosmos", "Emma", "Dune"]);
+    expect(
+      within(screen.getByRole("list", { name: /To Be Read/ })).getByText(
+        "Emma",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("TST-01-T-1 library shows saved books before their details load", async () => {
+    const fetchMock = stubApi(FIXTURES);
+    let resolveDetails: (response: Response) => void = () => {};
+    const details = new Promise<Response>((resolve) => {
+      resolveDetails = resolve;
+    });
+    fetchMock.mockImplementation(async (input: string, init?: RequestInit) =>
+      input.startsWith("/api/books/details")
+        ? details
+        : jsonResponse(
+            input === "/api/ratings"
+              ? { ratings: [] }
+              : {
+                  books: [
+                    {
+                      id: 1,
+                      bookKey: "/works/OL1W",
+                      createdAt: "2026-01-01T00:00:00Z",
+                      readingStatus: "to_be_read",
+                    },
+                  ],
+                },
+            init?.method === "DELETE" ? 204 : 200,
+          ),
+    );
+    renderWithProviders(<PersonalLibraryPage />);
+
+    expect(
+      await screen.findByRole("button", { name: "View details for Loading…" }),
+    ).toBeInTheDocument();
+    resolveDetails(
+      jsonResponse({
+        key: "/works/OL1W",
+        title: "Dune",
+        authors: ["Someone"],
+        tags: [],
+      }),
+    );
+    expect(await screen.findByText("Dune")).toBeInTheDocument();
   });
 
   it("TST-01-T-1 library shows ratings", async () => {

@@ -18,7 +18,8 @@ export function toTags(subjects: readonly string[] = []): string[] {
 }
 
 interface BookWithTags {
-  details: { tags: readonly string[] } | null;
+  // null when details failed to load, undefined while they're still loading
+  details: { tags: readonly string[] } | null | undefined;
 }
 
 // Sorted, unique tags across a set of books; books without details add none.

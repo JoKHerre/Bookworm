@@ -32,27 +32,25 @@
   line-height: 1.1;
 }
 
-.personal-library-books {
-  margin-top: 4px;
+.personal-library-shelf {
+  margin-top: 28px;
 }
 
-.personal-library-books-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 0;
-  padding: 10px 0 16px;
-  border-bottom: 1px solid var(--tan);
-}
-
-.personal-library-books-heading h2 {
+.personal-library-shelf h2 {
   margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--tan);
   color: var(--olive);
   font-family: var(--heading);
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.03em;
+}
+
+.personal-library-shelf-count {
+  color: var(--olive-text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 .personal-library-message {
@@ -71,7 +69,7 @@
   text-align: center;
 }
 
-.personal-library-empty-state h3 {
+.personal-library-empty-state h2 {
   margin: 0;
   color: var(--olive);
   font-family: var(--heading);
@@ -136,6 +134,16 @@
   height: 210px;
   object-fit: contain;
   background: var(--tan-cover);
+}
+
+.personal-library-book-cover--loading {
+  animation: personal-library-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes personal-library-pulse {
+  to {
+    opacity: 0.55;
+  }
 }
 
 .personal-library-book-cover--placeholder {
@@ -237,26 +245,67 @@
 }
 
 .personal-library-book-remove {
-  min-height: 24px;
-  margin-top: 14px;
-  padding: 2px 8px;
-  border: 1px solid var(--olive);
-  border-radius: 5px;
+  margin-top: 10px;
+  padding: 2px 0;
+  border: none;
   background: transparent;
-  color: var(--olive);
+  color: var(--olive-text-secondary);
   font: inherit;
   font-size: 0.74rem;
-  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 
 .personal-library-book-remove:hover {
-  background: var(--tan);
+  color: var(--olive);
 }
 
 .personal-library-book-remove:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 3px;
+}
+
+.personal-library-undo {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 12px 16px 12px 20px;
+  transform: translateX(-50%);
+  border-radius: 10px;
+  background: var(--olive);
+  color: var(--cream);
+  font-size: 0.9rem;
+  box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.45);
+}
+
+.personal-library-undo button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--cream);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cream);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.personal-library-undo button:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personal-library-book-cover--loading {
+    animation: none;
+  }
 }
 
 @media (max-width: 760px) {
