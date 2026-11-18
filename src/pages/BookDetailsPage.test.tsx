@@ -4,7 +4,12 @@ import { Route, Routes, useLocation } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AvailabilityResponse } from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
-import { getBookAvailability, getBookDetails, getBookISBNs } from "../booksApi";
+import {
+  getBookAvailability,
+  getBookDetails,
+  getBookISBNs,
+  searchLibraryByTitle,
+} from "../booksApi";
 import { getRatings, saveRating } from "../ratingsApi";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
@@ -12,7 +17,6 @@ import BookDetailsPage from "./BookDetailsPage";
 
 vi.mock("../booksApi");
 vi.mock("../ratingsApi");
-
 const BOOK: BookDetails = {
   key: "/works/OL1W",
   title: "Dune",
@@ -58,6 +62,7 @@ describe("BookDetailsPage", () => {
   beforeEach(() => {
     vi.mocked(getBookDetails).mockResolvedValue(BOOK);
     vi.mocked(getBookAvailability).mockResolvedValue(NOT_FOUND);
+    vi.mocked(searchLibraryByTitle).mockResolvedValue({ results: [] });
     vi.mocked(getRatings).mockResolvedValue([]);
     vi.mocked(saveRating).mockResolvedValue({
       bookKey: "/works/OL1W",

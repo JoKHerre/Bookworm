@@ -24,6 +24,12 @@ import {
   OpenLibraryError,
 } from "../services/openLibrary.ts";
 
+import {
+  titleSearchQuery,
+  type TitleSearchResponse,
+} from "../../../shared/titleSearch.ts";
+import { searchLibraryByTitle } from "../services/searchlibrary.ts";
+
 export const booksRouter: Router = Router();
 
 booksRouter.get(
@@ -199,6 +205,49 @@ booksRouter.get(
       });
       if (!res.destroyed) {
         res.status(502).json({ error: "Could not check library availability" });
+      }
+    } finally {
+      res.off("close", onClose);
+    }
+  },
+);
+
+booksRouter.get(
+  "/library-search",
+  async (req, res: Response<TitleSearchResponse | BooksError>) => {
+    const parsed = titleSearchQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid library search",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.once("close", onClose);
+    const started = Date.now();
+
+    try {
+      // 20 second limit for both requests
+      const results = await searchLibraryByTitle(
+        parsed.data.title,
+        parsed.data.format,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
+      );
+      if (!res.destroyed) res.json({ results });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      console.error("Library title search failed:", {
+        title: parsed.data.title,
+        format: parsed.data.format,
+        durationMs: Date.now() - started,
+        error,
+      });
+      if (!res.destroyed) {
+        res.status(502).json({ error: "Could not search the library catalog" });
       }
     } finally {
       res.off("close", onClose);
