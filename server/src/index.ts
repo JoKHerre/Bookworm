@@ -26,10 +26,6 @@ app.use("/api/library", libraryRouter);
 app.use("/api/collections", collectionsRouter);
 app.use("/api/ratings", ratingsRouter);
 
-app.get("/api/test", (req: Request, res: Response) => {
-  res.json({ message: "Hello from express" });
-});
-
 app.get("/api/health", async (req: Request, res: Response) => {
   await db.execute(sql`select 1`);
   res.json({ ok: true });

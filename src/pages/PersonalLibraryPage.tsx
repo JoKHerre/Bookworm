@@ -11,7 +11,6 @@ import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
-// define error messages
 const SESSION_EXPIRED_MESSAGE =
   "Your session has expired. Please sign in again.";
 const LOAD_ERROR = "Could not load your personal library.";
@@ -29,7 +28,7 @@ const READING_STATUS_OPTIONS = READING_STATUSES.map((value) => ({
   label: READING_STATUS_LABELS[value],
 }));
 
-// define the shape of a saved book object as returned by the server
+// a saved book as returned by GET /api/library
 interface SavedBook {
   id: number;
   bookKey: string;
@@ -37,44 +36,39 @@ interface SavedBook {
   readingStatus: ReadingStatus;
 }
 
-// PersonalLibraryBook: SavedBook plus any additional details
 interface PersonalLibraryBook extends SavedBook {
   details: BookDetails | null;
 }
 
 function PersonalLibraryPage() {
   const navigate = useNavigate();
-  const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
-  const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
-  const [error, setError] = useState(""); // message to display in case of error loading the saved books
-  const [removalError, setRemovalError] = useState(""); // message to display if removing a book fails
+  const [books, setBooks] = useState<PersonalLibraryBook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [removalError, setRemovalError] = useState("");
   const [removingBookIds, setRemovingBookIds] = useState<Set<number>>(
     () => new Set(),
-  ); // saved-book rows whose removal requests are in progress
+  );
   const [updatingReadingStatusIds, setUpdatingReadingStatusIds] = useState<
     Set<number>
-  >(() => new Set()); // saved-book rows whose reading status requests are in progress
+  >(() => new Set());
   const [readingStatusErrors, setReadingStatusErrors] = useState<
     Record<number, string>
-  >({}); // errors to display beside the affected book's status control
-  const [ratings, setRatings] = useState<Map<string, number>>(() => new Map()); // the user's rating for each rated bookKey
-  const [selectedTags, setSelectedTags] = useState<string[]>([]); // tags a book must all have to be shown; empty shows every book
-  const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
+  >({}); // keyed by saved-book id
+  const [ratings, setRatings] = useState<Map<string, number>>(() => new Map());
+  const [selectedTags, setSelectedTags] = useState<string[]>([]); // a book must have every one; empty shows all
+  const [loadAttempt, setLoadAttempt] = useState(0); // bumped by "Try again" to reload
 
-  // remove a book:
   async function removeBook(id: number, title: string) {
     const genericRemovalError = `Could not remove “${title}” from your library.`;
     let requestError = "";
 
-    // clear any previous removal error msg + add book's id to set of books being removed
     setRemovalError("");
     setRemovingBookIds((currentIds) => new Set(currentIds).add(id));
 
     try {
-      // send DELETE request to server
       const response = await fetch(`/api/library/${id}`, { method: "DELETE" });
 
-      // handle error status codes with error messages to display to user
       if (response.status === 401) {
         requestError = SESSION_EXPIRED_MESSAGE;
       } else if (response.status === 404) {
@@ -82,7 +76,6 @@ function PersonalLibraryPage() {
       } else if (!response.ok) {
         requestError = genericRemovalError;
       } else {
-        // successful DELETE: update the visible list by filtering out the removed book
         setBooks((currentBooks) =>
           currentBooks.filter((book) => book.id !== id),
         );
@@ -91,7 +84,6 @@ function PersonalLibraryPage() {
       // Network failures should use a friendly message instead of a browser error.
       requestError = genericRemovalError;
     } finally {
-      // remove the book's id from the set of books being removed, regardless of success or failure
       setRemovingBookIds((currentIds) => {
         const nextIds = new Set(currentIds);
         nextIds.delete(id);
@@ -107,7 +99,6 @@ function PersonalLibraryPage() {
     title: string,
     readingStatus: ReadingStatus,
   ) {
-    // capture current status, to be restored if the update fails
     const previousStatus = books.find((book) => book.id === id)?.readingStatus;
     if (!previousStatus) return;
 
@@ -126,14 +117,12 @@ function PersonalLibraryPage() {
 
     let requestError = "";
     try {
-      // attempt PATCH request to update the reading status on the server
       const response = await fetch(`/api/library/${id}/reading-status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ readingStatus }),
       });
 
-      // assign requestError based on the response status code, if applicable
       if (response.status === 401) {
         requestError = SESSION_EXPIRED_MESSAGE;
       } else if (response.status === 404) {
@@ -141,8 +130,6 @@ function PersonalLibraryPage() {
       } else if (!response.ok) {
         requestError = STATUS_UPDATE_ERROR_MESSAGE;
       } else {
-        // successful PATCH
-        // update book in the state with its new reading status as returned by the server
         const data = (await response.json()) as {
           id: number;
           readingStatus: ReadingStatus;
@@ -158,7 +145,6 @@ function PersonalLibraryPage() {
     } catch {
       requestError = STATUS_UPDATE_ERROR_MESSAGE;
     } finally {
-      // remove the book's id from the set of books being updated, regardless of success or failure
       setUpdatingReadingStatusIds((currentIds) => {
         const nextIds = new Set(currentIds);
         nextIds.delete(id);
@@ -166,7 +152,6 @@ function PersonalLibraryPage() {
       });
     }
 
-    // if error, restore previous reading status and display error msg
     if (requestError) {
       setBooks((currentBooks) =>
         currentBooks.map((book) =>
@@ -183,17 +168,14 @@ function PersonalLibraryPage() {
   useEffect(() => {
     let isCurrentRequest = true;
 
-    // loading the personal library: fetch list of saved books, then fetch details for each book
+    // fetch the saved books, then each book's details; a failed details lookup leaves details null
     async function loadPersonalLibrary() {
-      // set loading to true and clear any previous error message
       setLoading(true);
       setError("");
 
       try {
-        // requests GET /api/library to retrieve the user's saved books
         const response = await fetch("/api/library");
 
-        // interprets error status codes and sets error msg to display to user
         if (response.status === 401) {
           throw new Error(SESSION_EXPIRED_MESSAGE);
         }
@@ -201,28 +183,21 @@ function PersonalLibraryPage() {
           throw new Error(LOAD_ERROR);
         }
 
-        // else, successful response: parse the JSON and fetch details for each saved book
-        // read response, treat it as an object containing an array of SavedBook's, called "books"
         const data = (await response.json()) as { books: SavedBook[] };
         const booksWithDetails = await Promise.all(
           data.books.map(async (savedBook) => {
-            // for each SavedBook
             try {
-              // fetch book's details (title, author, etc) using bookKey
               const detailsResponse = await fetch(
                 `/api/books/details?key=${encodeURIComponent(savedBook.bookKey)}`,
               );
 
-              // if fails, return the savedBook with details set to null
               if (!detailsResponse.ok) {
                 return { ...savedBook, details: null };
               }
 
-              // success: read book details and return the savedBook with its details
               const details = (await detailsResponse.json()) as BookDetails;
               return { ...savedBook, details };
             } catch {
-              // any other error: also return the savedBook with details set to null
               return { ...savedBook, details: null };
             }
           }),
@@ -231,25 +206,21 @@ function PersonalLibraryPage() {
         // ratings are optional extras: if they fail to load, cards just show no rating
         const userRatings = await getRatings().catch(() => []);
 
-        // if current request, store the array of saved books w their details in the books state
         if (isCurrentRequest) {
           setBooks(booksWithDetails);
           setRatings(new Map(userRatings.map((r) => [r.bookKey, r.rating])));
         }
       } catch (loadError) {
-        // load error: store error msg
         if (isCurrentRequest) {
           setError(loadError instanceof Error ? loadError.message : LOAD_ERROR);
         }
       } finally {
-        // set loading to false, to signify that request is complete
         if (isCurrentRequest) {
           setLoading(false);
         }
       }
     }
 
-    // call the function to load the personal library
     void loadPersonalLibrary();
 
     return () => {
@@ -290,7 +261,6 @@ function PersonalLibraryPage() {
           </Link>
         </section>
 
-        {/* saved books collection */}
         <section
           className="personal-library-books"
           aria-labelledby="personal-library-books-title"
@@ -305,7 +275,6 @@ function PersonalLibraryPage() {
             </p>
           )}
 
-          {/* display loading msg, error + try again button if failure, empty state if no saved books, or the list of saved books */}
           {loading ? (
             <p className="personal-library-message" role="status">
               Loading…
@@ -388,7 +357,6 @@ function PersonalLibraryPage() {
                               aria-hidden="true"
                             />
                           )}
-                          {/* select book to view details */}
                           <div className="personal-library-book-details">
                             <h3>
                               <button

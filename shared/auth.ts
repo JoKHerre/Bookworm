@@ -14,9 +14,7 @@ export const credentials = z.object({
 
 export type Credentials = z.infer<typeof credentials>;
 
-export const publicUser = z.object({
-  id: z.number(),
-  email: z.string(),
-});
-
-export type PublicUser = z.infer<typeof publicUser>;
+export interface PublicUser {
+  id: number;
+  email: string;
+}

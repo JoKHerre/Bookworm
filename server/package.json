@@ -1,7 +1,6 @@
 {
   "name": "bookworm-server",
   "version": "1.0.0",
-  "description": "",
   "scripts": {
     "dev": "node --env-file-if-exists=.env --watch src/index.ts",
     "start": "node --env-file-if-exists=.env src/index.ts",
@@ -10,9 +9,6 @@
     "db:push": "node --env-file-if-exists=.env scripts/prepare-collection-ownership.ts && drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",

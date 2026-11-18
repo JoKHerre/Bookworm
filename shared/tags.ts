@@ -30,15 +30,6 @@ export function libraryTags(books: readonly BookWithTags[]): string[] {
   return [...tags].sort();
 }
 
-// Books carrying the tag; an empty tag keeps every book.
-export function filterByTag<T extends BookWithTags>(
-  books: readonly T[],
-  tag: string,
-): T[] {
-  if (!tag) return [...books];
-  return books.filter((book) => book.details?.tags.includes(tag));
-}
-
 // Books carrying every selected tag; an empty selection keeps every book.
 export function filterByTags<T extends BookWithTags>(
   books: readonly T[],

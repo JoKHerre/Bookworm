@@ -97,8 +97,6 @@ export const bookSuggestionsQuery = z.object({
     }, "Please enter a more specific query"),
 });
 
-export type BookSuggestionsQuery = z.infer<typeof bookSuggestionsQuery>;
-
 export const bookSearchResult = z.object({
   key: z.string(),
   title: z.string(),
@@ -139,8 +137,6 @@ export const bookDetailsQuery = z.object({
   key: openLibraryWorkKey,
   includeAuthors: z.enum(["true", "false"]).optional(),
 });
-
-export type BookDetailsQuery = z.infer<typeof bookDetailsQuery>;
 
 export const bookDetails = z.object({
   key: z.string(),
@@ -224,8 +220,6 @@ export type BookISBNs = z.infer<typeof bookISBNs>;
 
 // Error body returned by any books route on failure
 
-export const booksError = z.object({
-  error: z.string(),
-});
-
-export type BooksError = z.infer<typeof booksError>;
+export interface BooksError {
+  error: string;
+}

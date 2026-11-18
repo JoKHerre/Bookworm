@@ -12,8 +12,6 @@ export const saveRatingBody = z
   })
   .strict();
 
-export type SaveRatingBody = z.infer<typeof saveRatingBody>;
-
 export interface BookRatingResponse {
   bookKey: string;
   rating: number;
