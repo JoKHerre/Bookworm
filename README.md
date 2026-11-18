@@ -96,6 +96,19 @@ pnpm dev:all
 - Frontend: <http://localhost:5173>
 - API: <http://localhost:3001>
 
+## Importing books
+
+Books can be imported from a CSV file with a header row. The supported columns are:
+
+| Column     | Required | Description                                      |
+| ---------- | -------- | ------------------------------------------------ |
+| `title`    | Yes      | The book's title                                 |
+| `author`   | No       | The book's author                                |
+| `isbn`     | No       | ISBN-10 or ISBN-13                               |
+| `book_key` | No       | Open Library work key, such as `/works/OL45883W` |
+
+Column names are not case-sensitive and may appear in any order. Files must end in `.csv`, be non-empty, and be at most 1 MB with at most 500 rows. The rules live in [`shared/bookImport.ts`](shared/bookImport.ts).
+
 ## Database schema
 
 Tables are defined in [`server/src/db/schema.ts`](server/src/db/schema.ts) with [Drizzle ORM](https://orm.drizzle.team/). After editing the schema, or after pulling someone else's schema changes, sync your local database:
