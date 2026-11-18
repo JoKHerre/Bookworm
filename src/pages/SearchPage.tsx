@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   BOOK_GENRES,
@@ -14,6 +14,30 @@ import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
 type ViewMode = "grid" | "list";
+type Filters = Omit<BookSearchQuery, "q">;
+
+// Filters live in the URL beside q, so a refresh or Back keeps them.
+// Values the filters don't offer are ignored.
+function filtersFromParams(params: URLSearchParams): Filters {
+  const genres = params.getAll("genre");
+  return {
+    genre: BOOK_GENRES.filter((genre) => genres.includes(genre)),
+    language:
+      BOOK_LANGUAGES.find((value) => value === params.get("language")) ?? "",
+    year:
+      PUBLICATION_YEAR_RANGES.find((value) => value === params.get("year")) ??
+      "",
+  };
+}
+
+function paramsFor(q: string, { genre, language, year }: Filters) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  for (const value of genre) params.append("genre", value);
+  if (language) params.set("language", language);
+  if (year) params.set("year", year);
+  return params;
+}
 
 function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,12 +50,17 @@ function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedGenres, setSelectedGenres] = useState<
-    BookSearchQuery["genre"]
-  >([]);
-  const [language, setLanguage] = useState<BookSearchQuery["language"]>("");
-  const [publicationYearRange, setPublicationYearRange] =
-    useState<BookSearchQuery["year"]>("");
+  // memoized on the query string so the search effect sees stable arrays
+  const searchString = searchParams.toString();
+  const filters = useMemo(
+    () => filtersFromParams(new URLSearchParams(searchString)),
+    [searchString],
+  );
+  const {
+    genre: selectedGenres,
+    language,
+    year: publicationYearRange,
+  } = filters;
   const hasActiveFilters =
     selectedGenres.length > 0 || language !== "" || publicationYearRange !== "";
   const genreFilterRef = useRef<HTMLDetailsElement>(null);
@@ -85,11 +114,7 @@ function SearchPage() {
       setError("");
 
       try {
-        const data = await searchBooks(submittedQuery, signal, {
-          genre: selectedGenres,
-          language,
-          year: publicationYearRange,
-        });
+        const data = await searchBooks(submittedQuery, signal, filters);
         if (!signal.aborted) {
           setBooks(data.books);
           setTotal(data.total);
@@ -108,13 +133,7 @@ function SearchPage() {
 
     void search();
     return () => controller.abort();
-  }, [
-    submittedQuery,
-    searchAttempt,
-    selectedGenres,
-    language,
-    publicationYearRange,
-  ]);
+  }, [submittedQuery, searchAttempt, filters]);
 
   useEffect(() => {
     if (!showSuggestions) return;
@@ -182,7 +201,7 @@ function SearchPage() {
     if (trimmed === submittedQuery) {
       setSearchAttempt((attempt) => attempt + 1);
     } else {
-      setSearchParams(trimmed ? { q: trimmed } : {});
+      setSearchParams(paramsFor(trimmed, filters));
     }
   }
 
@@ -194,10 +213,14 @@ function SearchPage() {
     void navigate(bookDetailsPath(book.key), { state });
   }
 
+  function updateFilters(changes: Partial<Filters>) {
+    setSearchParams(paramsFor(submittedQuery, { ...filters, ...changes }), {
+      replace: true,
+    });
+  }
+
   function resetFilters() {
-    setSelectedGenres([]);
-    setLanguage("");
-    setPublicationYearRange("");
+    updateFilters({ genre: [], language: "", year: "" });
   }
 
   return (
@@ -276,11 +299,11 @@ function SearchPage() {
                   type="checkbox"
                   checked={selectedGenres.includes(genre)}
                   onChange={(event) =>
-                    setSelectedGenres((selected) =>
-                      event.target.checked
-                        ? [...selected, genre]
-                        : selected.filter((value) => value !== genre),
-                    )
+                    updateFilters({
+                      genre: event.target.checked
+                        ? [...selectedGenres, genre]
+                        : selectedGenres.filter((value) => value !== genre),
+                    })
                   }
                 />
                 {genre}
@@ -294,7 +317,9 @@ function SearchPage() {
           <select
             value={language}
             onChange={(event) =>
-              setLanguage(event.target.value as BookSearchQuery["language"])
+              updateFilters({
+                language: event.target.value as Filters["language"],
+              })
             }
           >
             <option value="">Any language</option>
@@ -309,9 +334,7 @@ function SearchPage() {
           <select
             value={publicationYearRange}
             onChange={(event) =>
-              setPublicationYearRange(
-                event.target.value as BookSearchQuery["year"],
-              )
+              updateFilters({ year: event.target.value as Filters["year"] })
             }
           >
             <option value="">Any year</option>

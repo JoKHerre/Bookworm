@@ -139,6 +139,22 @@ describe("SearchPage", () => {
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
   });
 
+  it("search page restores filters from the URL", async () => {
+    renderSearch(
+      "/search?q=dune&genre=Fantasy&genre=Unknown&language=French&year=1800",
+    );
+    await screen.findByText("Showing 2 of 2 results");
+
+    expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+      genre: ["Fantasy"],
+      language: "French",
+      year: "",
+    });
+    expect(screen.getByRole("checkbox", { name: "Fantasy" })).toBeChecked();
+    expect(screen.getByLabelText("Language")).toHaveValue("French");
+    expect(screen.getByLabelText("Publication year")).toHaveValue("");
+  });
+
   it("TST-01-T-1 search page switches between list and grid", async () => {
     renderSearch("/search?q=dune");
     await screen.findByText("Showing 2 of 2 results");
