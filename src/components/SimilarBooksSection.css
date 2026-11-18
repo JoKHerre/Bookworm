@@ -1,0 +1,47 @@
+.similar-books {
+  margin-top: 40px;
+  color: var(--olive);
+}
+
+.similar-books > h2 {
+  font-size: 24px;
+  border-bottom: 1.5px solid var(--tan);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.similar-books-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 180px;
+  gap: 24px;
+  overflow-x: auto;
+  padding: 8px 6px 20px;
+}
+
+.similar-books-retry {
+  padding: 8px 14px;
+  border: 1px solid var(--olive);
+  border-radius: 8px;
+  background: var(--olive);
+  color: var(--cream);
+  font: inherit;
+  cursor: pointer;
+}
+
+.similar-books-retry:hover {
+  background: var(--olive-hover);
+}
+
+.similar-books-retry:focus-visible,
+.similar-books-row:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .similar-books-row {
+    grid-auto-columns: 160px;
+    gap: 16px;
+  }
+}
