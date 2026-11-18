@@ -4,6 +4,7 @@ import type { AvailabilityResponse } from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../booksApi";
 import BookISBNSection from "../components/BookISBNSection";
+import SimilarBooks from "../components/SimilarBooks";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../ratingsApi";
 import StarRating from "../components/StarRating";
@@ -354,6 +355,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       )}
 
       {book && <BookISBNSection bookKey={bookKey} />}
+      {book && <SimilarBooks bookKey={bookKey} />}
     </main>
   );
 }

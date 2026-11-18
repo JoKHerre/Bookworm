@@ -1,10 +1,15 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Route, Routes, useLocation } from "react-router";
+import { Link, Route, Routes, useLocation } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AvailabilityResponse } from "../../shared/availability";
-import type { BookDetails } from "../../shared/books";
-import { getBookAvailability, getBookDetails, getBookISBNs } from "../booksApi";
+import type { BookDetails, SimilarBooksResponse } from "../../shared/books";
+import {
+  getBookAvailability,
+  getBookDetails,
+  getBookISBNs,
+  getSimilarBooks,
+} from "../booksApi";
 import { getRatings, saveRating } from "../ratingsApi";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
@@ -64,6 +69,7 @@ describe("BookDetailsPage", () => {
       rating: 4,
     });
     vi.mocked(getBookISBNs).mockRejectedValue(new Error("unused"));
+    vi.mocked(getSimilarBooks).mockReset().mockResolvedValue({ books: [] });
   });
 
   it("TST-01-T-1 details page shows the book", async () => {
@@ -240,6 +246,329 @@ describe("BookDetailsPage", () => {
 
       expect(await screen.findByText("Please sign in.")).toBeInTheDocument();
       expect(screen.getByRole("radio", { name: "2 stars" })).toBeChecked();
+    });
+  });
+
+  describe("similar books", () => {
+    const recommendations: SimilarBooksResponse = {
+      books: [
+        {
+          key: "/works/OL2W",
+          title: "Foundation",
+          author_name: ["Isaac Asimov"],
+        },
+        {
+          key: "/works/OL3W",
+          title: "A Wizard of Earthsea",
+          author_name: ["Ursula K. Le Guin"],
+        },
+      ],
+    };
+
+    it("DIS-02-T-3 loads recommendations after the book details", async () => {
+      let finishDetails: (book: BookDetails) => void = () => {};
+      let finishRecommendations: (
+        data: SimilarBooksResponse,
+      ) => void = () => {};
+      vi.mocked(getBookDetails).mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishDetails = resolve;
+        }),
+      );
+      vi.mocked(getSimilarBooks).mockReturnValueOnce(
+        new Promise((resolve) => {
+          finishRecommendations = resolve;
+        }),
+      );
+      renderDetails();
+
+      expect(getSimilarBooks).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole("region", { name: "Similar books" }),
+      ).not.toBeInTheDocument();
+
+      await act(async () => finishDetails(BOOK));
+      const region = screen.getByRole("region", { name: "Similar books" });
+      expect(within(region).getByRole("status")).toHaveTextContent(
+        "Loading similar books...",
+      );
+      expect(getSimilarBooks).toHaveBeenCalledWith(
+        BOOK.key,
+        expect.any(AbortSignal),
+      );
+
+      await act(async () => finishRecommendations(recommendations));
+      expect(
+        within(region)
+          .getAllByRole("button")
+          .map((card) => card.getAttribute("aria-label")),
+      ).toEqual([
+        "View details for Foundation by Isaac Asimov",
+        "View details for A Wizard of Earthsea by Ursula K. Le Guin",
+      ]);
+      expect(within(region).queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("DIS-02-T-3 skips recommendations when book details fail", async () => {
+      vi.mocked(getBookDetails).mockRejectedValueOnce(
+        new Error("Book not found"),
+      );
+      renderDetails();
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Book not found",
+      );
+      expect(getSimilarBooks).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole("region", { name: "Similar books" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("DIS-02-T-3 shows an empty recommendation response", async () => {
+      renderDetails();
+      const region = await screen.findByRole("region", {
+        name: "Similar books",
+      });
+
+      expect(
+        await within(region).findByText("No similar books found."),
+      ).toBeInTheDocument();
+      expect(within(region).queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("DIS-02-T-3 retries only the failed recommendations", async () => {
+      let finishRetry: (data: SimilarBooksResponse) => void = () => {};
+      vi.mocked(getSimilarBooks)
+        .mockRejectedValueOnce(new Error("Upstream failed"))
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            finishRetry = resolve;
+          }),
+        );
+      renderDetails();
+      const region = await screen.findByRole("region", {
+        name: "Similar books",
+      });
+      expect(await within(region).findByRole("alert")).toHaveTextContent(
+        "Unable to load similar books.",
+      );
+
+      await userEvent.click(
+        within(region).getByRole("button", { name: "Retry" }),
+      );
+      expect(within(region).getByRole("status")).toHaveTextContent(
+        "Loading similar books...",
+      );
+      expect(within(region).queryByRole("alert")).not.toBeInTheDocument();
+      expect(getSimilarBooks).toHaveBeenCalledTimes(2);
+      expect(getSimilarBooks).toHaveBeenLastCalledWith(
+        BOOK.key,
+        expect.any(AbortSignal),
+      );
+      expect(getBookDetails).toHaveBeenCalledTimes(1);
+      expect(getBookAvailability).toHaveBeenCalledTimes(1);
+      expect(getBookISBNs).not.toHaveBeenCalled();
+
+      await act(async () => finishRetry(recommendations));
+      expect(
+        within(region).getByRole("button", {
+          name: "View details for Foundation by Isaac Asimov",
+        }),
+      ).toBeInTheDocument();
+      expect(within(region).queryByRole("alert")).not.toBeInTheDocument();
+      expect(within(region).queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("DIS-02-T-3 opens a recommendation and returns with Back", async () => {
+      vi.mocked(getBookDetails)
+        .mockResolvedValueOnce(BOOK)
+        .mockResolvedValueOnce({
+          ...BOOK,
+          key: "/works/OL2W",
+          title: "Foundation",
+          authors: ["Isaac Asimov"],
+        });
+      vi.mocked(getSimilarBooks)
+        .mockResolvedValueOnce(recommendations)
+        .mockReturnValueOnce(new Promise(() => {}));
+      renderDetails();
+
+      await userEvent.click(
+        await screen.findByRole("button", {
+          name: "View details for Foundation by Isaac Asimov",
+        }),
+      );
+      expect(
+        await screen.findByRole("heading", { name: "Foundation", level: 1 }),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(getSimilarBooks).toHaveBeenLastCalledWith(
+          "/works/OL2W",
+          expect.any(AbortSignal),
+        ),
+      );
+      const region = screen.getByRole("region", { name: "Similar books" });
+      expect(within(region).getByRole("status")).toHaveTextContent(
+        "Loading similar books...",
+      );
+      expect(within(region).queryByRole("button")).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Back" }));
+      expect(
+        await screen.findByRole("heading", { name: "Dune", level: 1 }),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(getSimilarBooks).toHaveBeenLastCalledWith(
+          BOOK.key,
+          expect.any(AbortSignal),
+        ),
+      );
+    });
+
+    it.each(["success", "failure"])(
+      "DIS-02-T-3 ignores late %s after changing books",
+      async (outcome) => {
+        let finishOld: () => void = () => {};
+        let finishNew: (data: SimilarBooksResponse) => void = () => {};
+        vi.mocked(getBookDetails)
+          .mockResolvedValueOnce(BOOK)
+          .mockResolvedValueOnce({
+            ...BOOK,
+            key: "/works/OL2W",
+            title: "Foundation",
+            authors: ["Isaac Asimov"],
+          });
+        vi.mocked(getSimilarBooks)
+          .mockReturnValueOnce(
+            new Promise((resolve, reject) => {
+              finishOld = () => {
+                if (outcome === "success") {
+                  resolve({
+                    books: [
+                      { key: "/works/OL9W", title: "Old recommendation" },
+                    ],
+                  });
+                } else {
+                  reject(new Error("Late failure"));
+                }
+              };
+            }),
+          )
+          .mockReturnValueOnce(
+            new Promise((resolve) => {
+              finishNew = resolve;
+            }),
+          );
+
+        renderWithProviders(
+          <>
+            <Link to="/books/works/OL2W">Another book</Link>
+            <Routes>
+              <Route path="/books/*" element={<BookDetailsPage />} />
+            </Routes>
+          </>,
+          { route: "/books/works/OL1W" },
+        );
+        await screen.findByRole("region", { name: "Similar books" });
+        const oldSignal = vi.mocked(getSimilarBooks).mock.calls[0]?.[1];
+
+        await userEvent.click(
+          screen.getByRole("link", { name: "Another book" }),
+        );
+        await screen.findByRole("heading", { name: "Foundation", level: 1 });
+        await waitFor(() => expect(getSimilarBooks).toHaveBeenCalledTimes(2));
+        expect(oldSignal?.aborted).toBe(true);
+
+        await act(async () => finishOld());
+        const region = screen.getByRole("region", { name: "Similar books" });
+        expect(within(region).getByRole("status")).toHaveTextContent(
+          "Loading similar books...",
+        );
+        expect(within(region).queryByRole("alert")).not.toBeInTheDocument();
+        expect(
+          screen.queryByText("Old recommendation"),
+        ).not.toBeInTheDocument();
+
+        await act(async () =>
+          finishNew({
+            books: [{ key: "/works/OL3W", title: "Current recommendation" }],
+          }),
+        );
+        expect(
+          within(region).getByRole("button", {
+            name: "View details for Current recommendation by Unknown author",
+          }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it("DIS-02-T-3 aborts recommendations when leaving the page", async () => {
+      vi.mocked(getSimilarBooks).mockReturnValueOnce(new Promise(() => {}));
+      const { unmount } = renderDetails();
+      await screen.findByRole("region", { name: "Similar books" });
+      const signal = vi.mocked(getSimilarBooks).mock.calls[0]?.[1];
+      expect(signal?.aborted).toBe(false);
+
+      unmount();
+      expect(signal?.aborted).toBe(true);
+    });
+
+    it("DIS-02-T-3 loads recommendations without waiting for availability or ISBNs", async () => {
+      vi.mocked(getSimilarBooks).mockResolvedValueOnce(recommendations);
+      vi.mocked(getBookAvailability).mockReturnValueOnce(new Promise(() => {}));
+      vi.mocked(getBookISBNs).mockReturnValueOnce(new Promise(() => {}));
+      renderDetails();
+
+      expect(
+        await screen.findByRole("button", {
+          name: "View details for Foundation by Isaac Asimov",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Checking library...")).toBeInTheDocument();
+      expect(getBookISBNs).not.toHaveBeenCalled();
+
+      await userEvent.click(
+        screen.getByRole("heading", { name: "ISBNs", level: 2 }),
+      );
+      await waitFor(() => expect(getBookISBNs).toHaveBeenCalledTimes(1));
+      expect(
+        screen.getByRole("button", {
+          name: "View details for Foundation by Isaac Asimov",
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it("DIS-02-T-3 keeps availability and ISBNs usable while recommendations load", async () => {
+      vi.mocked(getSimilarBooks).mockReturnValueOnce(new Promise(() => {}));
+      vi.mocked(getBookISBNs).mockResolvedValueOnce({
+        groups: {
+          physical: { isbn_13: ["9780306406157"], isbn_10: [] },
+          ebook: { isbn_13: [], isbn_10: [] },
+          other: { isbn_13: [], isbn_10: [] },
+        },
+        pagination: {
+          offset: 0,
+          editionsChecked: 1,
+          totalEditions: 1,
+          nextOffset: null,
+        },
+      });
+      renderDetails();
+
+      expect(
+        await screen.findByText(
+          "No catalog match was found for the ISBNs checked.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByText("A desert planet.")).toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole("heading", { name: "ISBNs", level: 2 }),
+      );
+      expect(await screen.findByText("9780306406157")).toBeInTheDocument();
+      const region = screen.getByRole("region", { name: "Similar books" });
+      expect(within(region).getByRole("status")).toHaveTextContent(
+        "Loading similar books...",
+      );
     });
   });
 
