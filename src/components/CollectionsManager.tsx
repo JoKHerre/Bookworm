@@ -206,6 +206,11 @@ export default function CollectionsManager() {
       <div className="collections-actions">
         <button
           type="submit"
+          className={
+            editor.kind === "delete"
+              ? "collections-button--danger"
+              : "collections-button--primary"
+          }
           disabled={
             pending ||
             (editor.kind === "rename" && name.trim() === editor.collection.name)
@@ -254,6 +259,7 @@ export default function CollectionsManager() {
         </div>
         <button
           ref={newButton}
+          className="collections-button--primary"
           type="button"
           disabled={pending || loading || !!loadError}
           onClick={(event) =>
@@ -311,6 +317,7 @@ export default function CollectionsManager() {
                       </button>
                       <button
                         type="button"
+                        className="collections-button--delete"
                         disabled={pending}
                         aria-label={`Delete ${collection.name}`}
                         onClick={(event) =>
