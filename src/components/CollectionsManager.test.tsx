@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import CollectionsManager from "./CollectionsManager";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 
@@ -22,9 +22,48 @@ async function openCreate() {
   );
   return screen.getByRole("textbox", { name: "Collection name" });
 }
-afterEach(() => vi.unstubAllGlobals());
-
 describe("CollectionsManager", () => {
+  it("reports malformed collection lists and recovers on retry", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(jsonResponse({ collections: [collection] }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(<CollectionsManager />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not read your collections",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Favorites")).toBeInTheDocument();
+  });
+  it.each(["create", "rename"])(
+    "preserves input and existing collections after a malformed %s response",
+    async (operation) => {
+      const { fetchMock } = setup();
+      await screen.findByText("Favorites");
+      if (operation === "create") await openCreate();
+      else
+        await userEvent.click(
+          screen.getByRole("button", { name: "Rename Favorites" }),
+        );
+      const input = screen.getByRole("textbox", { name: "Collection name" });
+      await userEvent.clear(input);
+      await userEvent.type(input, "School");
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({}, operation === "create" ? 201 : 200),
+      );
+      await userEvent.click(
+        screen.getByRole("button", {
+          name: operation === "create" ? "Create collection" : "Save changes",
+        }),
+      );
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not read",
+      );
+      expect(screen.getByText("Favorites")).toBeInTheDocument();
+      expect(input).toHaveValue("School");
+    },
+  );
   it("loads names and counts including empty collections", async () => {
     setup([collection, { ...collection, id: 8, name: "Empty", bookCount: 0 }]);
     expect(screen.getByText("Loading collections…")).toBeInTheDocument();
@@ -197,6 +236,10 @@ describe("CollectionsManager", () => {
     );
     expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
     expect(screen.getByText(/no longer available/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Refreshing your collections/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading collections…")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
   it("retries a failed initial load", async () => {

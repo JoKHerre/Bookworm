@@ -148,9 +148,7 @@ export default function CollectionsManager() {
           : "Could not save changes. Please try again.";
       if (failure instanceof CollectionApiError && failure.status === 404) {
         closeEditor(true);
-        setNotice(
-          "This collection is no longer available. Refreshing your collections…",
-        );
+        setNotice("This collection is no longer available.");
         setAttempt((current) => current + 1);
       } else setError(message);
     } finally {
