@@ -4,6 +4,7 @@ import z from "zod";
 import { db } from "../db/index.ts"; // postgresql connection
 import { savedBooks } from "../db/schema.ts"; // saved books table definition
 import { requireAuth } from "../auth/middleware.ts"; // existing login check
+import { IMPORT_MAX_ROWS } from "../../../shared/bookImport.ts";
 import { openLibraryWorkKey } from "../../../shared/books.ts";
 import { READING_STATUSES } from "../../../shared/readingStatus.ts";
 
@@ -20,6 +21,14 @@ const saveBookBody = z
 const updateReadingStatusBody = z
   .object({
     readingStatus: z.enum(READING_STATUSES),
+  })
+  .strict();
+
+// define expected shape of request body for importing books: a bounded list of
+// work keys, with no other fields (such as a user ID)
+const importBooksBody = z
+  .object({
+    bookKeys: z.array(openLibraryWorkKey).min(1).max(IMPORT_MAX_ROWS),
   })
   .strict();
 
@@ -160,4 +169,31 @@ libraryRouter.post("/", requireAuth, async (req, res) => {
 
   // return success: 201 with the newly created saved book row as json
   res.status(201).json(savedBook);
+});
+
+// define the POST /api/library/import endpoint for saving many books at once
+// (the book importer); must be declared as its own path, not under /:id
+libraryRouter.post("/import", requireAuth, async (req, res) => {
+  const parsed = importBooksBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid import" });
+    return;
+  }
+
+  // a repeated key in one request counts once
+  const bookKeys = [...new Set(parsed.data.bookKeys)];
+
+  // one insert for the whole list; keys the user already saved are skipped
+  const inserted = await db
+    .insert(savedBooks)
+    .values(
+      bookKeys.map((bookKey) => ({ userId: res.locals.user!.id, bookKey })),
+    )
+    .onConflictDoNothing({ target: [savedBooks.userId, savedBooks.bookKey] })
+    .returning({ id: savedBooks.id });
+
+  res.json({
+    added: inserted.length,
+    alreadySaved: bookKeys.length - inserted.length,
+  });
 });

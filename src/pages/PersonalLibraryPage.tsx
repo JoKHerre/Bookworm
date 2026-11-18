@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
 import {
   READING_STATUSES,
@@ -288,6 +288,9 @@ function PersonalLibraryPage() {
           aria-labelledby="personal-library-title"
         >
           <h1 id="personal-library-title">My Library</h1>
+          <Link className="personal-library-import-link" to="/import">
+            Import books
+          </Link>
         </section>
 
         {/* saved books collection */}
