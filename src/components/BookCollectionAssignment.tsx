@@ -99,7 +99,7 @@ export default function BookCollectionAssignment({
       );
       setSelectedId("");
       setNotice(
-        `Added “${title}” to “${collection.name}”. This book is saved in My Library.`,
+        `Added “${title}” to “${collection.name}”. This book has also been saved to My Library.`,
       );
     } catch (failure) {
       if (!mounted.current) return;
@@ -121,9 +121,6 @@ export default function BookCollectionAssignment({
     }
   }
 
-  const allAdded =
-    collections.length > 0 &&
-    collections.every((collection) => collection.containsBook);
   return (
     <section className="book-collection-assignment" aria-label="Collections">
       <h3>Add to a collection</h3>
@@ -174,7 +171,7 @@ export default function BookCollectionAssignment({
                 <select
                   id={`${id}-collection`}
                   value={selectedId}
-                  disabled={pending || allAdded}
+                  disabled={pending}
                   onChange={(event) => {
                     setSelectedId(event.target.value);
                     setError("");
@@ -196,13 +193,12 @@ export default function BookCollectionAssignment({
                 <button
                   type="submit"
                   aria-label={pending ? "Adding…" : "Add to collection"}
-                  disabled={pending || !selectedId || allAdded}
+                  disabled={pending || !selectedId}
                 >
                   {pending ? "Adding…" : "Add"}
                 </button>
               </form>
             )}
-            {allAdded && <p>This book is already in all your collections.</p>}
             <div className="book-collection-links">
               <Link to="/personal-library">
                 Manage collections in My Library

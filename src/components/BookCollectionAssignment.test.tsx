@@ -145,9 +145,9 @@ describe("BookCollectionAssignment", () => {
     await selectCollection("8");
     await submit();
     expect(
-      await screen.findByText(/already in all your collections/),
+      await screen.findByText(/Added “Dune” to “School”/),
     ).toBeInTheDocument();
-    expect(select).toBeDisabled();
+    expect(select).toBeEnabled();
     const mutations = fetchMock.mock.calls.filter(
       ([, init]) => init?.method === "POST",
     );
@@ -186,12 +186,15 @@ describe("BookCollectionAssignment", () => {
       await screen.findByRole("option", { name: "Favorites" }),
     ).toBeEnabled();
   });
-  it("explains when the book is already in every collection", async () => {
+  it("keeps the dropdown enabled when every collection already contains the book", async () => {
     setup([{ ...FAVORITES, containsBook: true }]);
+    expect(await screen.findByRole("combobox")).toBeEnabled();
     expect(
-      await screen.findByText(/already in all your collections/),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toBeDisabled();
+      screen.queryByText(/already in all your collections/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Favorites — Already added" }),
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Add to collection" }),
     ).toBeDisabled();
@@ -256,8 +259,9 @@ describe("BookCollectionAssignment", () => {
     );
     await userEvent.click(retry);
     expect(
-      await screen.findByText(/already in all your collections/),
-    ).toBeInTheDocument();
+      await screen.findByRole("option", { name: "Favorites — Already added" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("combobox")).toBeEnabled();
   });
   it("retries a failed initial load", async () => {
     const fetchMock = vi

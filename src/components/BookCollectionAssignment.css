@@ -61,9 +61,28 @@
   background: var(--gold-wash);
 }
 
+.book-collection-assignment button[type="submit"] {
+  border-color: var(--gold-light);
+  background: var(--gold-light);
+  color: var(--olive);
+  font-weight: 600;
+}
+
+.book-collection-assignment button[type="submit"]:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: var(--gold-light);
+}
+
 .book-collection-assignment :disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+.book-collection-assignment button[type="submit"]:disabled {
+  border-color: var(--tan);
+  background: var(--gold-wash);
+  color: var(--olive);
+  opacity: 1;
 }
 
 .book-collection-assignment :is(button, select, a):focus-visible {
@@ -81,6 +100,16 @@
 
 .book-collection-links a {
   color: var(--olive);
+}
+
+.book-collection-links button {
+  margin-left: auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-color: var(--tan);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1.2;
 }
 
 @media (max-width: 480px) {
