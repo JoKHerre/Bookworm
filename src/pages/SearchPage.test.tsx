@@ -97,7 +97,27 @@ describe("SearchPage", () => {
   it("TST-01-T-1 search page says when nothing matches", async () => {
     vi.mocked(searchBooks).mockResolvedValue({ books: [], total: 0 });
     renderSearch("/search?q=zzzz");
-    expect(await screen.findByText("No results.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No books found for “zzzz”."),
+    ).toBeInTheDocument();
+  });
+
+  it("TST-01-T-1 search page offers to drop filters when nothing matches", async () => {
+    vi.mocked(searchBooks).mockResolvedValue({ books: [], total: 0 });
+    renderSearch("/search?q=zzzz&language=Spanish");
+    expect(
+      await screen.findByText("No books found for “zzzz” with these filters."),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Search without filters" }),
+    );
+    await waitFor(() =>
+      expect(searchBooks).toHaveBeenLastCalledWith("zzzz", expect.anything(), {
+        genre: [],
+        language: "",
+        year: "",
+      }),
+    );
   });
 
   it("TST-01-T-1 search page shows a search error", async () => {

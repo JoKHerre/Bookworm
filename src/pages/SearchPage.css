@@ -76,9 +76,28 @@
 
 .search-message {
   color: var(--olive);
-  opacity: 0.7;
   text-align: center;
   margin-top: 40px;
+}
+
+p.search-message,
+.search-message p {
+  opacity: 0.7;
+}
+
+.search-message p {
+  margin: 0 0 12px;
+}
+
+.search-message button {
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 18px;
+  color: var(--cream);
+  background: var(--olive);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
 }
 
 .search-message--error {

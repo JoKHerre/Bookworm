@@ -375,9 +375,19 @@ function SearchPage() {
         !visibleError &&
         searched &&
         visibleBooks.length === 0 && (
-          <p className="search-message" role="status">
-            No results.
-          </p>
+          <div className="search-message" role="status">
+            <p>
+              No books found for “{submittedQuery}”
+              {hasActiveFilters ? " with these filters." : "."}
+            </p>
+            {hasActiveFilters ? (
+              <button type="button" onClick={resetFilters}>
+                Search without filters
+              </button>
+            ) : (
+              <p>Check the spelling, or try fewer words.</p>
+            )}
+          </div>
         )}
 
       {!visibleLoading && !visibleError && visibleBooks.length > 0 && (
