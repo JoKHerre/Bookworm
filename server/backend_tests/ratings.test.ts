@@ -226,7 +226,7 @@ test("COL-04-T-4 lists an updated rating once with its latest value", async () =
   });
 });
 
-test("returns only the requested book's rating", async () => {
+test("REF-01-T-2 returns only the requested book's rating", async () => {
   const user = await createSignedInUser();
   const [first, second] = [createTestBookKey(), createTestBookKey()];
   await putRating({ bookKey: first, rating: 2 }, user.token);
@@ -248,7 +248,7 @@ test("returns only the requested book's rating", async () => {
   assert.deepEqual(await unrated.json(), { ratings: [] });
 });
 
-test("rejects an invalid bookKey filter", async () => {
+test("REF-01-T-2 rejects an invalid bookKey filter", async () => {
   const user = await createSignedInUser();
   for (const query of [
     "?bookKey=OL1W",

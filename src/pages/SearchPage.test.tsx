@@ -139,7 +139,7 @@ describe("SearchPage", () => {
     expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
   });
 
-  it("search page restores filters from the URL", async () => {
+  it("REF-01-T-2 search page restores filters from the URL", async () => {
     renderSearch(
       "/search?q=dune&genre=Fantasy&genre=Unknown&language=French&year=1800",
     );

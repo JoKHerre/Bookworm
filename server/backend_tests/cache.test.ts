@@ -12,7 +12,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-test("concurrent callers share one load", async () => {
+test("REF-01-T-2 concurrent callers share one load", async () => {
   const cache = new PromiseCache<number>(60_000, 10);
   let loads = 0;
   const load = async () => ++loads;
@@ -27,7 +27,7 @@ test("concurrent callers share one load", async () => {
   assert.equal(loads, 1);
 });
 
-test("a rejected load is retried by the next caller", async () => {
+test("REF-01-T-2 a rejected load is retried by the next caller", async () => {
   const cache = new PromiseCache<string>(60_000, 10);
   await assert.rejects(
     cache.get("k", async () => {
@@ -38,7 +38,7 @@ test("a rejected load is retried by the next caller", async () => {
   assert.equal(await cache.get("k", async () => "ok"), "ok");
 });
 
-test("an expired entry is loaded again", async (t) => {
+test("REF-01-T-2 an expired entry is loaded again", async (t) => {
   t.mock.timers.enable({ apis: ["Date"] });
   const cache = new PromiseCache<number>(1000, 10);
   let loads = 0;
@@ -49,7 +49,7 @@ test("an expired entry is loaded again", async (t) => {
   assert.equal(await cache.get("k", load), 2);
 });
 
-test("the least recently used entry is dropped past the size cap", async () => {
+test("REF-01-T-2 the least recently used entry is dropped past the size cap", async () => {
   const cache = new PromiseCache<string>(60_000, 2);
   const loads: string[] = [];
   const load = (key: string) => async () => {
@@ -66,7 +66,7 @@ test("the least recently used entry is dropped past the size cap", async () => {
   assert.deepEqual(loads, ["a", "b", "c", "b"]);
 });
 
-test("the shared load is aborted only after every waiting caller aborts", async () => {
+test("REF-01-T-2 the shared load is aborted only after every waiting caller aborts", async () => {
   const cache = new PromiseCache<string>(60_000, 10);
   const pending = deferred<string>();
   let loadSignal: AbortSignal | undefined;
@@ -93,7 +93,7 @@ test("the shared load is aborted only after every waiting caller aborts", async 
   pending.resolve("stale");
 });
 
-test("a caller without a signal keeps the shared load alive", async () => {
+test("REF-01-T-2 a caller without a signal keeps the shared load alive", async () => {
   const cache = new PromiseCache<string>(60_000, 10);
   const pending = deferred<string>();
   let loadSignal: AbortSignal | undefined;

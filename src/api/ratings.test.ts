@@ -57,7 +57,7 @@ describe("api/ratings", () => {
     await expect(getRatings()).rejects.toThrow("Could not load your ratings.");
   });
 
-  it("asks for one book's rating", async () => {
+  it("REF-01-T-2 asks for one book's rating", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ratings: [] }));
     vi.stubGlobal("fetch", fetchMock);
     await getRatings(undefined, "/works/OL1W");

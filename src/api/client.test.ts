@@ -3,7 +3,7 @@ import { jsonResponse } from "../test/renderWithProviders";
 import { ApiRequestError, apiRequest, errorMessage, userError } from "./client";
 
 describe("api/client", () => {
-  it("sends a JSON body and returns the parsed response", async () => {
+  it("REF-01-T-2 sends a JSON body and returns the parsed response", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -17,7 +17,7 @@ describe("api/client", () => {
     });
   });
 
-  it("returns null for an empty body", async () => {
+  it("REF-01-T-2 returns null for an empty body", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
@@ -25,7 +25,7 @@ describe("api/client", () => {
     await expect(apiRequest("/api/x")).resolves.toBeNull();
   });
 
-  it("reports the status and server message of a failed response", async () => {
+  it("REF-01-T-2 reports the status and server message of a failed response", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse({ error: "Nope" }, 409)),
@@ -35,12 +35,12 @@ describe("api/client", () => {
     expect(error).toMatchObject({ status: 409, serverMessage: "Nope" });
   });
 
-  it("reports a network failure as status 0", async () => {
+  it("REF-01-T-2 reports a network failure as status 0", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(apiRequest("/api/x")).rejects.toMatchObject({ status: 0 });
   });
 
-  it("rethrows the abort when the caller cancelled", async () => {
+  it("REF-01-T-2 rethrows the abort when the caller cancelled", async () => {
     const controller = new AbortController();
     const abort = new DOMException("Aborted", "AbortError");
     vi.stubGlobal(
@@ -55,7 +55,7 @@ describe("api/client", () => {
     ).rejects.toBe(abort);
   });
 
-  it("picks a status message, then the server message, then the fallback", () => {
+  it("REF-01-T-2 picks a status message, then the server message, then the fallback", () => {
     const messages = {
       fallback: "Fallback",
       byStatus: { 404: "Missing" },
@@ -76,7 +76,7 @@ describe("api/client", () => {
     expect(errorMessage(new TypeError("other"), messages)).toBe("Fallback");
   });
 
-  it("passes errors other than failed requests through userError", () => {
+  it("REF-01-T-2 passes errors other than failed requests through userError", () => {
     const abort = new DOMException("Aborted", "AbortError");
     expect(userError(abort, { fallback: "Fallback" })).toBe(abort);
   });

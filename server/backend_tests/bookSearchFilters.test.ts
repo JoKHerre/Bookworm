@@ -128,7 +128,7 @@ test("SRC-04-T-2 applies every first-publication year range", async () => {
   }
 });
 
-test("SRC-04-T-2 keeps query syntax from escaping the filters", async () => {
+test("REF-01-T-2 keeps query syntax from escaping the filters", async () => {
   stubOpenLibrary(() => openLibraryResponse());
 
   const res = await get(

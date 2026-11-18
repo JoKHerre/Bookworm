@@ -20,13 +20,13 @@ function postJson(body: string) {
   });
 }
 
-test("malformed JSON is a bad request", async () => {
+test("REF-01-T-2 malformed JSON is a bad request", async () => {
   const response = await postJson("{");
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "Bad request" });
 });
 
-test("an oversized body says so", async () => {
+test("REF-01-T-2 an oversized body says so", async () => {
   const response = await postJson(
     JSON.stringify({ email: "x".repeat(200_000) }),
   );
