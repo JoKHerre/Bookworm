@@ -5,6 +5,7 @@ import express from "express";
 import type { BookDetails } from "../../shared/books.ts";
 import { toTags } from "../../shared/tags.ts";
 import { booksRouter } from "../src/routes/books.ts";
+import { clearOpenLibraryCache } from "../src/services/openLibrary.ts";
 
 const originalFetch = globalThis.fetch;
 const workKey = "/works/OL1W";
@@ -45,6 +46,7 @@ after(async () => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  clearOpenLibraryCache();
 });
 
 test("COL-06-T-1 normalizes subjects into lowercase tags", () => {

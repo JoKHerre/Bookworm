@@ -4,7 +4,10 @@ import { after, afterEach, before, test } from "node:test";
 import express from "express";
 import { similarBooksResponse } from "../../shared/books.ts";
 import { booksRouter } from "../src/routes/books.ts";
-import { getSimilarBooks } from "../src/services/openLibrary.ts";
+import {
+  clearOpenLibraryCache,
+  getSimilarBooks,
+} from "../src/services/openLibrary.ts";
 
 const originalFetch = globalThis.fetch;
 const workKey = "/works/OL1W";
@@ -25,6 +28,8 @@ function stubOpenLibrary(
   respond: (url: URL, init?: RequestInit) => Response | Promise<Response>,
 ) {
   upstreamRequests = [];
+  // a new stub is a new upstream, so forget works cached from the last one
+  clearOpenLibraryCache();
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.origin, "https://openlibrary.org");
