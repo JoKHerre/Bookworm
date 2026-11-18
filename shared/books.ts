@@ -116,6 +116,23 @@ export const bookSearchResponse = z.object({
 
 export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
 
+// GET /api/books/similar?key=/works/OL...W
+
+export const similarBooksQuery = z.object({
+  key: openLibraryWorkKey,
+});
+
+export const similarBookResult = bookSearchResult.extend({
+  key: openLibraryWorkKey,
+  title: z.string().refine((title) => title.trim().length > 0),
+});
+
+export const similarBooksResponse = z.object({
+  books: z.array(similarBookResult).max(6),
+});
+
+export type SimilarBooksResponse = z.infer<typeof similarBooksResponse>;
+
 // GET /api/books/details?key=/works/OL...W
 
 export const bookDetailsQuery = z.object({

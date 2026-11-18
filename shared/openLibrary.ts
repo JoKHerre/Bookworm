@@ -1,11 +1,21 @@
 import z from "zod";
 
-import { bookSearchResult } from "./books.ts";
+import { bookSearchResult, similarBookResult } from "./books.ts";
 
 export const openLibrarySearchResponse = z.object({
   docs: z.array(bookSearchResult),
   numFound: z.number().optional(),
   num_found: z.number().optional(),
+});
+
+export const openLibrarySimilarBook = similarBookResult.extend({
+  key: z.string(),
+  subject: z.array(z.string()).optional(),
+});
+
+// Validate each candidate separately so one malformed book does not lose the rest.
+export const openLibrarySimilarSearchResponse = z.object({
+  docs: z.array(z.unknown()),
 });
 
 export const openLibraryWork = z.object({
