@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { getBookDetails, searchBooks } from "./booksApi";
-import { jsonResponse } from "./test/renderWithProviders";
+import { getBookDetails, searchBooks } from "./books";
+import { jsonResponse } from "../test/renderWithProviders";
 
 const signal = new AbortController().signal;
 
-describe("booksApi", () => {
+describe("api/books", () => {
   it("TST-01-T-1 searchBooks builds its query", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ results: [] }));
     vi.stubGlobal("fetch", fetchMock);

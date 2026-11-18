@@ -5,7 +5,7 @@ import {
   type BookSearchQuery,
   type BookSearchResult,
 } from "../../shared/books";
-import { getBookSuggestions, searchBooks } from "../booksApi";
+import { getBookSuggestions, searchBooks } from "../api/books";
 import BookCard from "../components/BookCard";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";

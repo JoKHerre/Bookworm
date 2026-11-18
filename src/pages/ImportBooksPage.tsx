@@ -10,7 +10,8 @@ import {
   validateImportRows,
   type ValidateImportResult,
 } from "../../shared/csvImport";
-import { importBooks, type ImportBooksResult } from "../libraryApi";
+import type { ImportBooksResponse } from "../../shared/library";
+import { importBooks } from "../api/library";
 import "./ImportBooksPage.css";
 
 function formatSize(bytes: number) {
@@ -24,7 +25,7 @@ function ImportBooksPage() {
   const [parsed, setParsed] = useState<ValidateImportResult | null>(null); // the valid rows and row errors found in the file
   const [readyName, setReadyName] = useState(""); // name of the file that was read
   const [importing, setImporting] = useState(false); // whether the books are being saved to the library
-  const [result, setResult] = useState<ImportBooksResult | null>(null); // counts returned after importing
+  const [result, setResult] = useState<ImportBooksResponse | null>(null); // counts returned after importing
 
   // choosing (or clearing) a file replaces any previous result
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {

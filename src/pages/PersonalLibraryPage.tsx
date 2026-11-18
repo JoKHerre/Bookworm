@@ -7,7 +7,15 @@ import {
 } from "../../shared/readingStatus";
 import { filterByTags, libraryTags } from "../../shared/tags";
 import StarDisplay from "../components/StarDisplay";
-import { getRatings } from "../ratingsApi";
+import type { SavedBook } from "../../shared/library";
+import { getBookDetails } from "../api/books";
+import { errorMessage } from "../api/client";
+import {
+  getLibrary,
+  removeSavedBook,
+  updateReadingStatus as saveReadingStatus,
+} from "../api/library";
+import { getRatings } from "../api/ratings";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
@@ -27,14 +35,6 @@ const READING_STATUS_OPTIONS = READING_STATUSES.map((value) => ({
   value,
   label: READING_STATUS_LABELS[value],
 }));
-
-// a saved book as returned by GET /api/library
-interface SavedBook {
-  id: number;
-  bookKey: string;
-  createdAt: string;
-  readingStatus: ReadingStatus;
-}
 
 interface PersonalLibraryBook extends SavedBook {
   details: BookDetails | null;
@@ -60,29 +60,22 @@ function PersonalLibraryPage() {
   const [loadAttempt, setLoadAttempt] = useState(0); // bumped by "Try again" to reload
 
   async function removeBook(id: number, title: string) {
-    const genericRemovalError = `Could not remove “${title}” from your library.`;
-    let requestError = "";
-
     setRemovalError("");
     setRemovingBookIds((currentIds) => new Set(currentIds).add(id));
 
     try {
-      const response = await fetch(`/api/library/${id}`, { method: "DELETE" });
-
-      if (response.status === 401) {
-        requestError = SESSION_EXPIRED_MESSAGE;
-      } else if (response.status === 404) {
-        requestError = `Could not find “${title}” in your library to remove.`;
-      } else if (!response.ok) {
-        requestError = genericRemovalError;
-      } else {
-        setBooks((currentBooks) =>
-          currentBooks.filter((book) => book.id !== id),
-        );
-      }
-    } catch {
-      // Network failures should use a friendly message instead of a browser error.
-      requestError = genericRemovalError;
+      await removeSavedBook(id);
+      setBooks((currentBooks) => currentBooks.filter((book) => book.id !== id));
+    } catch (err) {
+      setRemovalError(
+        errorMessage(err, {
+          fallback: `Could not remove “${title}” from your library.`,
+          byStatus: {
+            401: SESSION_EXPIRED_MESSAGE,
+            404: `Could not find “${title}” in your library to remove.`,
+          },
+        }),
+      );
     } finally {
       setRemovingBookIds((currentIds) => {
         const nextIds = new Set(currentIds);
@@ -90,8 +83,6 @@ function PersonalLibraryPage() {
         return nextIds;
       });
     }
-
-    if (requestError) setRemovalError(requestError);
   }
 
   async function updateReadingStatus(
@@ -115,44 +106,16 @@ function PersonalLibraryPage() {
       ),
     );
 
-    let requestError = "";
     try {
-      const response = await fetch(`/api/library/${id}/reading-status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ readingStatus }),
-      });
-
-      if (response.status === 401) {
-        requestError = SESSION_EXPIRED_MESSAGE;
-      } else if (response.status === 404) {
-        requestError = `Could not find “${title}” in your library to update.`;
-      } else if (!response.ok) {
-        requestError = STATUS_UPDATE_ERROR_MESSAGE;
-      } else {
-        const data = (await response.json()) as {
-          id: number;
-          readingStatus: ReadingStatus;
-        };
-        setBooks((currentBooks) =>
-          currentBooks.map((book) =>
-            book.id === id
-              ? { ...book, readingStatus: data.readingStatus }
-              : book,
-          ),
-        );
-      }
-    } catch {
-      requestError = STATUS_UPDATE_ERROR_MESSAGE;
-    } finally {
-      setUpdatingReadingStatusIds((currentIds) => {
-        const nextIds = new Set(currentIds);
-        nextIds.delete(id);
-        return nextIds;
-      });
-    }
-
-    if (requestError) {
+      const updated = await saveReadingStatus(id, readingStatus);
+      setBooks((currentBooks) =>
+        currentBooks.map((book) =>
+          book.id === id
+            ? { ...book, readingStatus: updated.readingStatus }
+            : book,
+        ),
+      );
+    } catch (err) {
       setBooks((currentBooks) =>
         currentBooks.map((book) =>
           book.id === id ? { ...book, readingStatus: previousStatus } : book,
@@ -160,13 +123,26 @@ function PersonalLibraryPage() {
       );
       setReadingStatusErrors((currentErrors) => ({
         ...currentErrors,
-        [id]: requestError,
+        [id]: errorMessage(err, {
+          fallback: STATUS_UPDATE_ERROR_MESSAGE,
+          byStatus: {
+            401: SESSION_EXPIRED_MESSAGE,
+            404: `Could not find “${title}” in your library to update.`,
+          },
+        }),
       }));
+    } finally {
+      setUpdatingReadingStatusIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(id);
+        return nextIds;
+      });
     }
   }
 
   useEffect(() => {
-    let isCurrentRequest = true;
+    const controller = new AbortController();
+    const { signal } = controller;
 
     // fetch the saved books, then each book's details; a failed details lookup leaves details null
     async function loadPersonalLibrary() {
@@ -174,58 +150,39 @@ function PersonalLibraryPage() {
       setError("");
 
       try {
-        const response = await fetch("/api/library");
-
-        if (response.status === 401) {
-          throw new Error(SESSION_EXPIRED_MESSAGE);
-        }
-        if (!response.ok) {
-          throw new Error(LOAD_ERROR);
-        }
-
-        const data = (await response.json()) as { books: SavedBook[] };
+        const { books: savedBooks } = await getLibrary(signal);
         const booksWithDetails = await Promise.all(
-          data.books.map(async (savedBook) => {
-            try {
-              const detailsResponse = await fetch(
-                `/api/books/details?key=${encodeURIComponent(savedBook.bookKey)}`,
-              );
-
-              if (!detailsResponse.ok) {
-                return { ...savedBook, details: null };
-              }
-
-              const details = (await detailsResponse.json()) as BookDetails;
-              return { ...savedBook, details };
-            } catch {
-              return { ...savedBook, details: null };
-            }
-          }),
+          savedBooks.map(async (savedBook) => ({
+            ...savedBook,
+            details: await getBookDetails(savedBook.bookKey, signal).catch(
+              () => null,
+            ),
+          })),
         );
 
         // ratings are optional extras: if they fail to load, cards just show no rating
-        const userRatings = await getRatings().catch(() => []);
+        const userRatings = await getRatings(signal).catch(() => []);
 
-        if (isCurrentRequest) {
+        if (!signal.aborted) {
           setBooks(booksWithDetails);
           setRatings(new Map(userRatings.map((r) => [r.bookKey, r.rating])));
         }
       } catch (loadError) {
-        if (isCurrentRequest) {
-          setError(loadError instanceof Error ? loadError.message : LOAD_ERROR);
+        if (!signal.aborted) {
+          setError(
+            errorMessage(loadError, {
+              fallback: LOAD_ERROR,
+              byStatus: { 401: SESSION_EXPIRED_MESSAGE },
+            }),
+          );
         }
       } finally {
-        if (isCurrentRequest) {
-          setLoading(false);
-        }
+        if (!signal.aborted) setLoading(false);
       }
     }
 
     void loadPersonalLibrary();
-
-    return () => {
-      isCurrentRequest = false;
-    };
+    return () => controller.abort();
   }, [loadAttempt]);
 
   function viewBook(bookKey: string) {

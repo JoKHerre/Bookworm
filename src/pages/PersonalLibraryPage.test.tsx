@@ -112,7 +112,7 @@ describe("PersonalLibraryPage", () => {
     stubApi(FIXTURES);
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Dune")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/api/library");
+    expect(fetchMock).toHaveBeenCalledWith("/api/library", expect.anything());
   });
 
   it("TST-01-T-1 library empty state", async () => {

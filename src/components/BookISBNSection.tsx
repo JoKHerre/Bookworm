@@ -6,7 +6,7 @@ import {
   type BookISBNs,
   type BookISBNsQuery,
 } from "../../shared/books";
-import { getBookISBNs } from "../booksApi";
+import { getBookISBNs } from "../api/books";
 import "./BookISBNSection.css";
 
 const isbnFormatLabels: Record<BookISBNFormat, string> = {

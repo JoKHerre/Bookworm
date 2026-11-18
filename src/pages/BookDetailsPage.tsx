@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import type { AvailabilityResponse } from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
-import { getBookDetails, getBookAvailability } from "../booksApi";
+import { getBookDetails, getBookAvailability } from "../api/books";
 import BookISBNSection from "../components/BookISBNSection";
 import type { AuthLocationState, BookDetailsLocationState } from "../routes";
-import { getRatings, saveRating } from "../ratingsApi";
+import { errorMessage } from "../api/client";
+import { saveBook } from "../api/library";
+import { getRatings, saveRating } from "../api/ratings";
 import StarRating from "../components/StarRating";
 import { useAuth } from "../useAuth";
 import "./BookDetailsPage.css";
@@ -124,42 +126,25 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     setAvailabilityAttempt((attempt) => attempt + 1);
   }
 
-  // function to handle saving a book to the user's personal library
   async function handleSave() {
-    // set saving state to true and clear any previous save message
     setSaving(true);
     setSaveMessage("");
 
     try {
-      // send POST request with the bookKey to /api/library
-      const response = await fetch("/api/library", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookKey }),
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        error?: string;
-      };
-
-      // interpret response status + show appropriate message to user through saveMessage
-      if (response.status === 201) {
-        // success
-        setSaveMessage("Book saved to your library.");
-      } else if (response.status === 409) {
-        // duplicate conflict
-        setSaveMessage("This book is already in your library.");
-      } else if (response.status === 401) {
-        // unauthorized user
-        setSaveMessage("Please sign in to save books to your library.");
-      } else {
-        // other error: generic error msg
-        setSaveMessage(data.error ?? "Could not save this book.");
-      }
-    } catch {
-      // network or other error: generic error msg
-      setSaveMessage("Could not save this book.");
+      await saveBook(bookKey);
+      setSaveMessage("Book saved to your library.");
+    } catch (err) {
+      setSaveMessage(
+        errorMessage(err, {
+          fallback: "Could not save this book.",
+          byStatus: {
+            401: "Please sign in to save books to your library.",
+            409: "This book is already in your library.",
+          },
+          useServerMessage: true,
+        }),
+      );
     } finally {
-      // re-enable save button after request is complete, by setting saving to false
       setSaving(false);
     }
   }

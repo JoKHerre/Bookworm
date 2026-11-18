@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { getRatings, saveRating } from "./ratingsApi";
-import { jsonResponse } from "./test/renderWithProviders";
+import { getRatings, saveRating } from "./ratings";
+import { jsonResponse } from "../test/renderWithProviders";
 
-describe("ratingsApi", () => {
+describe("api/ratings", () => {
   it("TST-01-T-1 saveRating sends a PUT", async () => {
     const fetchMock = vi
       .fn()

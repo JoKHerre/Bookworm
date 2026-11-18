@@ -9,11 +9,11 @@ import userEvent from "@testing-library/user-event";
 import { Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
-import { getBookSuggestions, searchBooks } from "../booksApi";
+import { getBookSuggestions, searchBooks } from "../api/books";
 import { renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
 
-vi.mock("../booksApi");
+vi.mock("../api/books");
 
 const DUNE: BookSearchResult = {
   key: "/works/OL1W",

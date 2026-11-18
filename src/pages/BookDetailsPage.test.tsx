@@ -9,14 +9,15 @@ import {
   getBookDetails,
   getBookISBNs,
   searchLibraryByTitle,
-} from "../booksApi";
-import { getRatings, saveRating } from "../ratingsApi";
+} from "../api/books";
+import { getRatings, saveRating } from "../api/ratings";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import BookDetailsPage from "./BookDetailsPage";
 
-vi.mock("../booksApi");
-vi.mock("../ratingsApi");
+vi.mock("../api/books");
+vi.mock("../api/ratings");
+
 const BOOK: BookDetails = {
   key: "/works/OL1W",
   title: "Dune",

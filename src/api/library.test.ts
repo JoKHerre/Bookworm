@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { importBooks } from "./libraryApi";
-import { jsonResponse } from "./test/renderWithProviders";
+import { importBooks } from "./library";
+import { jsonResponse } from "../test/renderWithProviders";
 
-describe("libraryApi", () => {
+describe("api/library", () => {
   it("IMP-01-T-5 importBooks posts the keys", async () => {
     const fetchMock = vi
       .fn()

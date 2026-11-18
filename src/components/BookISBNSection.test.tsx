@@ -2,10 +2,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookISBNs } from "../../shared/books";
-import { getBookISBNs } from "../booksApi";
+import { getBookISBNs } from "../api/books";
 import BookISBNSection from "./BookISBNSection";
 
-vi.mock("../booksApi");
+vi.mock("../api/books");
 
 const empty = { isbn_13: [], isbn_10: [] };
 
