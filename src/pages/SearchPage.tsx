@@ -10,6 +10,7 @@ import {
 } from "../../shared/books";
 import { getBookSuggestions, searchBooks } from "../api/books";
 import BookCard from "../components/BookCard";
+import { useSavedBooks } from "../library/useSavedBooks";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
@@ -46,6 +47,7 @@ function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const submittedQuery = searchParams.get("q") ?? "";
   const navigate = useNavigate();
+  const { saved, busyKeys, errors, save } = useSavedBooks();
 
   const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [total, setTotal] = useState(0);
@@ -214,6 +216,27 @@ function SearchPage() {
       searchBook: book,
     };
     void navigate(bookDetailsPath(book.key), { state });
+  }
+
+  function renderSaveAction(book: BookSearchResult) {
+    const busy = busyKeys.has(book.key);
+    return (
+      <div className="result-save">
+        {saved.has(book.key) ? (
+          <span className="result-save-done">✓ In your library</span>
+        ) : (
+          <button
+            type="button"
+            aria-label={`Save ${book.title} to my library`}
+            disabled={busy}
+            onClick={() => void save(book.key)}
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        )}
+        {errors[book.key] && <p role="alert">{errors[book.key]}</p>}
+      </div>
+    );
   }
 
   function updateFilters(changes: Partial<Filters>) {
@@ -426,57 +449,54 @@ function SearchPage() {
           {viewMode === "grid" ? (
             <section className="book-grid" aria-label="Book search results">
               {visibleBooks.map((book) => (
-                <BookCard
-                  key={book.key}
-                  book={book}
-                  onClick={() => viewBook(book)}
-                />
+                <div className="book-grid-item" key={book.key}>
+                  <BookCard book={book} onClick={() => viewBook(book)} />
+                  {renderSaveAction(book)}
+                </div>
               ))}
             </section>
           ) : (
             <section className="book-list" aria-label="Book search results">
               {visibleBooks.map((book) => (
-                <button
-                  key={book.key}
-                  type="button"
-                  className="book-list-item"
-                  onClick={() => viewBook(book)}
-                  aria-label={`View details for ${book.title} by ${
-                    book.author_name?.join(", ") || "Unknown author"
-                  }`}
-                >
-                  {book.cover_i ? (
-                    <img
-                      className="book-list-cover"
-                      src={`https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`}
-                      alt=""
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <div
-                      className="book-list-cover book-list-cover--placeholder"
-                      aria-hidden="true"
-                    />
-                  )}
-
-                  <div className="book-list-info" aria-hidden="true">
-                    <h2>{book.title}</h2>
-
-                    <p className="book-list-author">
-                      {book.author_name?.join(", ") || "Unknown author"}
-                    </p>
-
-                    {book.first_publish_year && (
-                      <p className="book-list-year">
-                        {book.first_publish_year}
-                      </p>
+                <div key={book.key} className="book-list-item">
+                  <button
+                    type="button"
+                    className="book-list-open"
+                    onClick={() => viewBook(book)}
+                    aria-label={`View details for ${book.title} by ${
+                      book.author_name?.join(", ") || "Unknown author"
+                    }`}
+                  >
+                    {book.cover_i ? (
+                      <img
+                        className="book-list-cover"
+                        src={`https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <div
+                        className="book-list-cover book-list-cover--placeholder"
+                        aria-hidden="true"
+                      />
                     )}
-                  </div>
 
-                  <span className="book-list-action" aria-hidden="true">
-                    View details
-                  </span>
-                </button>
+                    <div className="book-list-info" aria-hidden="true">
+                      <h2>{book.title}</h2>
+
+                      <p className="book-list-author">
+                        {book.author_name?.join(", ") || "Unknown author"}
+                      </p>
+
+                      {book.first_publish_year && (
+                        <p className="book-list-year">
+                          {book.first_publish_year}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                  {renderSaveAction(book)}
+                </div>
               ))}
             </section>
           )}

@@ -10,7 +10,8 @@ import { Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
 import { getBookSuggestions, searchBooks } from "../api/books";
-import { renderWithProviders } from "../test/renderWithProviders";
+import type { AuthLocationState } from "../routes";
+import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
 
 vi.mock("../api/books");
@@ -32,13 +33,29 @@ function Destination() {
   return <p>Details at {location.pathname}</p>;
 }
 
-function renderSearch(route = "/search") {
+function LoginDestination() {
+  const location = useLocation();
+  const from = (location.state as AuthLocationState | null)?.from;
+  return (
+    <p>
+      Login page, back to {from?.pathname}
+      {from?.search}
+    </p>
+  );
+}
+
+function renderSearch(
+  route:
+    string | { pathname: string; search?: string; state?: unknown } = "/search",
+  user: { id: number; email: string } | null = null,
+) {
   return renderWithProviders(
     <Routes>
       <Route path="/search" element={<SearchPage />} />
       <Route path="/books/*" element={<Destination />} />
+      <Route path="/login" element={<LoginDestination />} />
     </Routes>,
-    { route },
+    { route, user },
   );
 }
 
@@ -191,7 +208,7 @@ describe("SearchPage", () => {
     expect(
       within(
         screen.getByRole("region", { name: "Book search results" }),
-      ).getAllByRole("button"),
+      ).getAllByRole("button", { name: /View details/ }),
     ).toHaveLength(2);
   });
 
@@ -203,6 +220,69 @@ describe("SearchPage", () => {
     expect(
       screen.getByText("Details at /books/works/OL1W"),
     ).toBeInTheDocument();
+  });
+
+  describe("saving from results", () => {
+    const USER = { id: 1, email: "a@b.co" };
+
+    function stubLibrary(books: unknown[] = []) {
+      const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+        Promise.resolve(
+          init?.method === "POST"
+            ? jsonResponse({ id: 9, userId: 1, bookKey: "/works/OL1W" }, 201)
+            : jsonResponse({ books }),
+        ),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    }
+
+    it("TST-01-T-1 search page saves a result", async () => {
+      const fetchMock = stubLibrary([
+        { id: 3, bookKey: "/works/OL2W", readingStatus: "to_be_read" },
+      ]);
+      renderSearch("/search?q=dune", USER);
+      expect(await screen.findByText("✓ In your library")).toBeInTheDocument();
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Save Dune to my library" }),
+      );
+      await waitFor(() =>
+        expect(screen.getAllByText("✓ In your library")).toHaveLength(2),
+      );
+      const post = fetchMock.mock.calls.find(
+        ([, init]) => init?.method === "POST",
+      );
+      expect(JSON.parse(post?.[1]?.body as string)).toEqual({
+        bookKey: "/works/OL1W",
+      });
+    });
+
+    it("TST-01-T-1 search page sends signed-out savers to log in", async () => {
+      renderSearch("/search?q=dune");
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Save Dune to my library" }),
+      );
+      expect(
+        screen.getByText("Login page, back to /search?q=dune"),
+      ).toBeInTheDocument();
+    });
+
+    it("TST-01-T-1 search page finishes a save started before login", async () => {
+      const fetchMock = stubLibrary();
+      renderSearch(
+        {
+          pathname: "/search",
+          search: "?q=dune",
+          state: { pendingSave: "/works/OL1W" },
+        },
+        USER,
+      );
+      expect(await screen.findByText("✓ In your library")).toBeInTheDocument();
+      expect(
+        fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+      ).toHaveLength(1);
+    });
   });
 
   describe("suggestions", () => {
