@@ -242,7 +242,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         </div>
 
         <div className="book-info">
-          <div className="book-identity">
+          <div>
             <h1 className="book-details-title">{title}</h1>
             <p className="book-details-author">
               {searchBook?.author_name?.join(", ") ||

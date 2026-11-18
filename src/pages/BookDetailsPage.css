@@ -150,12 +150,6 @@
   cursor: wait;
 }
 
-.book-year {
-  color: var(--olive);
-  opacity: 0.6;
-  font-size: 14px;
-}
-
 .book-summary {
   margin-top: 40px;
 }
