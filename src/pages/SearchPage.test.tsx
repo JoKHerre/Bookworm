@@ -12,7 +12,7 @@ import type { BookSearchResult } from "../../shared/books";
 import { getBookDetails, getBookSuggestions, searchBooks } from "../api/books";
 import { getInterests, saveInterests } from "../api/interests";
 import { getRecommendations } from "../api/recommendations";
-import type { AuthLocationState } from "../routes";
+import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
 
@@ -34,7 +34,14 @@ const EMMA: BookSearchResult = {
 
 function Destination() {
   const location = useLocation();
-  return <p>Details at {location.pathname}</p>;
+  const searchBook = (location.state as BookDetailsLocationState | null)
+    ?.searchBook;
+  return (
+    <>
+      <p>Details at {location.pathname}</p>
+      {searchBook && <p>Passed {searchBook.title}</p>}
+    </>
+  );
 }
 
 function LoginDestination() {
@@ -608,6 +615,7 @@ describe("SearchPage", () => {
       expect(
         screen.getByText("Details at /books/works/OL1W"),
       ).toBeInTheDocument();
+      expect(screen.getByText("Passed Dune")).toBeInTheDocument();
     });
 
     it("DIS-01-T-3 shows loading, empty, and error states", async () => {
@@ -657,6 +665,51 @@ describe("SearchPage", () => {
       await userEvent.click(screen.getByRole("button", { name: "Horror" }));
       await screen.findByText("Could not save your genres.");
       expect(getRecommendations).toHaveBeenCalledTimes(2);
+    });
+
+    it("DIS-01-T-3 keeps books on screen while reloading", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockResolvedValueOnce([DUNE]);
+      renderSearch("/search", USER);
+      const section = await screen.findByRole("region", {
+        name: "Recommended for you",
+      });
+      await within(section).findByRole("button", { name: /Dune/ });
+
+      let finish: (books: BookSearchResult[]) => void = () => {};
+      vi.mocked(getRecommendations).mockReturnValueOnce(
+        new Promise((resolve) => (finish = resolve)),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Fantasy" }));
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(2));
+
+      expect(
+        within(section).getByRole("button", { name: /Dune/ }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Loading recommendations..."),
+      ).not.toBeInTheDocument();
+
+      act(() => finish([EMMA]));
+      expect(
+        await within(section).findByRole("button", { name: /Emma/ }),
+      ).toBeInTheDocument();
+      expect(
+        within(section).queryByRole("button", { name: /Dune/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("DIS-01-T-3 a newer load cancels an older one", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockReturnValueOnce(new Promise(() => {}));
+      renderSearch("/search", USER);
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(1));
+      const firstSignal = vi.mocked(getRecommendations).mock.calls[0]?.[0];
+      expect(firstSignal?.aborted).toBe(false);
+
+      await userEvent.click(screen.getByRole("button", { name: "Fantasy" }));
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(2));
+      expect(firstSignal?.aborted).toBe(true);
     });
 
     it("DIS-01-T-3 hides recommendations without liked genres", async () => {
