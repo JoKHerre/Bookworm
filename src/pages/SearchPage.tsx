@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import {
   BOOK_GENRES,
   BOOK_LANGUAGES,
+  MAX_SEARCH_PAGE,
   PUBLICATION_YEAR_RANGES,
   bookSuggestionsQuery,
   type BookSearchQuery,
@@ -38,7 +39,7 @@ function readRecentSearches(): string[] {
 }
 
 type ViewMode = "grid" | "list";
-type Filters = Omit<BookSearchQuery, "q">;
+type Filters = Omit<BookSearchQuery, "q" | "page">;
 
 // Filters live in the URL beside q, so a refresh or Back keeps them.
 // Values the filters don't offer are ignored.
@@ -79,6 +80,10 @@ function SearchPage() {
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1); // the last page of results loaded
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState("");
+  const moreRequest = useRef<AbortController | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   // memoized on the query string so the search effect sees stable arrays
   const searchString = searchParams.toString();
@@ -140,8 +145,12 @@ function SearchPage() {
     const { signal } = controller;
 
     async function search() {
+      moreRequest.current?.abort();
       setLoading(true);
       setError("");
+      setPage(1);
+      setLoadingMore(false);
+      setMoreError("");
 
       try {
         const data = await searchBooks(submittedQuery, signal, filters);
@@ -164,6 +173,41 @@ function SearchPage() {
     void search();
     return () => controller.abort();
   }, [submittedQuery, searchAttempt, filters]);
+
+  useEffect(() => () => moreRequest.current?.abort(), []);
+
+  async function loadMore() {
+    const controller = new AbortController();
+    moreRequest.current = controller;
+    const next = page + 1;
+    setLoadingMore(true);
+    setMoreError("");
+
+    try {
+      const data = await searchBooks(submittedQuery, controller.signal, {
+        ...filters,
+        page: next,
+      });
+      if (controller.signal.aborted) return;
+      // a book can shift onto the next page between requests
+      setBooks((current) => {
+        const keys = new Set(current.map((book) => book.key));
+        return [
+          ...current,
+          ...data.books.filter((book) => !keys.has(book.key)),
+        ];
+      });
+      setTotal(data.total);
+      setPage(next);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setMoreError(
+        err instanceof Error ? err.message : "Unable to load more books",
+      );
+    } finally {
+      if (!controller.signal.aborted) setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (!showSuggestions) return;
@@ -606,6 +650,23 @@ function SearchPage() {
                 </div>
               ))}
             </section>
+          )}
+
+          {visibleBooks.length < total && page < MAX_SEARCH_PAGE && (
+            <div className="search-more">
+              {moreError && (
+                <p className="search-more-error" role="alert">
+                  {moreError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void loadMore()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading..." : "Show more"}
+              </button>
+            </div>
           )}
         </>
       )}

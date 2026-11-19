@@ -43,6 +43,9 @@ export function searchBooks(
   for (const genre of filters.genre ?? []) params.append("genre", genre);
   if (filters.language) params.set("language", filters.language);
   if (filters.year) params.set("year", filters.year);
+  if (filters.page && filters.page > 1) {
+    params.set("page", String(filters.page));
+  }
 
   return get<BookSearchResponse>("search", params, signal);
 }

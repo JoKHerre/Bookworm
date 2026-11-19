@@ -10,6 +10,7 @@ import {
 } from "./openLibrarySchemas.ts";
 
 import {
+  SEARCH_PAGE_SIZE,
   bookISBNs,
   openLibraryWorkKey,
   similarBooksResponse,
@@ -87,12 +88,14 @@ async function fetchOpenLibrary<T extends z.ZodType>(
 async function searchOpenLibraryQuery(
   query: string,
   limit: number,
+  page = 1,
 ): Promise<BookSearchResponse> {
   const params = new URLSearchParams({
     q: query,
     fields: "key,title,author_name,first_publish_year,cover_i",
     limit: String(limit),
   });
+  if (page > 1) params.set("page", String(page));
 
   const data = await fetchOpenLibrary(
     `/search.json?${params.toString()}`,
@@ -140,7 +143,7 @@ export function searchOpenLibrary(
   const filteredQuery = constraints.length
     ? `(${q}) AND ${constraints.join(" AND ")}`
     : q;
-  return searchOpenLibraryQuery(filteredQuery, 20);
+  return searchOpenLibraryQuery(filteredQuery, SEARCH_PAGE_SIZE, query.page);
 }
 
 const openLibraryQuerySpecialCharacters = new Set('+-&|!(){}[]^"~*?:\\/');
