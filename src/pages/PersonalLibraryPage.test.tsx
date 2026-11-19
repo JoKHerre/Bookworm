@@ -82,10 +82,14 @@ async function renderPage() {
   return view;
 }
 
-const titles = () =>
-  screen
-    .queryAllByRole("heading", { level: 3 })
-    .map((heading) => heading.textContent);
+const titles = () => {
+  const books = screen.queryByRole("list", { name: "Saved books" });
+  return books
+    ? within(books)
+        .queryAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent)
+    : [];
+};
 const tagBox = (name: string) => screen.getByRole("checkbox", { name });
 
 describe("PersonalLibraryPage", () => {

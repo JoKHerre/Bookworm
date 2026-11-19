@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
-import {
-  READING_STATUSES,
-  type ReadingStatus,
-} from "../../shared/readingStatus";
+import { type ReadingStatus } from "../../shared/readingStatus";
 import { filterByTags, libraryTags } from "../../shared/tags";
-import StarDisplay from "../components/StarDisplay";
+import SavedBookCard from "../components/SavedBookCard";
 import CollectionsManager from "../components/CollectionsManager";
 import { getRatings } from "../ratingsApi";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
@@ -17,17 +14,6 @@ const SESSION_EXPIRED_MESSAGE =
   "Your session has expired. Please sign in again.";
 const STATUS_UPDATE_ERROR_MESSAGE =
   "Could not update this book's reading status. Please try again.";
-
-const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
-  to_be_read: "To Be Read",
-  currently_reading: "Currently Reading",
-  finished: "Finished",
-};
-
-const READING_STATUS_OPTIONS = READING_STATUSES.map((value) => ({
-  value,
-  label: READING_STATUS_LABELS[value],
-}));
 
 // define the shape of a saved book object as returned by the server
 interface SavedBook {
@@ -367,117 +353,34 @@ function PersonalLibraryPage() {
                   No books match these tags.
                 </p>
               ) : (
-                <ul
-                  className="personal-library-book-grid"
-                  aria-label="Saved books"
-                >
-                  {visibleBooks.map(
-                    ({ id, bookKey, details, readingStatus }) => {
-                      const title =
-                        details?.title ?? "Book details unavailable";
-                      const coverId = details?.covers?.[0];
-                      const isRemoving = removingBookIds.has(id);
-                      const isUpdatingReadingStatus =
-                        updatingReadingStatusIds.has(id);
-                      const readingStatusError = readingStatusErrors[id];
-                      const rating = ratings.get(bookKey);
-
-                      return (
-                        <li className="personal-library-book-card" key={id}>
-                          {coverId ? (
-                            <img
-                              className="personal-library-book-cover"
-                              src={`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`}
-                              alt={`Cover of ${title}`}
-                            />
-                          ) : (
-                            <div
-                              className="personal-library-book-cover personal-library-book-cover--placeholder"
-                              aria-hidden="true"
-                            />
-                          )}
-                          {/* select book to view details */}
-                          <div className="personal-library-book-details">
-                            <h3>
-                              <button
-                                className="personal-library-book-title"
-                                type="button"
-                                aria-label={`View details for ${title}`}
-                                onClick={() => viewBook(bookKey)}
-                              >
-                                {title}
-                              </button>
-                            </h3>
-                            <p>
-                              {details?.authors.join(", ") ||
-                                "Author unavailable"}
-                            </p>
-                            {rating !== undefined && (
-                              <StarDisplay rating={rating} />
-                            )}
-                            {!details && (
-                              <p className="personal-library-book-key">
-                                {bookKey}
-                              </p>
-                            )}
-                          </div>
-                          <div className="personal-library-book-status">
-                            <select
-                              aria-label={`Reading status for ${title}`}
-                              aria-busy={isUpdatingReadingStatus}
-                              aria-describedby={
-                                readingStatusError
-                                  ? `reading-status-error-${id}`
-                                  : undefined
-                              }
-                              disabled={isUpdatingReadingStatus}
-                              value={readingStatus}
-                              onChange={(event) =>
-                                void updateReadingStatus(
-                                  id,
-                                  title,
-                                  event.target.value as ReadingStatus,
-                                )
-                              }
-                            >
-                              {READING_STATUS_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                            {isUpdatingReadingStatus && (
-                              <p
-                                className="personal-library-book-status-message"
-                                role="status"
-                              >
-                                Saving status…
-                              </p>
-                            )}
-                            {readingStatusError && (
-                              <p
-                                className="personal-library-book-status-error"
-                                id={`reading-status-error-${id}`}
-                                role="alert"
-                              >
-                                {readingStatusError}
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            className="personal-library-book-remove"
-                            type="button"
-                            aria-label={`${isRemoving ? "Removing" : "Remove"} ${title} from my library`}
-                            aria-busy={isRemoving}
-                            disabled={isRemoving}
-                            onClick={() => void removeBook(id, title)}
-                          >
-                            {isRemoving ? "Removing…" : "Remove"}
-                          </button>
-                        </li>
-                      );
-                    },
-                  )}
+                <ul className="saved-book-grid" aria-label="Saved books">
+                  {visibleBooks.map((book) => (
+                    <SavedBookCard
+                      key={book.id}
+                      book={book}
+                      rating={ratings.get(book.bookKey)}
+                      removeFrom="library"
+                      onViewBook={() => viewBook(book.bookKey)}
+                      onReadingStatusChange={(status) =>
+                        void updateReadingStatus(
+                          book.id,
+                          book.details?.title ?? "Book details unavailable",
+                          status,
+                        )
+                      }
+                      onRemove={() =>
+                        void removeBook(
+                          book.id,
+                          book.details?.title ?? "Book details unavailable",
+                        )
+                      }
+                      isRemoving={removingBookIds.has(book.id)}
+                      isUpdatingReadingStatus={updatingReadingStatusIds.has(
+                        book.id,
+                      )}
+                      readingStatusError={readingStatusErrors[book.id]}
+                    />
+                  ))}
                 </ul>
               )}
             </>
