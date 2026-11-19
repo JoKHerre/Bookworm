@@ -7,7 +7,7 @@ import {
   openLibraryWork,
   openLibraryAuthor,
   openLibraryEditionsResponse,
-} from "../../../shared/openLibrary.ts";
+} from "./openLibrarySchemas.ts";
 
 import {
   bookISBNs,
@@ -23,6 +23,7 @@ import {
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 import { toTags } from "../../../shared/tags.ts";
+import { PromiseCache } from "./cache.ts";
 
 const BASE_URL = "https://openlibrary.org";
 
@@ -31,6 +32,24 @@ const languageCodes = {
   Spanish: "spa",
   French: "fre",
 };
+
+// Works and authors rarely change, and the library page asks for every saved
+// book's details on each load, so keep them for an hour.
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const workCache = new PromiseCache<z.infer<typeof openLibraryWork>>(
+  CACHE_TTL_MS,
+  2000,
+);
+const authorNameCache = new PromiseCache<string | undefined>(
+  CACHE_TTL_MS,
+  2000,
+);
+
+// For tests that stub fetch with different responses for the same key.
+export function clearOpenLibraryCache() {
+  workCache.clear();
+  authorNameCache.clear();
+}
 
 export class OpenLibraryError extends Error {
   status: number;
@@ -115,9 +134,12 @@ export function searchOpenLibrary(
     constraints.push(`first_publish_year:[${range}]`);
   }
 
+  // Escape the user's text so characters like ")" can't break out of the
+  // group and skip the filters. Words such as OR still work as operators.
+  const q = escapeOpenLibraryQueryText(query.q);
   const filteredQuery = constraints.length
-    ? `(${query.q}) AND ${constraints.join(" AND ")}`
-    : query.q;
+    ? `(${q}) AND ${constraints.join(" AND ")}`
+    : q;
   return searchOpenLibraryQuery(filteredQuery, 20);
 }
 
@@ -284,8 +306,20 @@ export async function getSimilarBooks(
   }
 }
 
-async function getWork(key: string, signal?: AbortSignal) {
-  return fetchOpenLibrary(`${key}.json`, openLibraryWork, signal);
+function getWork(key: string, signal?: AbortSignal) {
+  return workCache.get(
+    key,
+    (shared) => fetchOpenLibrary(`${key}.json`, openLibraryWork, shared),
+    signal,
+  );
+}
+
+function getAuthorName(key: string) {
+  return authorNameCache.get(key, (shared) =>
+    fetchOpenLibrary(`${key}.json`, openLibraryAuthor, shared).then(
+      ({ name }) => name,
+    ),
+  );
 }
 
 async function getEditions(
@@ -410,11 +444,7 @@ export async function getBookDetails(
     ? await Promise.all(
         (work.authors ?? []).slice(0, 5).map(async ({ author }) => {
           try {
-            const data = await fetchOpenLibrary(
-              `${author.key}.json`,
-              openLibraryAuthor,
-            );
-            return data.name;
+            return await getAuthorName(author.key);
           } catch (error) {
             console.error(`Failed to retrieve author ${author.key}:`, error);
             return undefined;

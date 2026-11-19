@@ -10,7 +10,7 @@ A React + Vite frontend with an Express backend and a PostgreSQL database.
 - [pnpm](https://pnpm.io/installation)
 - [PostgreSQL](https://www.postgresql.org/) 16 or newer
 
-Both the frontend (repo root) and the backend (`server/`) use pnpm. Don't commit `package-lock.json` or `yarn.lock`.
+The repo is a pnpm workspace: the frontend is the root package and the backend is `server/`, with one `pnpm-lock.yaml` for both. Don't commit `package-lock.json` or `yarn.lock`.
 
 ## Setup
 
@@ -75,9 +75,10 @@ docker run --name bookworm-db -e POSTGRES_USER=bookworm -e POSTGRES_PASSWORD=boo
 
 ### Install and run
 
+One install at the repo root covers the frontend and the backend:
+
 ```bash
 pnpm install
-pnpm --dir server install
 ```
 
 Outside the Nix shell, create the backend's env file. The defaults match the database above:

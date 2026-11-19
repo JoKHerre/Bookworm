@@ -1,10 +1,12 @@
 .import-page {
   flex: 1;
-  width: min(100% - 48px, 720px);
-  margin: 0 auto;
-  padding: 40px 0 64px;
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
   color: var(--olive);
   text-align: left;
+}
+
+.import-page > * {
+  max-width: 720px;
 }
 
 .import-page h1 {

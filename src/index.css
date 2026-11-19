@@ -31,6 +31,24 @@
   --heading: system-ui, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* page edges: the header and every page share these, so content lines up with the logo.
+     backgrounds run full width; content stays in a centered column of --page-max */
+  --page-max: 1200px;
+  --page-gutter: 32px;
+  --page-inline: max(var(--page-gutter), calc((100% - var(--page-max)) / 2));
+  --page-top: 40px;
+  --page-bottom: 64px;
+
+  @media (max-width: 900px) {
+    --page-gutter: 24px;
+  }
+
+  @media (max-width: 500px) {
+    --page-gutter: 16px;
+    --page-top: 24px;
+    --page-bottom: 48px;
+  }
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light;
@@ -51,11 +69,7 @@ body {
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;

@@ -1,6 +1,7 @@
+// Shapes of Open Library's responses, validated before the server uses them.
 import z from "zod";
 
-import { bookSearchResult, similarBookResult } from "./books.ts";
+import { bookSearchResult, similarBookResult } from "../../../shared/books.ts";
 
 export const openLibrarySearchResponse = z.object({
   docs: z.array(bookSearchResult),

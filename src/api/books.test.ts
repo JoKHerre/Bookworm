@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { getBookDetails, searchBooks } from "./booksApi";
-import { jsonResponse } from "./test/renderWithProviders";
+import { getBookDetails, searchBooks } from "./books";
+import { jsonResponse } from "../test/renderWithProviders";
 
 const signal = new AbortController().signal;
 
-describe("booksApi", () => {
+describe("api/books", () => {
   it("TST-01-T-1 searchBooks builds its query", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ results: [] }));
     vi.stubGlobal("fetch", fetchMock);
@@ -40,12 +40,12 @@ describe("booksApi", () => {
       vi.fn().mockResolvedValue(new Response("nope", { status: 500 })),
     );
     await expect(getBookDetails("/works/OL1W", signal)).rejects.toThrow(
-      "Unable to load books. Please try again.",
+      "Unable to load books.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(getBookDetails("/works/OL1W", signal)).rejects.toThrow(
-      "Unable to connect. Please try again.",
+      "Unable to connect.",
     );
   });
 });

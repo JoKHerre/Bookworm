@@ -1,8 +1,16 @@
 {
-  "name": "frontend",
+  "name": "bookworm",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.11.2",
+      "onFail": "download"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "dev:server": "pnpm --dir server dev",

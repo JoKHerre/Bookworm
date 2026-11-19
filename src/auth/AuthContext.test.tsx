@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "./AuthContext";
-import { jsonResponse } from "./test/renderWithProviders";
+import { jsonResponse } from "../test/renderWithProviders";
 import { useAuth, type AuthContextValue } from "./useAuth";
 
 const USER = { id: 7, email: "a@b.co" };
