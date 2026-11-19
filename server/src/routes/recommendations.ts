@@ -44,11 +44,17 @@ recommendationsRouter.get(
   "/",
   async (_req, res: Response<RecommendationsResponse | ApiError>) => {
     const userId = res.locals.user!.id;
-    const [genreRows, savedRows, ratedRows] = await Promise.all([
-      db
-        .select({ genre: userGenres.genre })
-        .from(userGenres)
-        .where(eq(userGenres.userId, userId)),
+    const genreRows = await db
+      .select({ genre: userGenres.genre })
+      .from(userGenres)
+      .where(eq(userGenres.userId, userId));
+    const genres = sortGenres(genreRows.map(({ genre }) => genre));
+    if (genres.length === 0) {
+      res.json({ books: [] });
+      return;
+    }
+
+    const [savedRows, ratedRows] = await Promise.all([
       db
         .select({ bookKey: savedBooks.bookKey })
         .from(savedBooks)
@@ -58,12 +64,6 @@ recommendationsRouter.get(
         .from(bookRatings)
         .where(eq(bookRatings.userId, userId)),
     ]);
-
-    const genres = sortGenres(genreRows.map(({ genre }) => genre));
-    if (genres.length === 0) {
-      res.json({ books: [] });
-      return;
-    }
 
     const controller = new AbortController();
     const onClose = () => {
