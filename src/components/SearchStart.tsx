@@ -61,7 +61,7 @@ function Shelf({ books }: { books: ShelfBook[] }) {
 }
 
 interface Recommendations {
-  key: string; // the user and saved genres they were loaded for
+  userId: number | undefined; // the user they were loaded for
   books: BookSearchResult[] | null;
   error: string;
 }
@@ -77,11 +77,12 @@ function SearchStart({
   const shelfKeys = shelf.map((book) => book.bookKey).join("\n");
   const [details, setDetails] = useState<Record<string, BookDetails>>({});
   const { user } = useAuth();
+  const userId = user?.id;
   const interests = useInterests();
   const [recommendations, setRecommendations] =
     useState<Recommendations | null>(null);
   const recommendationsKey = interests.savedGenres?.length
-    ? `${user?.id}:${interests.savedGenres.join(",")}`
+    ? `${userId}:${interests.savedGenres.join(",")}`
     : "";
 
   useEffect(() => {
@@ -103,19 +104,21 @@ function SearchStart({
     if (!recommendationsKey) return;
     const controller = new AbortController();
     getRecommendations(controller.signal)
-      .then((books) =>
-        setRecommendations({ key: recommendationsKey, books, error: "" }),
-      )
+      .then((books) => {
+        if (!controller.signal.aborted) {
+          setRecommendations({ userId, books, error: "" });
+        }
+      })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         setRecommendations({
-          key: recommendationsKey,
+          userId,
           books: null,
           error: (err as Error).message,
         });
       });
     return () => controller.abort();
-  }, [recommendationsKey]);
+  }, [recommendationsKey, userId]);
 
   const shelfBooks = shelf.flatMap(({ bookKey }): ShelfBook[] => {
     const book = details[bookKey];
@@ -130,9 +133,9 @@ function SearchStart({
         ]
       : [];
   });
-  // null while loading
+  // a reload keeps showing the last books; null until the first load
   const recommended =
-    recommendations?.key === recommendationsKey ? recommendations : null;
+    recommendations?.userId === userId ? recommendations : null;
   const searches =
     recentSearches.length > 0 ? recentSearches : EXAMPLE_SEARCHES;
 
