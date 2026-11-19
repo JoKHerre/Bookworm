@@ -870,3 +870,28 @@ test("COL-05-T-1 cascades collections and memberships when a user is deleted", a
     second.secondBook,
   ]);
 });
+
+test("DIS-01-T-1 user genres are unique and cascade", async () => {
+  const user = await createTestUser();
+  const insert = (genre: string) =>
+    pool.query("INSERT INTO user_genres (user_id, genre) VALUES ($1, $2)", [
+      user.id,
+      genre,
+    ]);
+
+  await insert("Fantasy");
+  await assert.rejects(insert("Fantasy"), (error) =>
+    hasPostgresErrorCode(error, "23505"),
+  );
+  await assert.rejects(insert("Cooking"), (error) =>
+    hasPostgresErrorCode(error, "22P02"),
+  );
+
+  await db.delete(users).where(eq(users.id, user.id));
+  createdUserIds.delete(user.id);
+  const rows = await pool.query(
+    "SELECT 1 FROM user_genres WHERE user_id = $1",
+    [user.id],
+  );
+  assert.equal(rows.rowCount, 0);
+});

@@ -12,6 +12,7 @@ import {
   unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { BOOK_GENRES } from "../../../shared/books.ts";
 import { READING_STATUSES } from "../../../shared/readingStatus.ts";
 
 export const users = pgTable("users", {
@@ -145,6 +146,20 @@ export const bookRatings = pgTable(
     ),
     check("book_ratings_rating_range", sql`${table.rating} BETWEEN 1 AND 5`),
   ],
+);
+
+export const bookGenreEnum = pgEnum("book_genre", BOOK_GENRES);
+
+// the genres a user likes, which drive their recommendations
+export const userGenres = pgTable(
+  "user_genres",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    genre: bookGenreEnum("genre").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.genre] })],
 );
 
 export type User = typeof users.$inferSelect;

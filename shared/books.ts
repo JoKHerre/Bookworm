@@ -20,6 +20,8 @@ export const BOOK_GENRES = [
   "Poetry",
 ] as const;
 
+export type BookGenre = (typeof BOOK_GENRES)[number];
+
 export const BOOK_LANGUAGES = ["English", "Spanish", "French"] as const;
 
 export const PUBLICATION_YEAR_RANGES = [
