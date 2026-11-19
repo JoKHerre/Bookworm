@@ -7,9 +7,11 @@ export const saveInterestsBody = z.strictObject({
 });
 
 // GET and PUT /api/interests response, in BOOK_GENRES order
-export interface InterestsResponse {
-  genres: BookGenre[];
-}
+export const interestsResponse = z.object({
+  genres: z.array(z.enum(BOOK_GENRES)),
+});
+
+export type InterestsResponse = z.infer<typeof interestsResponse>;
 
 export function sortGenres(genres: readonly BookGenre[]): BookGenre[] {
   return BOOK_GENRES.filter((genre) => genres.includes(genre));

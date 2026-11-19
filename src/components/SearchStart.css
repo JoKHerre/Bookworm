@@ -83,6 +83,17 @@
   border-color: var(--gold);
 }
 
+.search-start-chips button[aria-pressed="true"] {
+  color: var(--cream);
+  background: var(--olive);
+  border-color: var(--olive);
+}
+
+.search-start-error {
+  margin: 12px 0 0;
+  color: var(--error);
+}
+
 .search-start button:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 2px;

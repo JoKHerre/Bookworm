@@ -10,11 +10,13 @@ import { Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
 import { getBookDetails, getBookSuggestions, searchBooks } from "../api/books";
+import { getInterests, saveInterests } from "../api/interests";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
 
 vi.mock("../api/books");
+vi.mock("../api/interests");
 
 const DUNE: BookSearchResult = {
   key: "/works/OL1W",
@@ -74,6 +76,10 @@ describe("SearchPage", () => {
       total: 2,
     });
     vi.mocked(getBookSuggestions).mockResolvedValue({ books: [], total: 0 });
+    vi.mocked(getInterests).mockResolvedValue([]);
+    vi.mocked(saveInterests).mockImplementation((genres) =>
+      Promise.resolve(genres),
+    );
     localStorage.clear();
   });
   afterEach(() => {
@@ -459,6 +465,53 @@ describe("SearchPage", () => {
         screen.getByText("Details at /books/works/OL1W"),
       ).toBeInTheDocument();
       expect(getBookDetails).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("genres you like", () => {
+    const USER = { id: 1, email: "a@b.co" };
+
+    it("DIS-01-T-1 signed-in users can pick genres", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Mystery"]);
+      renderSearch("/search", USER);
+
+      const picker = await screen.findByRole("region", {
+        name: "Genres you like",
+      });
+      expect(
+        within(picker).getByRole("button", { name: "Mystery" }),
+      ).toHaveAttribute("aria-pressed", "true");
+
+      const fantasy = within(picker).getByRole("button", { name: "Fantasy" });
+      expect(fantasy).toHaveAttribute("aria-pressed", "false");
+      await userEvent.click(fantasy);
+
+      expect(fantasy).toHaveAttribute("aria-pressed", "true");
+      expect(saveInterests).toHaveBeenCalledWith(["Fantasy", "Mystery"]);
+    });
+
+    it("DIS-01-T-1 a failed save reverts the genre", async () => {
+      vi.mocked(saveInterests).mockRejectedValue(
+        new Error("Could not save your genres."),
+      );
+      renderSearch("/search", USER);
+
+      const fantasy = await screen.findByRole("button", { name: "Fantasy" });
+      await userEvent.click(fantasy);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not save your genres.",
+      );
+      expect(fantasy).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("DIS-01-T-1 logged-out users don't see the genre picker", async () => {
+      renderSearch();
+      await screen.findByRole("heading", { name: "Try searching for" });
+      expect(
+        screen.queryByRole("heading", { name: "Genres you like" }),
+      ).not.toBeInTheDocument();
+      expect(getInterests).not.toHaveBeenCalled();
     });
   });
 

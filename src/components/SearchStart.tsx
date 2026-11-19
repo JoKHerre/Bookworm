@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import type { BookDetails } from "../../shared/books";
+import { BOOK_GENRES, type BookDetails } from "../../shared/books";
 import type { SavedBook } from "../../shared/library";
 import { getBookDetails } from "../api/books";
+import { useInterests } from "../library/useInterests";
 import "./SearchStart.css";
 
 // a few searches that show what Bookworm can find, for a first visit
@@ -29,6 +30,7 @@ function SearchStart({
   const shelf = reading.slice(0, SHELF_LIMIT);
   const shelfKeys = shelf.map((book) => book.bookKey).join("\n");
   const [details, setDetails] = useState<Record<string, BookDetails>>({});
+  const interests = useInterests();
 
   useEffect(() => {
     if (!shelfKeys) return;
@@ -77,6 +79,32 @@ function SearchStart({
               );
             })}
           </ul>
+        </section>
+      )}
+
+      {(interests.genres || interests.error) && (
+        <section aria-labelledby="search-start-genres">
+          <h2 id="search-start-genres">Genres you like</h2>
+          {interests.genres && (
+            <ul className="search-start-chips">
+              {BOOK_GENRES.map((genre) => (
+                <li key={genre}>
+                  <button
+                    type="button"
+                    aria-pressed={interests.genres?.includes(genre)}
+                    onClick={() => interests.toggle(genre)}
+                  >
+                    {genre}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {interests.error && (
+            <p className="search-start-error" role="alert">
+              {interests.error}
+            </p>
+          )}
         </section>
       )}
 
