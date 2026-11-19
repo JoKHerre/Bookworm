@@ -145,6 +145,21 @@ function SearchStart({
         </section>
       )}
 
+      <section aria-labelledby="search-start-searches">
+        <h2 id="search-start-searches">
+          {recentSearches.length > 0 ? "Recent searches" : "Try searching for"}
+        </h2>
+        <ul className="search-start-chips">
+          {searches.map((query) => (
+            <li key={query}>
+              <button type="button" onClick={() => onSearch(query)}>
+                {query}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {(interests.genres || interests.error) && (
         <section aria-labelledby="search-start-genres">
           <h2 id="search-start-genres">Genres you like</h2>
@@ -202,21 +217,6 @@ function SearchStart({
           )}
         </section>
       )}
-
-      <section aria-labelledby="search-start-searches">
-        <h2 id="search-start-searches">
-          {recentSearches.length > 0 ? "Recent searches" : "Try searching for"}
-        </h2>
-        <ul className="search-start-chips">
-          {searches.map((query) => (
-            <li key={query}>
-              <button type="button" onClick={() => onSearch(query)}>
-                {query}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }
