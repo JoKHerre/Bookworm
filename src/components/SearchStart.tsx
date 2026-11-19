@@ -49,10 +49,12 @@ function Shelf({ books }: { books: ShelfBook[] }) {
             ) : (
               <span className="search-start-cover" aria-hidden="true" />
             )}
-            <span className="search-start-title">{book.title}</span>
-            {book.author && (
-              <span className="search-start-author">{book.author}</span>
-            )}
+            <span className="search-start-text">
+              <span className="search-start-title">{book.title}</span>
+              {book.author && (
+                <span className="search-start-author">{book.author}</span>
+              )}
+            </span>
           </button>
         </li>
       ))}

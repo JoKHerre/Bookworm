@@ -19,7 +19,7 @@
   list-style: none;
 }
 
-/* column counts divide the 12 recommendations into full rows */
+/* 6, 4 and 3 columns all divide a full set of 12 recommendations evenly */
 .search-start-shelf {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -64,6 +64,12 @@
   box-shadow: var(--shadow);
 }
 
+.search-start-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .search-start-title,
 .search-start-author {
   display: -webkit-box;
@@ -80,7 +86,6 @@
 
 .search-start-author {
   -webkit-line-clamp: 1;
-  margin-top: -6px;
   font-size: 13px;
   color: var(--olive-text-secondary);
 }
