@@ -56,6 +56,13 @@
   line-height: 1.3;
 }
 
+.search-start-author {
+  margin-top: -6px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--olive-text-secondary);
+}
+
 .search-start-shelf button:hover .search-start-title {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -89,8 +96,20 @@
   border-color: var(--olive);
 }
 
+.search-start-message,
 .search-start-error {
-  margin: 12px 0 0;
+  margin: 0;
+}
+
+.search-start-chips + .search-start-error {
+  margin-top: 12px;
+}
+
+.search-start-message {
+  color: var(--olive-text-secondary);
+}
+
+.search-start-error {
   color: var(--error);
 }
 

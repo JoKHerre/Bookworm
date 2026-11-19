@@ -11,12 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
 import { getBookDetails, getBookSuggestions, searchBooks } from "../api/books";
 import { getInterests, saveInterests } from "../api/interests";
+import { getRecommendations } from "../api/recommendations";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
 
 vi.mock("../api/books");
 vi.mock("../api/interests");
+vi.mock("../api/recommendations");
 
 const DUNE: BookSearchResult = {
   key: "/works/OL1W",
@@ -80,6 +82,7 @@ describe("SearchPage", () => {
     vi.mocked(saveInterests).mockImplementation((genres) =>
       Promise.resolve(genres),
     );
+    vi.mocked(getRecommendations).mockResolvedValue([]);
     localStorage.clear();
   });
   afterEach(() => {
@@ -572,6 +575,104 @@ describe("SearchPage", () => {
         screen.queryByRole("heading", { name: "Genres you like" }),
       ).not.toBeInTheDocument();
       expect(getInterests).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("recommendations", () => {
+    const USER = { id: 1, email: "a@b.co" };
+
+    it("DIS-01-T-3 shows recommended books", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockResolvedValue([DUNE, EMMA]);
+      renderSearch("/search", USER);
+
+      const section = await screen.findByRole("region", {
+        name: "Recommended for you",
+      });
+      expect(
+        await within(section).findByRole("button", { name: /Dune/ }),
+      ).toHaveTextContent("Frank Herbert");
+      expect(
+        within(section).getByRole("button", { name: /Emma/ }),
+      ).toHaveTextContent("Jane Austen");
+    });
+
+    it("DIS-01-T-3 opens a recommended book", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockResolvedValue([DUNE]);
+      renderSearch("/search", USER);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: /Dune/ }),
+      );
+      expect(
+        screen.getByText("Details at /books/works/OL1W"),
+      ).toBeInTheDocument();
+    });
+
+    it("DIS-01-T-3 shows loading, empty, and error states", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Poetry"]);
+      let finish: (books: BookSearchResult[]) => void = () => {};
+      vi.mocked(getRecommendations).mockReturnValue(
+        new Promise((resolve) => (finish = resolve)),
+      );
+      const first = renderSearch("/search", USER);
+
+      expect(
+        await screen.findByText("Loading recommendations..."),
+      ).toBeInTheDocument();
+      act(() => finish([]));
+      expect(
+        await screen.findByText("No recommendations for these genres yet."),
+      ).toBeInTheDocument();
+      first.unmount();
+
+      vi.mocked(getRecommendations).mockRejectedValue(
+        new Error("Could not load recommendations."),
+      );
+      renderSearch("/search", USER);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not load recommendations.",
+      );
+    });
+
+    it("DIS-01-T-3 reloads recommendations after a saved change", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Poetry"]);
+      renderSearch("/search", USER);
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(1));
+
+      let finishSave: (genres: ["Fantasy", "Poetry"]) => void = () => {};
+      vi.mocked(saveInterests).mockReturnValueOnce(
+        new Promise((resolve) => (finishSave = resolve)),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Fantasy" }));
+      expect(getRecommendations).toHaveBeenCalledTimes(1);
+
+      act(() => finishSave(["Fantasy", "Poetry"]));
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(2));
+
+      vi.mocked(saveInterests).mockRejectedValueOnce(
+        new Error("Could not save your genres."),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Horror" }));
+      await screen.findByText("Could not save your genres.");
+      expect(getRecommendations).toHaveBeenCalledTimes(2);
+    });
+
+    it("DIS-01-T-3 hides recommendations without liked genres", async () => {
+      const first = renderSearch();
+      await screen.findByRole("heading", { name: "Try searching for" });
+      expect(
+        screen.queryByRole("heading", { name: "Recommended for you" }),
+      ).not.toBeInTheDocument();
+      first.unmount();
+
+      renderSearch("/search", USER);
+      await screen.findByRole("heading", { name: "Genres you like" });
+      expect(
+        screen.queryByRole("heading", { name: "Recommended for you" }),
+      ).not.toBeInTheDocument();
+      expect(getRecommendations).not.toHaveBeenCalled();
     });
   });
 
