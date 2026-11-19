@@ -2,8 +2,6 @@ import type { BookGenre } from "../../shared/books";
 import { interestsResponse } from "../../shared/interests";
 import { apiRequest, userError } from "./client";
 
-const CONNECTION_ERROR = "Unable to connect.";
-
 // the genres the signed-in user likes
 export async function getInterests(signal?: AbortSignal) {
   const fallback = "Could not load your genres.";
@@ -11,7 +9,7 @@ export async function getInterests(signal?: AbortSignal) {
   try {
     data = await apiRequest<unknown>("/api/interests", { signal });
   } catch (err) {
-    throw userError(err, { fallback, byStatus: { 0: CONNECTION_ERROR } });
+    throw userError(err, { fallback, byStatus: { 0: "Unable to connect." } });
   }
   const parsed = interestsResponse.safeParse(data);
   if (!parsed.success) throw new Error(fallback);
@@ -28,7 +26,7 @@ export async function saveInterests(genres: BookGenre[]) {
       body: { genres },
     });
   } catch (err) {
-    throw userError(err, { fallback, byStatus: { 0: CONNECTION_ERROR } });
+    throw userError(err, { fallback, byStatus: { 0: "Unable to connect." } });
   }
   const parsed = interestsResponse.safeParse(data);
   if (!parsed.success) throw new Error(fallback);
