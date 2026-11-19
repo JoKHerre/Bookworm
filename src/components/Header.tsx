@@ -9,6 +9,13 @@ function Header() {
   const location = useLocation();
   // after logging in, come back to the page the user was on
   const loginState: AuthLocationState = { from: location };
+  // import is part of the library, so the library link stays marked there
+  const libraryCurrent =
+    location.pathname === "/personal-library"
+      ? "page"
+      : location.pathname === "/import"
+        ? "true"
+        : undefined;
 
   return (
     <header className="site-header">
@@ -18,7 +25,9 @@ function Header() {
 
       <nav className="main-nav" aria-label="Main navigation">
         <NavLink to="/search">Discover</NavLink>
-        <NavLink to="/personal-library">My Library</NavLink>
+        <Link to="/personal-library" aria-current={libraryCurrent}>
+          My Library
+        </Link>
         {user ? (
           <button className="nav-auth-button" type="button" onClick={logout}>
             Log out

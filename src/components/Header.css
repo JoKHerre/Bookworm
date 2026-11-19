@@ -49,7 +49,7 @@
 }
 
 /* style for currently selected nav link */
-.main-nav a[aria-current="page"] {
+.main-nav a[aria-current] {
   color: var(--cream);
   text-decoration: underline;
   text-decoration-color: var(--gold);
