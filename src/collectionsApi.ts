@@ -1,4 +1,6 @@
 import z from "zod";
+import { openLibraryWorkKey } from "../shared/books";
+import { READING_STATUSES } from "../shared/readingStatus";
 
 export interface CollectionSummary {
   id: number;
@@ -27,6 +29,20 @@ const membershipListResponse = z.object({
   collections: z.array(collectionSummary.extend({ containsBook: z.boolean() })),
 });
 
+const collectionDetailsResponse = z.object({
+  collection: collectionSummary,
+  books: z.array(
+    z.object({
+      id: z.number().int().positive(),
+      bookKey: openLibraryWorkKey,
+      readingStatus: z.enum(READING_STATUSES),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
+export type CollectionDetails = z.infer<typeof collectionDetailsResponse>;
+
 export class CollectionApiError extends Error {
   constructor(
     public status: number,
@@ -39,7 +55,7 @@ export class CollectionApiError extends Error {
 async function request(
   path: string,
   init?: RequestInit,
-  operation: "manage" | "membership" = "manage",
+  operation: "manage" | "membership" | "read" | "remove" = "manage",
 ): Promise<Response> {
   let response: Response;
   try {
@@ -66,12 +82,27 @@ async function request(
           ? "This book is already in this collection."
           : "A collection with this name already exists. Choose another name.",
     };
+    if (operation === "read" || operation === "remove") {
+      messages[400] =
+        operation === "read"
+          ? "Invalid collection ID."
+          : "Invalid collection or saved book ID.";
+      messages[404] =
+        operation === "read"
+          ? "Collection not found."
+          : "This book is no longer available in this collection.";
+    }
+    const fallbackMessages = {
+      manage: "Could not save your collection changes. Please try again.",
+      membership:
+        "Could not add this book to the collection. Please try again.",
+      read: "Could not load this collection. Please try again.",
+      remove:
+        "Could not remove this book from the collection. Please try again.",
+    };
     throw new CollectionApiError(
       response.status,
-      messages[response.status] ??
-        (operation === "membership"
-          ? "Could not add this book to the collection. Please try again."
-          : "Could not save your collection changes. Please try again."),
+      messages[response.status] ?? fallbackMessages[operation],
     );
   }
   return response;
@@ -132,6 +163,29 @@ export async function renameCollection(
 
 export async function deleteCollection(id: number): Promise<void> {
   await request(`/${id}`, { method: "DELETE" });
+}
+
+export async function getCollection(
+  id: number,
+  signal?: AbortSignal,
+): Promise<CollectionDetails> {
+  const response = await request(`/${id}`, { signal }, "read");
+  return readResponse(
+    response,
+    collectionDetailsResponse,
+    "Could not read this collection. Please try again.",
+  );
+}
+
+export async function removeBookFromCollection(
+  collectionId: number,
+  savedBookId: number,
+): Promise<void> {
+  await request(
+    `/${collectionId}/books/${savedBookId}`,
+    { method: "DELETE" },
+    "remove",
+  );
 }
 
 export async function listCollectionsForBook(

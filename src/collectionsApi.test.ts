@@ -6,6 +6,8 @@ import {
   listCollectionsForBook,
   addBookToCollection,
   renameCollection,
+  getCollection,
+  removeBookFromCollection,
 } from "./collectionsApi";
 import { jsonResponse } from "./test/renderWithProviders";
 
@@ -16,6 +18,82 @@ const collection = {
   bookCount: 0,
 };
 describe("collectionsApi", () => {
+  it("loads and validates collection details with cancellation", async () => {
+    const data = {
+      collection: { ...collection, bookCount: 1 },
+      books: [
+        {
+          id: 12,
+          bookKey: "/works/OL1W",
+          readingStatus: "finished",
+          createdAt: "2026-01-01",
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(data));
+    vi.stubGlobal("fetch", fetchMock);
+    const signal = new AbortController().signal;
+    expect(await getCollection(7, signal)).toEqual(data);
+    expect(fetchMock).toHaveBeenCalledWith("/api/collections/7", { signal });
+  });
+  it.each([
+    {},
+    { collection, books: [{}] },
+    {
+      collection,
+      books: [
+        {
+          id: 12,
+          bookKey: "/works/OL1W",
+          readingStatus: "invalid",
+          createdAt: "2026-01-01",
+        },
+      ],
+    },
+  ])("rejects malformed collection detail data", async (body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
+    await expect(getCollection(7)).rejects.toThrow(
+      "Could not read this collection",
+    );
+  });
+  it("removes only membership using the saved-book ID and accepts empty 204", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(removeBookFromCollection(7, 12)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "/api/collections/7/books/12",
+      { method: "DELETE" },
+    );
+  });
+  it.each([400, 401, 404, 500])(
+    "uses read/remove-specific errors for HTTP %s",
+    async (status) => {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => jsonResponse({}, status));
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(getCollection(7)).rejects.toThrow(
+        status === 400
+          ? "Invalid collection ID"
+          : status === 401
+            ? "session has expired"
+            : status === 404
+              ? "Collection not found"
+              : "Could not load this collection",
+      );
+      await expect(removeBookFromCollection(7, 12)).rejects.toThrow(
+        status === 400
+          ? "Invalid collection or saved book ID"
+          : status === 401
+            ? "session has expired"
+            : status === 404
+              ? "no longer available in this collection"
+              : "Could not remove this book",
+      );
+    },
+  );
   it.each([
     null,
     {},
