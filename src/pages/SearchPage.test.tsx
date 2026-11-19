@@ -505,6 +505,66 @@ describe("SearchPage", () => {
       expect(fantasy).toHaveAttribute("aria-pressed", "false");
     });
 
+    it("DIS-01-T-1 saves one change at a time", async () => {
+      let finishSave: (genres: ["Fantasy"]) => void = () => {};
+      vi.mocked(saveInterests).mockReturnValueOnce(
+        new Promise((resolve) => (finishSave = resolve)),
+      );
+      renderSearch("/search", USER);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Fantasy" }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Mystery" }));
+      await userEvent.click(screen.getByRole("button", { name: "Horror" }));
+      expect(saveInterests).toHaveBeenCalledTimes(1);
+      expect(saveInterests).toHaveBeenLastCalledWith(["Fantasy"]);
+
+      act(() => finishSave(["Fantasy"]));
+      await waitFor(() => expect(saveInterests).toHaveBeenCalledTimes(2));
+      expect(saveInterests).toHaveBeenLastCalledWith([
+        "Fantasy",
+        "Mystery",
+        "Horror",
+      ]);
+      for (const name of ["Fantasy", "Mystery", "Horror"]) {
+        expect(screen.getByRole("button", { name })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
+      }
+    });
+
+    it("DIS-01-T-1 a failed save drops the changes after it", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Poetry"]);
+      let failSave: (err: Error) => void = () => {};
+      vi.mocked(saveInterests).mockReturnValueOnce(
+        new Promise((_resolve, reject) => (failSave = reject)),
+      );
+      renderSearch("/search", USER);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Fantasy" }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Mystery" }));
+
+      act(() => failSave(new Error("Could not save your genres.")));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not save your genres.",
+      );
+      expect(screen.getByRole("button", { name: "Poetry" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      for (const name of ["Fantasy", "Mystery"]) {
+        expect(screen.getByRole("button", { name })).toHaveAttribute(
+          "aria-pressed",
+          "false",
+        );
+      }
+      expect(saveInterests).toHaveBeenCalledTimes(1);
+    });
+
     it("DIS-01-T-1 logged-out users don't see the genre picker", async () => {
       renderSearch();
       await screen.findByRole("heading", { name: "Try searching for" });

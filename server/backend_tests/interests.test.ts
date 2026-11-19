@@ -122,6 +122,31 @@ test("DIS-01-T-1 keeps each user's genres separate", async () => {
   assert.deepEqual(await storedGenres(second), ["History", "Biography"]);
 });
 
+test("DIS-01-T-1 overlapping saves don't conflict", async () => {
+  const lists = [
+    ["Fantasy", "Mystery"],
+    ["Fantasy", "Mystery", "Romance"],
+    ["Fantasy", "Horror"],
+  ];
+  for (let round = 0; round < 10; round++) {
+    const token = await createSignedInUser();
+    await putInterests({ genres: ["Fantasy"] }, token);
+
+    const responses = await Promise.all(
+      lists.map((genres) => putInterests({ genres }, token)),
+    );
+    assert.deepEqual(
+      responses.map(({ status }) => status),
+      [200, 200, 200],
+    );
+    const stored = await storedGenres(token);
+    assert.ok(
+      lists.some((genres) => JSON.stringify(genres) === JSON.stringify(stored)),
+      `stored ${JSON.stringify(stored)}`,
+    );
+  }
+});
+
 test("DIS-01-T-1 rejects invalid genres without changing them", async () => {
   const token = await createSignedInUser();
   await putInterests({ genres: ["Romance"] }, token);
