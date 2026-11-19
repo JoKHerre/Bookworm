@@ -12,6 +12,7 @@ import { loadSession } from "./auth/middleware.ts";
 import { authRouter } from "./routes/auth.ts";
 import { booksRouter } from "./routes/books.ts";
 import { collectionsRouter } from "./routes/collections.ts";
+import { interestsRouter } from "./routes/interests.ts";
 import { libraryRouter } from "./routes/library.ts";
 import { ratingsRouter } from "./routes/ratings.ts";
 
@@ -28,6 +29,7 @@ export function createApp(): Express {
   app.use("/api/library", libraryRouter);
   app.use("/api/collections", collectionsRouter);
   app.use("/api/ratings", ratingsRouter);
+  app.use("/api/interests", interestsRouter);
 
   app.get("/api/health", async (req: Request, res: Response) => {
     await db.execute(sql`select 1`);
