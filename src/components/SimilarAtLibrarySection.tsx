@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { BookFormat, TitleSearchResult } from "../../shared/titleSearch";
-import { searchLibraryByTitle } from "../booksApi";
+import { searchLibraryByTitle } from "../api/books";
 
 function SimilarAtLibrarySection({
   title,

@@ -10,7 +10,8 @@ import {
   validateImportRows,
   type ValidateImportResult,
 } from "../../shared/csvImport";
-import { importBooks, type ImportBooksResult } from "../libraryApi";
+import type { ImportBooksResponse } from "../../shared/library";
+import { importBooks } from "../api/library";
 import "./ImportBooksPage.css";
 
 function formatSize(bytes: number) {
@@ -24,7 +25,7 @@ function ImportBooksPage() {
   const [parsed, setParsed] = useState<ValidateImportResult | null>(null); // the valid rows and row errors found in the file
   const [readyName, setReadyName] = useState(""); // name of the file that was read
   const [importing, setImporting] = useState(false); // whether the books are being saved to the library
-  const [result, setResult] = useState<ImportBooksResult | null>(null); // counts returned after importing
+  const [result, setResult] = useState<ImportBooksResponse | null>(null); // counts returned after importing
 
   // choosing (or clearing) a file replaces any previous result
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -62,7 +63,7 @@ function ImportBooksPage() {
         setError(result.error);
       }
     } catch {
-      setError("Could not read this file. Please try again.");
+      setError("Could not read this file.");
     } finally {
       setReading(false);
     }
@@ -84,9 +85,8 @@ function ImportBooksPage() {
     <main className="import-page">
       <h1>Import books</h1>
       <p>
-        Upload a CSV file with a header row. Supported columns:{" "}
-        {IMPORT_COLUMNS.join(", ")} (only title is required). Files can have up
-        to {IMPORT_MAX_ROWS} rows and be up to 1 MB.
+        CSV with a header row. Supported columns: {IMPORT_COLUMNS.join(", ")}{" "}
+        (only title is required). Up to {IMPORT_MAX_ROWS} rows and 1 MB.
       </p>
 
       <div className="import-card">
@@ -120,16 +120,15 @@ function ImportBooksPage() {
           readyName &&
           parsed && (
             <p className="import-status" role="status">
-              {readyName} is ready to import. {total}{" "}
-              {total === 1 ? "book" : "books"} found. {parsed.valid.length}{" "}
-              valid, {parsed.errors.length} with problems.
+              {parsed.valid.length} of {total}{" "}
+              {total === 1 ? "book is" : "books are"} valid.
             </p>
           )
         )}
 
         {parsed && !result && unmatched > 0 && (
           <p>
-            {`${unmatched} valid ${unmatched === 1 ? "book has" : "books have"} no book_key and cannot be imported until title matching is available.`}
+            {`${unmatched} ${unmatched === 1 ? "book has" : "books have"} no book_key and will be skipped.`}
           </p>
         )}
 

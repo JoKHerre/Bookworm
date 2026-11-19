@@ -18,7 +18,8 @@ export function toTags(subjects: readonly string[] = []): string[] {
 }
 
 interface BookWithTags {
-  details: { tags: readonly string[] } | null;
+  // null when details failed to load, undefined while they're still loading
+  details: { tags: readonly string[] } | null | undefined;
 }
 
 // Sorted, unique tags across a set of books; books without details add none.
@@ -28,15 +29,6 @@ export function libraryTags(books: readonly BookWithTags[]): string[] {
     for (const tag of book.details?.tags ?? []) tags.add(tag);
   }
   return [...tags].sort();
-}
-
-// Books carrying the tag; an empty tag keeps every book.
-export function filterByTag<T extends BookWithTags>(
-  books: readonly T[],
-  tag: string,
-): T[] {
-  if (!tag) return [...books];
-  return books.filter((book) => book.details?.tags.includes(tag));
 }
 
 // Books carrying every selected tag; an empty selection keeps every book.

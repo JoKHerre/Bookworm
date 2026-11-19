@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { getRatings, saveRating } from "./ratingsApi";
-import { jsonResponse } from "./test/renderWithProviders";
+import { getRatings, saveRating } from "./ratings";
+import { jsonResponse } from "../test/renderWithProviders";
 
-describe("ratingsApi", () => {
+describe("api/ratings", () => {
   it("TST-01-T-1 saveRating sends a PUT", async () => {
     const fetchMock = vi
       .fn()
@@ -25,7 +25,7 @@ describe("ratingsApi", () => {
   it("TST-01-T-1 saveRating maps failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 401)));
     await expect(saveRating("/works/OL1W", 4)).rejects.toThrow(
-      "Please sign in to rate books.",
+      "Please log in to rate books.",
     );
 
     vi.stubGlobal(
@@ -36,12 +36,12 @@ describe("ratingsApi", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(null, 500)));
     await expect(saveRating("/works/OL1W", 4)).rejects.toThrow(
-      "Could not save your rating. Please try again.",
+      "Could not save your rating.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(saveRating("/works/OL1W", 4)).rejects.toThrow(
-      "Unable to connect. Please try again.",
+      "Unable to connect.",
     );
   });
 
@@ -55,5 +55,14 @@ describe("ratingsApi", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 500)));
     await expect(getRatings()).rejects.toThrow("Could not load your ratings.");
+  });
+
+  it("REF-01-T-2 asks for one book's rating", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ratings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await getRatings(undefined, "/works/OL1W");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "/api/ratings?bookKey=%2Fworks%2FOL1W",
+    );
   });
 });

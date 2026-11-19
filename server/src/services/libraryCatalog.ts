@@ -1,18 +1,18 @@
 import * as cheerio from "cheerio";
 import makeFetchCookie from "fetch-cookie";
 import {
+  LIBRARY_CATALOG_CTX as CTX,
+  LIBRARY_CATALOG_SEARCH_URL as BASE,
   availability,
   type Availability,
 } from "../../../shared/availability.ts";
-
+import { cleanIsbn } from "../../../shared/isbn.ts";
 import {
   titleSearchResult,
   type BookFormat,
   type TitleSearchResult,
 } from "../../../shared/titleSearch.ts";
 
-const BASE = "https://catalog.santacruzpl.org/polaris/search/";
-const CTX = "1.1033.0.0.1";
 const MATERIAL_FORMAT_SELECTOR =
   'img.c-title-detail-formats__img[src*="/formats/"][alt]';
 export const CATALOG_REQUEST_TIMEOUT_MS = 5000;
@@ -26,7 +26,7 @@ export async function checkIsbnAvailability(
   isbn: string,
   signal?: AbortSignal,
 ): Promise<Availability | null> {
-  const term = isbn.replace(/[^0-9Xx]/g, "").toUpperCase();
+  const term = cleanIsbn(isbn);
   if (!term) throw new Error("Provide a valid isbn");
   signal?.throwIfAborted();
 

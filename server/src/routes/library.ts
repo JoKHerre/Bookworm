@@ -1,60 +1,39 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { and, eq } from "drizzle-orm";
 import z from "zod";
-import { db } from "../db/index.ts"; // postgresql connection
-import { savedBooks } from "../db/schema.ts"; // saved books table definition
-import { requireAuth } from "../auth/middleware.ts"; // existing login check
+import { db } from "../db/index.ts";
+import { savedBooks } from "../db/schema.ts";
+import { requireAuth } from "../auth/middleware.ts";
+import { parsePositiveId } from "./params.ts";
 import { IMPORT_MAX_ROWS } from "../../../shared/bookImport.ts";
 import { openLibraryWorkKey } from "../../../shared/books.ts";
 import { READING_STATUSES } from "../../../shared/readingStatus.ts";
+import type { ApiError } from "../../../shared/api.ts";
+import type {
+  ImportBooksResponse,
+  LibraryResponse,
+  ReadingStatusResponse,
+  SaveBookResponse,
+} from "../../../shared/library.ts";
 
-// define expected shape of request body for saving a book
-// bookKey format using regex, reject extra fields (such as a userid) with .strict(), etc
-const saveBookBody = z
-  .object({
-    bookKey: openLibraryWorkKey,
-  })
-  .strict();
+// strict objects reject extra fields such as a userId
+const saveBookBody = z.strictObject({ bookKey: openLibraryWorkKey });
 
-// define expected shape of request body for updating reading status
-// require an object with one property, readingStatus, which must be one of the three allowed values
-const updateReadingStatusBody = z
-  .object({
-    readingStatus: z.enum(READING_STATUSES),
-  })
-  .strict();
+const updateReadingStatusBody = z.strictObject({
+  readingStatus: z.enum(READING_STATUSES),
+});
 
-// define expected shape of request body for importing books: a bounded list of
-// work keys, with no other fields (such as a user ID)
-const importBooksBody = z
-  .object({
-    bookKeys: z.array(openLibraryWorkKey).min(1).max(IMPORT_MAX_ROWS),
-  })
-  .strict();
+const importBooksBody = z.strictObject({
+  bookKeys: z.array(openLibraryWorkKey).min(1).max(IMPORT_MAX_ROWS),
+});
 
 const INVALID_SAVED_BOOK_ID_ERROR = "Invalid saved book ID";
-const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
-function parseSavedBookId(idParam: unknown): number | null {
-  if (typeof idParam !== "string" || !/^\d+$/.test(idParam)) {
-    return null;
-  }
-
-  const id = Number(idParam);
-  if (!Number.isSafeInteger(id) || id < 1 || id > MAX_POSTGRES_INTEGER) {
-    return null;
-  }
-
-  return id;
-}
-
-// create an express router for library-related endpoints
 export const libraryRouter: Router = Router();
+libraryRouter.use(requireAuth);
 
-// define GET /api/library endpoint for retrieving a user's saved books
-libraryRouter.get("/", requireAuth, async (_req, res) => {
-  // run requireAuth before handler to reject unauthenticated requests
-  // from saved_books, return each row's identity, key, creation time, and reading status
+// GET /api/library: the signed-in user's saved books
+libraryRouter.get("/", async (_req, res: Response<LibraryResponse<Date>>) => {
   const books = await db
     .select({
       id: savedBooks.id,
@@ -65,20 +44,17 @@ libraryRouter.get("/", requireAuth, async (_req, res) => {
     .from(savedBooks)
     .where(eq(savedBooks.userId, res.locals.user!.id));
 
-  // return the array of saved books as json
   res.json({ books });
 });
 
-// define DELETE /api/library/:id endpoint for removing a saved book from the user's library
-libraryRouter.delete("/:id", requireAuth, async (req, res) => {
-  // Validate the path parameter before converting it to a PostgreSQL integer.
-  const id = parseSavedBookId(req.params.id);
+// DELETE /api/library/:id: remove a saved book
+libraryRouter.delete("/:id", async (req, res: Response<ApiError>) => {
+  const id = parsePositiveId(req.params.id);
   if (id === null) {
     res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
     return;
   }
 
-  // Delete only a row owned by the signed-in user; return its ID if one was deleted.
   const [deletedBook] = await db
     .delete(savedBooks)
     .where(
@@ -86,114 +62,111 @@ libraryRouter.delete("/:id", requireAuth, async (req, res) => {
     )
     .returning({ id: savedBooks.id });
 
-  // delete attempt unsuccessful: 404 row not found in library
   if (!deletedBook) {
     res.status(404).json({ error: "Book not found in your library" });
     return;
   }
 
-  // delete successful: return 204
   res.status(204).end();
 });
 
-// PATCH route for updating the reading status of a saved book in the user's library
-libraryRouter.patch("/:id/reading-status", requireAuth, async (req, res) => {
-  // ensure valid book id
-  const id = parseSavedBookId(req.params.id);
-  if (id === null) {
-    res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
-    return;
-  }
+// PATCH /api/library/:id/reading-status
+libraryRouter.patch(
+  "/:id/reading-status",
+  async (req, res: Response<ReadingStatusResponse | ApiError>) => {
+    const id = parsePositiveId(req.params.id);
+    if (id === null) {
+      res.status(400).json({ error: INVALID_SAVED_BOOK_ID_ERROR });
+      return;
+    }
 
-  // get and validate request body's readingStatus
-  const parsed = updateReadingStatusBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid reading status" });
-    return;
-  }
+    const parsed = updateReadingStatusBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid reading status" });
+      return;
+    }
 
-  // update readingStatus for this user's saved book
-  const [updatedBook] = await db
-    .update(savedBooks)
-    .set({ readingStatus: parsed.data.readingStatus })
-    .where(
-      and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
-    )
-    .returning({
-      id: savedBooks.id,
-      readingStatus: savedBooks.readingStatus,
+    const [updatedBook] = await db
+      .update(savedBooks)
+      .set({ readingStatus: parsed.data.readingStatus })
+      .where(
+        and(eq(savedBooks.id, id), eq(savedBooks.userId, res.locals.user!.id)),
+      )
+      .returning({
+        id: savedBooks.id,
+        readingStatus: savedBooks.readingStatus,
+      });
+
+    if (!updatedBook) {
+      res.status(404).json({ error: "Book not found in your library" });
+      return;
+    }
+
+    res.status(200).json(updatedBook);
+  },
+);
+
+// POST /api/library: save a book
+libraryRouter.post(
+  "/",
+  async (req, res: Response<SaveBookResponse<Date> | ApiError>) => {
+    const parsed = saveBookBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid book key" });
+      return;
+    }
+
+    const [savedBook] = await db
+      .insert(savedBooks)
+      .values({
+        userId: res.locals.user!.id,
+        bookKey: parsed.data.bookKey,
+      })
+      .onConflictDoNothing({
+        target: [savedBooks.userId, savedBooks.bookKey],
+      })
+      .returning({
+        id: savedBooks.id,
+        userId: savedBooks.userId,
+        bookKey: savedBooks.bookKey,
+        createdAt: savedBooks.createdAt,
+      });
+
+    // no row returned means the book was already saved
+    if (!savedBook) {
+      res.status(409).json({ error: "Book is already in your library" });
+      return;
+    }
+
+    res.status(201).json(savedBook);
+  },
+);
+
+// POST /api/library/import: save many books at once (the book importer)
+libraryRouter.post(
+  "/import",
+  async (req, res: Response<ImportBooksResponse | ApiError>) => {
+    const parsed = importBooksBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid import" });
+      return;
+    }
+
+    // a repeated key in one request counts once
+    const bookKeys = [...new Set(parsed.data.bookKeys)];
+
+    // one insert for the whole list; keys the user already saved are skipped
+    const inserted = await db
+      .insert(savedBooks)
+      .values(
+        bookKeys.map((bookKey) => ({ userId: res.locals.user!.id, bookKey })),
+      )
+      .onConflictDoNothing({ target: [savedBooks.userId, savedBooks.bookKey] })
+      .returning({ id: savedBooks.id });
+
+    res.json({
+      added: inserted.length,
+      alreadySaved: bookKeys.length - inserted.length,
     });
-
-  // handle book not found case
-  if (!updatedBook) {
-    res.status(404).json({ error: "Book not found in your library" });
-    return;
-  }
-
-  // return success code
-  res.status(200).json(updatedBook);
-});
-
-// define the POST /api/library endpoint for saving a book to the user's library
-libraryRouter.post("/", requireAuth, async (req, res) => {
-  // check request body against the expected schema; if invalid, return 400 with error message
-  const parsed = saveBookBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid book key" });
-    return;
-  }
-
-  // insert into saved_books table with the authenticated user's ID and the provided bookKey
-  const [savedBook] = await db
-    .insert(savedBooks)
-    .values({
-      userId: res.locals.user!.id,
-      bookKey: parsed.data.bookKey,
-    })
-    .onConflictDoNothing({
-      // if duplicate conflict, do nothing
-      target: [savedBooks.userId, savedBooks.bookKey],
-    })
-    .returning({
-      id: savedBooks.id,
-      userId: savedBooks.userId,
-      bookKey: savedBooks.bookKey,
-      createdAt: savedBooks.createdAt,
-    }); // return the existing API response fields if successfully inserted
-
-  // no row returned == skipped insert due to duplicate; return 409 with error message
-  if (!savedBook) {
-    res.status(409).json({ error: "Book is already in your library" });
-    return;
-  }
-
-  // return success: 201 with the newly created saved book row as json
-  res.status(201).json(savedBook);
-});
-
-// define the POST /api/library/import endpoint for saving many books at once
-// (the book importer); must be declared as its own path, not under /:id
-libraryRouter.post("/import", requireAuth, async (req, res) => {
-  const parsed = importBooksBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid import" });
-    return;
-  }
-
-  // a repeated key in one request counts once
-  const bookKeys = [...new Set(parsed.data.bookKeys)];
-
-  // one insert for the whole list; keys the user already saved are skipped
-  const inserted = await db
-    .insert(savedBooks)
-    .values(
-      bookKeys.map((bookKey) => ({ userId: res.locals.user!.id, bookKey })),
-    )
-    .onConflictDoNothing({ target: [savedBooks.userId, savedBooks.bookKey] })
-    .returning({ id: savedBooks.id });
-
-  res.json({
-    added: inserted.length,
-    alreadySaved: bookKeys.length - inserted.length,
-  });
-});
+  },
+);

@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
+import type { ApiError } from "../../shared/api.ts";
 import { after, afterEach, before, test } from "node:test";
-import type { Server } from "node:http";
-import express from "express";
 import type {
   BookSearchResponse,
   BookSearchResult,
-  BooksError,
 } from "../../shared/books.ts";
-import { booksRouter } from "../src/routes/books.ts";
+import { createApp } from "../src/app.ts";
+import { startTestServer } from "./test-utils.ts";
 
 const resultLimit = 20;
 const totalMatches = resultLimit * 2;
 const originalFetch = globalThis.fetch;
-let server: Server;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 let upstreamRequests: URL[];
 
@@ -41,23 +40,11 @@ function get(query: string | URLSearchParams) {
 }
 
 before(async () => {
-  const app = express();
-  app.use("/api/books", booksRouter);
-  server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
-    listener.once("error", reject);
-  });
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 after(async () => {
-  if (server?.listening) {
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
-  }
+  await closeServer();
 });
 
 afterEach(() => {
@@ -139,6 +126,20 @@ test("SRC-04-T-2 applies every first-publication year range", async () => {
       year,
     );
   }
+});
+
+test("REF-01-T-2 keeps query syntax from escaping the filters", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+
+  const res = await get(
+    new URLSearchParams({ q: "dune) OR (harry", genre: "Fantasy" }),
+  );
+
+  assert.equal(res.status, 200);
+  assert.equal(
+    upstreamRequests[0]?.searchParams.get("q"),
+    '(dune\\) OR \\(harry) AND subject:("fantasy")',
+  );
 });
 
 // Criterion 2: OR within genres, AND between different filters and the query.
@@ -234,7 +235,7 @@ test("SRC-04-T-2 rejects invalid filters without calling Open Library", async ()
 
   for (const query of invalidQueries) {
     const res = await get(query);
-    const body = (await res.json()) as BooksError;
+    const body = (await res.json()) as ApiError;
     assert.equal(res.status, 400, query);
     assert.equal(typeof body.error, "string", query);
     assert.ok(body.error.length > 0, query);

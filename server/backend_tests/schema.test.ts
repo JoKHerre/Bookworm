@@ -5,7 +5,6 @@ import { assertTestDatabaseUrl, createTestBookKey, eq } from "./test-utils.ts";
 
 assertTestDatabaseUrl();
 
-// import postgres connection, schema, and drizzle eq helper
 const [
   { db, pool },
   { bookRatings, savedBooks, users, collections, collectionBooks },
@@ -14,11 +13,10 @@ const [
   import("../src/db/schema.ts"),
 ]);
 
-// trackers
 const createdUserIds = new Set<number>();
 let emailCounter = 0;
 
-// insert a user with a unique email and a placeholder password hash, then return new user's ID
+// insert a user with a unique email and a placeholder password hash
 async function createTestUser() {
   emailCounter += 1;
   const email = `schema-test-${process.pid}-${Date.now()}-${emailCounter}@example.test`;
@@ -32,19 +30,17 @@ async function createTestUser() {
   return user;
 }
 
-// post-test cleanup: delete any remaining test users and close the postgres connection pool
+// deleting users cascades to their rows
 after(async () => {
   try {
     for (const userId of createdUserIds) {
       await db.delete(users).where(eq(users.id, userId));
     }
   } finally {
-    // still attempt to close pool
     await pool.end();
   }
 });
 
-// helper to check that an error has a certain error code
 function hasPostgresErrorCode(error: unknown, code: string): boolean {
   if (typeof error !== "object" || error === null) return false;
 
@@ -53,9 +49,7 @@ function hasPostgresErrorCode(error: unknown, code: string): boolean {
   return "cause" in error && hasPostgresErrorCode(error.cause, code);
 }
 
-// test: check that the saved_books table exists and has the expected structure
 test("COL-01-T-4 creates the saved-books table", async () => {
-  // ask postgres for the columns of the saved_books table in the public schema
   const result = await pool.query<{
     column_name: string;
     is_nullable: string;
@@ -67,12 +61,10 @@ test("COL-01-T-4 creates the saved-books table", async () => {
      WHERE table_schema = 'public' AND table_name = 'saved_books'`,
   );
 
-  // save results in a lookup map
   const columns = new Map(
     result.rows.map((column) => [column.column_name, column]),
   );
 
-  // check that the expected columns are present
   assert.deepEqual([...columns.keys()].sort(), [
     "book_key",
     "created_at",
@@ -81,8 +73,6 @@ test("COL-01-T-4 creates the saved-books table", async () => {
     "user_id",
   ]);
 
-  // check that the columns have the expected properties (can't be null, id = automatically generated identity,
-  // created_at has a default value, etc.)
   assert.equal(columns.get("id")?.is_nullable, "NO");
   assert.equal(columns.get("id")?.is_identity, "YES");
   assert.equal(columns.get("user_id")?.is_nullable, "NO");
@@ -107,7 +97,6 @@ test("COL-01-T-4 creates the saved-books table", async () => {
     ["to_be_read", "currently_reading", "finished"],
   );
 
-  // get the table's indexes and check that there is a unique index on (user_id, book_key)
   const indexes = await pool.query<{ indexdef: string }>(
     `SELECT indexdef FROM pg_indexes
      WHERE schemaname = 'public' AND tablename = 'saved_books'`,
@@ -125,11 +114,9 @@ test("COL-01-T-4 creates the saved-books table", async () => {
 
 // COL-02 reading status tests
 test("COL-02-T-1 defaults saved books to to_be_read", async () => {
-  // create sample user and book key
   const user = await createTestUser();
   const bookKey = createTestBookKey();
 
-  // insert a saved_books row without specifying reading_status
   const result = await pool.query<{ reading_status: string }>(
     `INSERT INTO saved_books (user_id, book_key)
      VALUES ($1, $2)
@@ -137,17 +124,13 @@ test("COL-02-T-1 defaults saved books to to_be_read", async () => {
     [user.id, bookKey],
   );
 
-  // check that reading_status is present and set to "to_be_read"
   assert.equal(result.rows[0]?.reading_status, "to_be_read");
 });
 
 test("COL-02-T-1 accepts each supported reading status", async () => {
-  // create sample user
   const user = await createTestUser();
   const statuses = ["to_be_read", "currently_reading", "finished"];
 
-  // try inserting a saved_books row for each of the reading statuses
-  // ensure that each status is accepted and returned correctly
   for (const status of statuses) {
     const result = await pool.query<{ reading_status: string }>(
       `INSERT INTO saved_books (user_id, book_key, reading_status)
@@ -160,11 +143,8 @@ test("COL-02-T-1 accepts each supported reading status", async () => {
 });
 
 test("COL-02-T-1 rejects unsupported and null reading statuses", async () => {
-  // create sample user
   const user = await createTestUser();
 
-  // try inserting saved_books row with an unsupported reading statuses
-  // ensure errors occur
   await assert.rejects(
     pool.query(
       `INSERT INTO saved_books (user_id, book_key, reading_status)
@@ -184,9 +164,8 @@ test("COL-02-T-1 rejects unsupported and null reading statuses", async () => {
   );
 });
 
-// test: require an existing user
 test("COL-01-T-4 requires an existing user", async () => {
-  // try inserting a row with a non-existent user ID (-1) and expect a foreign key violation (error code 23503)
+  // foreign key violation (23503)
   await assert.rejects(
     pool.query("INSERT INTO saved_books (user_id, book_key) VALUES ($1, $2)", [
       -1,
@@ -196,12 +175,10 @@ test("COL-01-T-4 requires an existing user", async () => {
   );
 });
 
-// test: require both a user ID and a book key
 test("COL-01-T-4 requires a user ID and book key", async () => {
   const user = await createTestUser();
 
-  // try inserting a row into saved_books with a book key but no user_id
-  // expect a missing value violation (error code 23502)
+  // missing user_id: not-null violation (23502)
   await assert.rejects(
     pool.query("INSERT INTO saved_books (book_key) VALUES ($1)", [
       createTestBookKey(),
@@ -209,26 +186,21 @@ test("COL-01-T-4 requires a user ID and book key", async () => {
     (error) => hasPostgresErrorCode(error, "23502"),
   );
 
-  // try inserting a row into saved_books with a user_id but no book_key
-  // expect a missing value violation (error code 23502)
+  // missing book_key
   await assert.rejects(
     pool.query("INSERT INTO saved_books (user_id) VALUES ($1)", [user.id]),
     (error) => hasPostgresErrorCode(error, "23502"),
   );
 });
 
-// test: deleting a user should cascade and delete their saved_books rows
 test("COL-01-T-4 cascades when a user is deleted", async () => {
-  // create test user and book key
   const user = await createTestUser();
   const bookKey = createTestBookKey();
 
-  // insert a row into saved_books, then delete the user's row from the users table
   await db.insert(savedBooks).values({ userId: user.id, bookKey });
   await db.delete(users).where(eq(users.id, user.id));
   createdUserIds.delete(user.id);
 
-  // check that there are no saved_books rows with that user id
   const remainingRows = await db
     .select()
     .from(savedBooks)
@@ -236,35 +208,28 @@ test("COL-01-T-4 cascades when a user is deleted", async () => {
   assert.equal(remainingRows.length, 0);
 });
 
-// test: reject a duplicate book for the same user
 test("COL-01-T-4 rejects a duplicate for one user", async () => {
-  // create test user and a book key
   const user = await createTestUser();
   const book = { userId: user.id, bookKey: createTestBookKey() };
 
-  // insert row into table
   await db.insert(savedBooks).values(book);
 
-  // try insert again and expect a unique violation (error code 23505)
+  // unique violation (23505)
   await assert.rejects(db.insert(savedBooks).values(book), (error) =>
     hasPostgresErrorCode(error, "23505"),
   );
 });
 
-// test: allow the same book for different users
 test("COL-01-T-4 allows the same book for different users", async () => {
-  // create two test users and a book key
   const firstUser = await createTestUser();
   const secondUser = await createTestUser();
   const bookKey = createTestBookKey();
 
-  // insert the two rows into saved_books at the same time
   await db.insert(savedBooks).values([
     { userId: firstUser.id, bookKey },
     { userId: secondUser.id, bookKey },
   ]);
 
-  // check that there are in fact two rows with this book key
   const rows = await db
     .select()
     .from(savedBooks)

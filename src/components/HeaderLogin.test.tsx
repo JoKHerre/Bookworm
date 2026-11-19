@@ -21,7 +21,7 @@ describe("Header login redirect", () => {
       </Routes>,
       { route: "/personal-library" },
     );
-    await userEvent.click(screen.getByRole("link", { name: "Log In" }));
+    await userEvent.click(screen.getByRole("link", { name: "Log in" }));
     expect(
       screen.getByText("Log in, then return to /personal-library"),
     ).toBeInTheDocument();

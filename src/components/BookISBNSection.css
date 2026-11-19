@@ -47,11 +47,6 @@
   cursor: wait;
 }
 
-.isbn-help {
-  margin-top: 8px;
-  font-size: 12px;
-}
-
 .isbn-results {
   max-height: 240px;
   overflow-y: auto;

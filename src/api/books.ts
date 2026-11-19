@@ -6,36 +6,32 @@ import {
   type BookISBNsQuery,
   type BookSearchQuery,
   type BookSearchResponse,
-} from "../shared/books";
-
-import { availabilityResponse } from "../shared/availability";
-import { titleSearchResponse, type BookFormat } from "../shared/titleSearch";
+} from "../../shared/books";
+import { availabilityResponse } from "../../shared/availability";
+import { titleSearchResponse, type BookFormat } from "../../shared/titleSearch";
+import { apiRequest, userError } from "./client";
 
 async function get<T>(
   path: string,
   params: URLSearchParams,
   signal: AbortSignal,
 ): Promise<T> {
-  let response: Response;
+  let data: T | null;
   try {
-    response = await fetch(`/api/books/${path}?${params}`, { signal });
+    data = await apiRequest<T | null>(`/api/books/${path}?${params}`, {
+      signal,
+    });
   } catch (err) {
-    if (signal.aborted) throw err;
-    throw new Error("Unable to connect. Please try again.", { cause: err });
-  }
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(
-      typeof data?.error === "string"
-        ? data.error
-        : "Unable to load books. Please try again.",
-    );
+    throw userError(err, {
+      fallback: "Unable to load books.",
+      byStatus: { 0: "Unable to connect." },
+      useServerMessage: true,
+    });
   }
   if (!data || typeof data !== "object") {
-    throw new Error("Unable to read the response. Please try again.");
+    throw new Error("Unable to read the response.");
   }
-  return data as T;
+  return data;
 }
 
 export function searchBooks(
@@ -99,7 +95,7 @@ export async function getBookISBNs(
     parsed.data.pagination.offset !== offset ||
     parsed.data.pagination.editionsChecked > limit
   ) {
-    throw new Error("Unable to read ISBNs. Please try again.");
+    throw new Error("Unable to read ISBNs.");
   }
   return parsed.data;
 }
@@ -112,7 +108,7 @@ export async function getBookAvailability(key: string, signal: AbortSignal) {
   );
   const parsed = availabilityResponse.safeParse(data);
   if (!parsed.success) {
-    throw new Error("Unable to read library availability. Please try again.");
+    throw new Error("Unable to read library availability.");
   }
   return parsed.data;
 }
@@ -129,7 +125,7 @@ export async function searchLibraryByTitle(
   );
   const parsed = titleSearchResponse.safeParse(data);
   if (!parsed.success) {
-    throw new Error("Unable to read library search results. Please try again.");
+    throw new Error("Unable to read library search results.");
   }
   return parsed.data;
 }

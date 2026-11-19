@@ -1,5 +1,6 @@
 import { IMPORT_MAX_ROWS, checkImportHeaders } from "./bookImport.ts";
 import { openLibraryWorkKey } from "./books.ts";
+import { hasValidIsbnChecksum } from "./isbn.ts";
 
 // One book line from an import file. `row` is the spreadsheet row number
 // (the header is row 1), so errors can point at the right line.
@@ -119,27 +120,10 @@ export interface ValidateImportResult {
 const MAX_TITLE_LENGTH = 300;
 const MAX_AUTHOR_LENGTH = 200;
 
-// Strip hyphens and spaces and return the ISBN if its length, characters, and checksum are valid.
+// Strip hyphens and spaces and return the ISBN if its checksum is valid.
 function normalizeIsbn(value: string): string | null {
   const isbn = value.replace(/[-\s]/g, "").toUpperCase();
-
-  if (/^\d{13}$/.test(isbn)) {
-    const sum = [...isbn].reduce(
-      (total, digit, i) => total + Number(digit) * (i % 2 === 0 ? 1 : 3),
-      0,
-    );
-    return sum % 10 === 0 ? isbn : null;
-  }
-
-  if (/^\d{9}[\dX]$/.test(isbn)) {
-    const sum = [...isbn].reduce(
-      (total, char, i) => total + (char === "X" ? 10 : Number(char)) * (10 - i),
-      0,
-    );
-    return sum % 11 === 0 ? isbn : null;
-  }
-
-  return null;
+  return hasValidIsbnChecksum(isbn) ? isbn : null;
 }
 
 // Check every row. Each row lands in exactly one list, in file order, and gets

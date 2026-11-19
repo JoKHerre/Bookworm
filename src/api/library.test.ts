@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { importBooks } from "./libraryApi";
-import { jsonResponse } from "./test/renderWithProviders";
+import { importBooks } from "./library";
+import { jsonResponse } from "../test/renderWithProviders";
 
-describe("libraryApi", () => {
+describe("api/library", () => {
   it("IMP-01-T-5 importBooks posts the keys", async () => {
     const fetchMock = vi
       .fn()
@@ -25,17 +25,17 @@ describe("libraryApi", () => {
   it("IMP-01-T-5 importBooks maps failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 401)));
     await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
-      "Your session has expired. Please sign in again.",
+      "Your session has expired. Please log in again.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({}, 500)));
     await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
-      "Could not import these books. Please try again.",
+      "Could not import these books.",
     );
 
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("down")));
     await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
-      "Could not import these books. Please try again.",
+      "Could not import these books.",
     );
   });
 });

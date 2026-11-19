@@ -1,35 +1,78 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
+  BOOK_GENRES,
+  BOOK_LANGUAGES,
+  PUBLICATION_YEAR_RANGES,
   bookSuggestionsQuery,
   type BookSearchQuery,
   type BookSearchResult,
 } from "../../shared/books";
-import { getBookSuggestions, searchBooks } from "../booksApi";
+import { getBookSuggestions, searchBooks } from "../api/books";
 import BookCard from "../components/BookCard";
+import SearchStart from "../components/SearchStart";
+import { useSavedBooks } from "../library/useSavedBooks";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./SearchPage.css";
 
-type ViewMode = "grid" | "list";
+// long enough to skip a request per keystroke, short enough to keep up with typing
+const SUGGESTION_DELAY_MS = 250;
 
-const genreOptions: BookSearchQuery["genre"] = [
-  "Fantasy",
-  "Sci-fi",
-  "Mystery",
-  "Romance",
-  "Horror",
-  "History",
-  "Thriller",
-  "Adventure",
-  "Biography",
-  "Non-fiction",
-  "Poetry",
-];
+const RECENT_SEARCHES_KEY = "bookworm:recent-searches";
+const RECENT_SEARCHES_LIMIT = 6;
+
+// Recent searches are a per-browser convenience; without storage there are none.
+function readRecentSearches(): string[] {
+  try {
+    const stored: unknown = JSON.parse(
+      localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]",
+    );
+    return Array.isArray(stored)
+      ? stored
+          .filter((value) => typeof value === "string")
+          .slice(0, RECENT_SEARCHES_LIMIT)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+type ViewMode = "grid" | "list";
+type Filters = Omit<BookSearchQuery, "q">;
+
+// Filters live in the URL beside q, so a refresh or Back keeps them.
+// Values the filters don't offer are ignored.
+function filtersFromParams(params: URLSearchParams): Filters {
+  const genres = params.getAll("genre");
+  return {
+    genre: BOOK_GENRES.filter((genre) => genres.includes(genre)),
+    language:
+      BOOK_LANGUAGES.find((value) => value === params.get("language")) ?? "",
+    year:
+      PUBLICATION_YEAR_RANGES.find((value) => value === params.get("year")) ??
+      "",
+  };
+}
+
+function yearLabel(range: (typeof PUBLICATION_YEAR_RANGES)[number]) {
+  return range === "before-1900" ? "Before 1900" : range;
+}
+
+function paramsFor(q: string, { genre, language, year }: Filters) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  for (const value of genre) params.append("genre", value);
+  if (language) params.set("language", language);
+  if (year) params.set("year", year);
+  return params;
+}
 
 function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const submittedQuery = searchParams.get("q") ?? "";
   const navigate = useNavigate();
+  const { saved, busyKeys, errors, save } = useSavedBooks();
+  const [recentSearches, setRecentSearches] = useState(readRecentSearches);
 
   const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [total, setTotal] = useState(0);
@@ -37,12 +80,17 @@ function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedGenres, setSelectedGenres] = useState<
-    BookSearchQuery["genre"]
-  >([]);
-  const [language, setLanguage] = useState<BookSearchQuery["language"]>("");
-  const [publicationYearRange, setPublicationYearRange] =
-    useState<BookSearchQuery["year"]>("");
+  // memoized on the query string so the search effect sees stable arrays
+  const searchString = searchParams.toString();
+  const filters = useMemo(
+    () => filtersFromParams(new URLSearchParams(searchString)),
+    [searchString],
+  );
+  const {
+    genre: selectedGenres,
+    language,
+    year: publicationYearRange,
+  } = filters;
   const hasActiveFilters =
     selectedGenres.length > 0 || language !== "" || publicationYearRange !== "";
   const genreFilterRef = useRef<HTMLDetailsElement>(null);
@@ -96,11 +144,7 @@ function SearchPage() {
       setError("");
 
       try {
-        const data = await searchBooks(submittedQuery, signal, {
-          genre: selectedGenres,
-          language,
-          year: publicationYearRange,
-        });
+        const data = await searchBooks(submittedQuery, signal, filters);
         if (!signal.aborted) {
           setBooks(data.books);
           setTotal(data.total);
@@ -119,13 +163,7 @@ function SearchPage() {
 
     void search();
     return () => controller.abort();
-  }, [
-    submittedQuery,
-    searchAttempt,
-    selectedGenres,
-    language,
-    publicationYearRange,
-  ]);
+  }, [submittedQuery, searchAttempt, filters]);
 
   useEffect(() => {
     if (!showSuggestions) return;
@@ -143,7 +181,7 @@ function SearchPage() {
         .catch(() => {
           if (!signal.aborted) setSuggestions([]);
         });
-    }, 1000);
+    }, SUGGESTION_DELAY_MS);
 
     return () => {
       window.clearTimeout(timeout);
@@ -185,16 +223,37 @@ function SearchPage() {
     }
   }
 
+  function rememberSearch(q: string) {
+    if (!q) return;
+    const next = [
+      q,
+      ...recentSearches.filter(
+        (recent) => recent.toLowerCase() !== q.toLowerCase(),
+      ),
+    ].slice(0, RECENT_SEARCHES_LIMIT);
+    setRecentSearches(next);
+    try {
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+    } catch {
+      // not remembered this time
+    }
+  }
+
+  function runSearch(q: string) {
+    rememberSearch(q);
+    if (q === submittedQuery) {
+      setSearchAttempt((attempt) => attempt + 1);
+    } else {
+      setSearchParams(paramsFor(q, filters));
+    }
+  }
+
   function handleSearch(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     closeSuggestions();
     const trimmed = query.trim();
     setQuery(trimmed);
-    if (trimmed === submittedQuery) {
-      setSearchAttempt((attempt) => attempt + 1);
-    } else {
-      setSearchParams(trimmed ? { q: trimmed } : {});
-    }
+    runSearch(trimmed);
   }
 
   function viewBook(book: BookSearchResult) {
@@ -205,10 +264,35 @@ function SearchPage() {
     void navigate(bookDetailsPath(book.key), { state });
   }
 
+  function renderSaveAction(book: BookSearchResult) {
+    const busy = busyKeys.has(book.key);
+    return (
+      <div className="result-save">
+        {saved.has(book.key) ? (
+          <span className="result-save-done">✓ In your library</span>
+        ) : (
+          <button
+            type="button"
+            aria-label={`Save ${book.title} to my library`}
+            disabled={busy}
+            onClick={() => void save(book.key)}
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        )}
+        {errors[book.key] && <p role="alert">{errors[book.key]}</p>}
+      </div>
+    );
+  }
+
+  function updateFilters(changes: Partial<Filters>) {
+    setSearchParams(paramsFor(submittedQuery, { ...filters, ...changes }), {
+      replace: true,
+    });
+  }
+
   function resetFilters() {
-    setSelectedGenres([]);
-    setLanguage("");
-    setPublicationYearRange("");
+    updateFilters({ genre: [], language: "", year: "" });
   }
 
   return (
@@ -277,76 +361,133 @@ function SearchPage() {
         </form>
       </section>
 
-      <section className="search-filters" aria-label="Filter search results">
-        <details className="genre-filter" ref={genreFilterRef}>
-          <summary>Genres</summary>
-          <div className="genre-filter-options">
-            {genreOptions.map((genre) => (
-              <label key={genre}>
-                <input
-                  type="checkbox"
-                  checked={selectedGenres.includes(genre)}
-                  onChange={(event) =>
-                    setSelectedGenres((selected) =>
-                      event.target.checked
-                        ? [...selected, genre]
-                        : selected.filter((value) => value !== genre),
-                    )
-                  }
-                />
-                {genre}
-              </label>
-            ))}
-          </div>
-        </details>
+      {searched && (
+        <section className="search-filters" aria-label="Filter search results">
+          <details className="genre-filter" ref={genreFilterRef}>
+            <summary>Genres</summary>
+            <div className="genre-filter-options">
+              {BOOK_GENRES.map((genre) => (
+                <label key={genre}>
+                  <input
+                    type="checkbox"
+                    checked={selectedGenres.includes(genre)}
+                    onChange={(event) =>
+                      updateFilters({
+                        genre: event.target.checked
+                          ? [...selectedGenres, genre]
+                          : selectedGenres.filter((value) => value !== genre),
+                      })
+                    }
+                  />
+                  {genre}
+                </label>
+              ))}
+            </div>
+          </details>
 
-        <label className="search-filter">
-          Language
-          <select
-            value={language}
-            onChange={(event) =>
-              setLanguage(event.target.value as BookSearchQuery["language"])
-            }
-          >
-            <option value="">Any language</option>
-            <option>English</option>
-            <option>Spanish</option>
-            <option>French</option>
-          </select>
-        </label>
+          <label className="search-filter">
+            Language
+            <select
+              value={language}
+              onChange={(event) =>
+                updateFilters({
+                  language: event.target.value as Filters["language"],
+                })
+              }
+            >
+              <option value="">Any language</option>
+              {BOOK_LANGUAGES.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </label>
 
-        <label className="search-filter">
-          Publication year
-          <select
-            value={publicationYearRange}
-            onChange={(event) =>
-              setPublicationYearRange(
-                event.target.value as BookSearchQuery["year"],
-              )
-            }
-          >
-            <option value="">Any year</option>
-            <option value="2020-present">2020-present</option>
-            <option value="2010-2019">2010-2019</option>
-            <option value="2000-2009">2000-2009</option>
-            <option value="1990-1999">1990-1999</option>
-            <option value="1980-1989">1980-1989</option>
-            <option value="1970-1979">1970-1979</option>
-            <option value="1950-1969">1950-1969</option>
-            <option value="1900-1949">1900-1949</option>
-            <option value="before-1900">Before 1900</option>
-          </select>
-        </label>
+          <label className="search-filter">
+            Publication year
+            <select
+              value={publicationYearRange}
+              onChange={(event) =>
+                updateFilters({ year: event.target.value as Filters["year"] })
+              }
+            >
+              <option value="">Any year</option>
+              {PUBLICATION_YEAR_RANGES.map((range) => (
+                <option key={range} value={range}>
+                  {yearLabel(range)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+      )}
 
-        <button
-          type="button"
-          className="search-filter-reset"
-          onClick={resetFilters}
-          disabled={!hasActiveFilters}
-        >
-          Reset
-        </button>
-      </section>
+      {searched && hasActiveFilters && (
+        <ul className="search-filter-chips" aria-label="Active filters">
+          {selectedGenres.map((genre) => (
+            <li key={genre}>
+              <button
+                type="button"
+                aria-label={`Remove ${genre} filter`}
+                onClick={() =>
+                  updateFilters({
+                    genre: selectedGenres.filter((value) => value !== genre),
+                  })
+                }
+              >
+                {genre} <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          ))}
+          {language && (
+            <li>
+              <button
+                type="button"
+                aria-label={`Remove ${language} filter`}
+                onClick={() => updateFilters({ language: "" })}
+              >
+                {language} <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          )}
+          {publicationYearRange && (
+            <li>
+              <button
+                type="button"
+                aria-label={`Remove ${yearLabel(publicationYearRange)} filter`}
+                onClick={() => updateFilters({ year: "" })}
+              >
+                {yearLabel(publicationYearRange)}{" "}
+                <span aria-hidden="true">×</span>
+              </button>
+            </li>
+          )}
+          <li>
+            <button
+              type="button"
+              className="search-filter-reset"
+              onClick={resetFilters}
+            >
+              Clear all
+            </button>
+          </li>
+        </ul>
+      )}
+
+      {!searched && (
+        <SearchStart
+          reading={[...saved.values()].filter(
+            (book) => book.readingStatus === "currently_reading",
+          )}
+          recentSearches={recentSearches}
+          onSearch={runSearch}
+          onOpenBook={(bookKey) => {
+            const state: BookDetailsLocationState = {
+              backLabel: "Back to Search",
+            };
+            void navigate(bookDetailsPath(bookKey), { state });
+          }}
+        />
+      )}
 
       {visibleError && (
         <p className="search-message search-message--error" role="alert">
@@ -364,9 +505,19 @@ function SearchPage() {
         !visibleError &&
         searched &&
         visibleBooks.length === 0 && (
-          <p className="search-message" role="status">
-            No results.
-          </p>
+          <div className="search-message" role="status">
+            <p>
+              No books found for “{submittedQuery}”
+              {hasActiveFilters ? " with these filters." : "."}
+            </p>
+            {hasActiveFilters ? (
+              <button type="button" onClick={resetFilters}>
+                Search without filters
+              </button>
+            ) : (
+              <p>Check the spelling, or try fewer words.</p>
+            )}
+          </div>
         )}
 
       {!visibleLoading && !visibleError && visibleBooks.length > 0 && (
@@ -405,57 +556,54 @@ function SearchPage() {
           {viewMode === "grid" ? (
             <section className="book-grid" aria-label="Book search results">
               {visibleBooks.map((book) => (
-                <BookCard
-                  key={book.key}
-                  book={book}
-                  onClick={() => viewBook(book)}
-                />
+                <div className="book-grid-item" key={book.key}>
+                  <BookCard book={book} onClick={() => viewBook(book)} />
+                  {renderSaveAction(book)}
+                </div>
               ))}
             </section>
           ) : (
             <section className="book-list" aria-label="Book search results">
               {visibleBooks.map((book) => (
-                <button
-                  key={book.key}
-                  type="button"
-                  className="book-list-item"
-                  onClick={() => viewBook(book)}
-                  aria-label={`View details for ${book.title} by ${
-                    book.author_name?.join(", ") || "Unknown author"
-                  }`}
-                >
-                  {book.cover_i ? (
-                    <img
-                      className="book-list-cover"
-                      src={`https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`}
-                      alt=""
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <div
-                      className="book-list-cover book-list-cover--placeholder"
-                      aria-hidden="true"
-                    />
-                  )}
-
-                  <div className="book-list-info" aria-hidden="true">
-                    <h2>{book.title}</h2>
-
-                    <p className="book-list-author">
-                      {book.author_name?.join(", ") || "Unknown author"}
-                    </p>
-
-                    {book.first_publish_year && (
-                      <p className="book-list-year">
-                        {book.first_publish_year}
-                      </p>
+                <div key={book.key} className="book-list-item">
+                  <button
+                    type="button"
+                    className="book-list-open"
+                    onClick={() => viewBook(book)}
+                    aria-label={`View details for ${book.title} by ${
+                      book.author_name?.join(", ") || "Unknown author"
+                    }`}
+                  >
+                    {book.cover_i ? (
+                      <img
+                        className="book-list-cover"
+                        src={`https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <div
+                        className="book-list-cover book-list-cover--placeholder"
+                        aria-hidden="true"
+                      />
                     )}
-                  </div>
 
-                  <span className="book-list-action" aria-hidden="true">
-                    View details
-                  </span>
-                </button>
+                    <div className="book-list-info" aria-hidden="true">
+                      <h2>{book.title}</h2>
+
+                      <p className="book-list-author">
+                        {book.author_name?.join(", ") || "Unknown author"}
+                      </p>
+
+                      {book.first_publish_year && (
+                        <p className="book-list-year">
+                          {book.first_publish_year}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                  {renderSaveAction(book)}
+                </div>
               ))}
             </section>
           )}

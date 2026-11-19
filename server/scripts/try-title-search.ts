@@ -1,4 +1,4 @@
-import { searchLibraryByTitle } from "../src/services/searchlibrary.ts";
+import { searchLibraryByTitle } from "../src/services/libraryCatalog.ts";
 import type { BookFormat } from "../../shared/titleSearch.ts";
 
 const title = process.argv[2] ?? "harry potter";
