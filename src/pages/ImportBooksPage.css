@@ -36,6 +36,29 @@
   font-weight: 600;
 }
 
+.import-field input {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--olive-text-secondary);
+}
+
+.import-field input::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--olive);
+  background: transparent;
+  border: 1.5px solid var(--olive);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.import-field input::file-selector-button:hover {
+  background: var(--gold-wash);
+}
+
 .import-field input:focus-visible,
 .import-upload:focus-visible {
   outline: 3px solid var(--olive);
