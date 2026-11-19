@@ -1,6 +1,6 @@
 import { Link, NavLink, useLocation } from "react-router";
 import type { AuthLocationState } from "../routes";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import "./Header.css";
 
 // NavLink sets aria-current="page" on the link matching the current URL
@@ -17,19 +17,15 @@ function Header() {
       </NavLink>
 
       <nav className="main-nav" aria-label="Main navigation">
-        <NavLink to="/" end>
-          Home
-        </NavLink>
         <NavLink to="/search">Discover</NavLink>
         <NavLink to="/personal-library">My Library</NavLink>
-        <NavLink to="/account">Account</NavLink>
         {user ? (
           <button className="nav-auth-button" type="button" onClick={logout}>
-            Log Out
+            Log out
           </button>
         ) : (
           <Link to="/login" state={loginState} replace>
-            Log In
+            Log in
           </Link>
         )}
       </nav>

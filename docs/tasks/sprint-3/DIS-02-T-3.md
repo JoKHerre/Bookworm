@@ -14,20 +14,20 @@ Serves DIS-02 (discover similar books while viewing a book). Connect the API fro
 
 ## Specs
 
-- Add `getSimilarBooks(key, signal)` to `src/booksApi.ts`. Call `GET /api/books/similar?key=...` and validate successful responses with `similarBooksResponse` from `shared/books.ts`.
+- Add `getSimilarBooks(key, signal)` to `src/api/books.ts`. Use its existing `get` helper, which routes requests through `src/api/client.ts`. Call `GET /api/books/similar?key=...` and validate successful responses with `similarBooksResponse` from `shared/books.ts`. Follow the existing concise API error messages, including "Unable to read similar books." for invalid schema data and "Unable to connect." for network failures.
 - Add `SimilarBooks` in `src/components/SimilarBooks.tsx` to manage request state and pass books, loading, error, selection, and retry props to `SimilarBooksSection`.
 - Render it in `src/pages/BookDetailsPage.tsx` after the main book details load successfully. Request recommendations automatically for the displayed book.
 - Show the loading, results, empty, and error states through the existing display component. Preserve the API's result order and the single horizontally scrollable row.
 - Selecting a card opens that book using `bookDetailsPath` from `src/routes.ts`. Back returns to the previous page.
 - Failed requests show "Unable to load similar books." and Retry. Retry clears the error, shows loading, and requests recommendations for the current book again.
-- Changing books clears old results and messages. Abort pending requests when changing books or leaving the page, and ignore late responses from cancelled requests.
+- Changing books clears old results and messages through the details page's existing keyed content component. Abort pending requests when changing books or leaving the page, and ignore late responses from cancelled requests.
 - Similar-book loading and retry operate independently of ISBN expansion and availability loading.
 
 ## Requirements
 
 - This task depends on DIS-02-T-2. Merge Task 2 before merging this task.
-- Reuse existing API helpers, shared schemas, navigation, components, and Vitest setup. Keep similarity request state in `SimilarBooks`.
-- Add no dependencies or backend changes. Preserve tags, search, ISBN browsing, availability, authentication, saved-library operations, and ratings.
+- Build on the approved copy, cleanup, layout, and UI changes and the updated DIS-02-T-2 display. Reuse existing API helpers in `src/api/`, shared schemas, navigation, components, and Vitest setup. Keep similarity request state in `SimilarBooks`.
+- Add no dependencies or backend changes. Preserve tags, search, ISBN browsing, availability, library title searches, authentication, saved-library operations, and ratings.
 
 ## Acceptance criteria
 
@@ -42,7 +42,7 @@ Serves DIS-02 (discover similar books while viewing a book). Connect the API fro
 
 ## Tests
 
-Test files: `src/booksApi.test.ts` and `src/pages/BookDetailsPage.test.tsx`, using the existing Vitest, React Testing Library, and user-event setup. Run `pnpm test src/booksApi.test.ts src/pages/BookDetailsPage.test.tsx`.
+Test files: `src/api/books.test.ts` and `src/pages/BookDetailsPage.test.tsx`, using the existing Vitest, React Testing Library, and user-event setup. Run `pnpm test src/api/books.test.ts src/pages/BookDetailsPage.test.tsx`.
 
 | Test name                                                                    | Setup                                                                       | Asserts                                                                                                     | Criterion |
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------- |

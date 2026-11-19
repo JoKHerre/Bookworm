@@ -39,6 +39,12 @@
   outline-offset: 3px;
 }
 
+@media (max-width: 600px) {
+  .similar-books {
+    margin-top: 32px;
+  }
+}
+
 @media (max-width: 480px) {
   .similar-books-row {
     grid-auto-columns: 160px;

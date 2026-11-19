@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { BookSearchResult } from "../../shared/books";
-import { getSimilarBooks } from "../booksApi";
+import { getSimilarBooks } from "../api/books";
 import { bookDetailsPath } from "../routes";
 import SimilarBooksSection from "./SimilarBooksSection";
 

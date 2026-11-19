@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { type Credentials, type PublicUser } from "../shared/auth";
+import { type Credentials, type PublicUser } from "../../shared/auth";
 
 export type AuthContextValue = {
   user: PublicUser | null;

@@ -85,7 +85,7 @@ describe("ImportBooksPage", () => {
     await userEvent.click(upload());
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "books.csv is ready to import.",
+      "1 of 1 book is valid.",
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -98,13 +98,13 @@ describe("ImportBooksPage", () => {
 
     await userEvent.click(upload());
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not read this file. Please try again.",
+      "Could not read this file.",
     );
     expect(upload()).toBeEnabled();
 
     await userEvent.click(upload());
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "books.csv is ready to import.",
+      "1 of 1 book is valid.",
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -114,13 +114,13 @@ describe("ImportBooksPage", () => {
     await choose(csv("books.csv", "title\nDune\nEmma\n"));
     await userEvent.click(upload());
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "2 books found.",
+      "2 of 2 books are valid.",
     );
 
     await choose(csv("one.csv", "title\nDune\n"));
     await userEvent.click(upload());
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "1 book found.",
+      "1 of 1 book is valid.",
     );
   });
 
@@ -139,7 +139,7 @@ describe("ImportBooksPage", () => {
     await choose(csv("books.csv", "title,isbn\nDune,\nEmma,123\nUlysses,\n"));
     await userEvent.click(upload());
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "3 books found. 2 valid, 1 with problems.",
+      "2 of 3 books are valid.",
     );
   });
 
@@ -162,7 +162,7 @@ describe("ImportBooksPage", () => {
     await choose(csv());
     await userEvent.click(upload());
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "1 valid, 0 with problems.",
+      "1 of 1 book is valid.",
     );
     expect(
       screen.queryByRole("list", { name: "Rows with problems" }),
@@ -174,9 +174,7 @@ describe("ImportBooksPage", () => {
     await choose(csv("books.csv", "title,book_key\nDune,\nEmma,/works/OL2W\n"));
     await userEvent.click(upload());
     expect(
-      await screen.findByText(
-        "1 valid book has no book_key and cannot be imported until title matching is available.",
-      ),
+      await screen.findByText("1 book has no book_key and will be skipped."),
     ).toBeInTheDocument();
   });
 
@@ -239,7 +237,7 @@ describe("ImportBooksPage", () => {
       await screen.findByRole("button", { name: "Import 1 book" }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not import these books. Please try again.",
+      "Could not import these books.",
     );
 
     await userEvent.click(

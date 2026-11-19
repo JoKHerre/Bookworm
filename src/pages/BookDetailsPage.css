@@ -1,12 +1,16 @@
 .book-details {
   flex: 1;
   min-height: 100vh;
-  padding: 40px 24px;
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
   background: var(--cream);
   color: var(--olive);
   box-sizing: border-box;
+  text-align: left;
+}
+
+/* long-form text reads best in a narrower column */
+.book-details > * {
   max-width: 900px;
-  margin-inline: auto;
 }
 
 .back-button {
@@ -37,7 +41,7 @@
   display: flex;
   align-items: stretch;
   gap: 40px;
-  margin: 32px 0;
+  margin: 24px 0 0;
 }
 
 .book-details .book-cover {
@@ -77,7 +81,7 @@
 }
 
 .save-library-button {
-  align-self: center;
+  align-self: flex-start;
   margin-top: 16px;
   padding: 11px 18px;
   border: 1px solid var(--olive);
@@ -102,6 +106,30 @@
 .save-library-button:disabled {
   opacity: 0.7;
   cursor: wait;
+}
+
+.saved-book-status {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  font-weight: 650;
+  color: var(--olive);
+}
+
+.saved-book-status span::before {
+  content: "✓ ";
+}
+
+.saved-book-status select {
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 10px;
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 8px;
 }
 
 .book-year {
@@ -203,19 +231,34 @@
 }
 
 @media (max-width: 600px) {
+  /* keep the cover beside the title so the title and Save button stay above the fold */
   .book-header {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
+    align-items: flex-start;
+    gap: 16px;
   }
 
   .book-details .book-cover {
-    width: 200px;
+    width: 112px;
+    border-radius: 8px;
   }
 
   .book-details .book-info {
-    box-sizing: border-box;
-    width: 100%;
-    padding: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  .book-details-title {
+    font-size: 24px;
+  }
+
+  .book-details-author {
+    font-size: 17px;
+  }
+
+  .book-summary,
+  .book-genres,
+  .library-availability {
+    margin-top: 32px;
   }
 }
