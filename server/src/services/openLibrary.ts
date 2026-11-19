@@ -13,6 +13,7 @@ import {
   SEARCH_PAGE_SIZE,
   bookISBNs,
   openLibraryWorkKey,
+  type BookGenre,
   similarBooksResponse,
   type BookDetails,
   type BookISBNFormat,
@@ -20,11 +21,16 @@ import {
   type BookISBNsQuery,
   type BookSearchQuery,
   type BookSearchResponse,
+  type BookSearchResult,
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 import { toTags } from "../../../shared/tags.ts";
 import { PromiseCache } from "./cache.ts";
-import { getSimilarityProfile, rankSimilarBooks } from "./bookSimilarity.ts";
+import {
+  getSimilarityProfile,
+  rankSimilarBooks,
+  toWorkResult,
+} from "./bookSimilarity.ts";
 
 const BASE_URL = "https://openlibrary.org";
 const MAX_SIMILAR_CANDIDATES = 100;
@@ -48,11 +54,14 @@ const authorNameCache = new PromiseCache<string | undefined>(
   CACHE_TTL_MS,
   2000,
 );
+// the same for every user, so one cached list per genre
+const genreBooksCache = new PromiseCache<BookSearchResult[]>(CACHE_TTL_MS, 20);
 
 // For tests that stub fetch with different responses for the same key.
 export function clearOpenLibraryCache() {
   workCache.clear();
   authorNameCache.clear();
+  genreBooksCache.clear();
 }
 
 export class OpenLibraryError extends Error {
@@ -111,18 +120,22 @@ async function searchOpenLibraryQuery(
   };
 }
 
+// Open Library's subject for a genre
+function genreSubject(genre: BookGenre): string {
+  if (genre === "Sci-fi") return "science fiction";
+  if (genre === "Non-fiction") return "nonfiction";
+  return genre.toLowerCase();
+}
+
 export function searchOpenLibrary(
   query: BookSearchQuery,
 ): Promise<BookSearchResponse> {
   const constraints: string[] = [];
 
   if (query.genre.length) {
-    const subjects = [...new Set(query.genre)].map((genre) => {
-      let subject = genre.toLowerCase();
-      if (genre === "Sci-fi") subject = "science fiction";
-      if (genre === "Non-fiction") subject = "nonfiction";
-      return `"${subject}"`;
-    });
+    const subjects = [...new Set(query.genre)].map(
+      (genre) => `"${genreSubject(genre)}"`,
+    );
     constraints.push(`subject:(${subjects.join(" OR ")})`);
   }
   if (query.language) {
@@ -240,6 +253,34 @@ export async function getSimilarBooks(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// Well-rated books for a genre, best first.
+export function getGenreBooks(
+  genre: BookGenre,
+  signal?: AbortSignal,
+): Promise<BookSearchResult[]> {
+  return genreBooksCache.get(
+    genre,
+    async (shared) => {
+      const params = new URLSearchParams({
+        q: `subject:"${genreSubject(genre)}"`,
+        sort: "rating",
+        limit: "20",
+        fields: "key,title,author_name,first_publish_year,cover_i",
+      });
+      const data = await fetchOpenLibrary(
+        `/search.json?${params.toString()}`,
+        openLibrarySimilarSearchResponse,
+        shared,
+      );
+      return data.docs.flatMap((doc) => {
+        const result = toWorkResult(doc);
+        return result ? [result.book] : [];
+      });
+    },
+    signal,
+  );
 }
 
 function getWork(key: string, signal?: AbortSignal) {
