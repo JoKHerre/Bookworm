@@ -183,11 +183,28 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     (availability?.status === "incomplete" &&
       availability.reason === "deadline");
 
+  const backButton = (
+    <button className="back-button" onClick={onBack}>
+      {backLabel}
+    </button>
+  );
+
+  // with nothing to show about the book, show only what went wrong
+  if (error && !searchBook) {
+    return (
+      <main className="book-details">
+        {backButton}
+        <section className="book-details-load-error" role="alert">
+          <h1 className="book-details-title">We couldn’t load this book</h1>
+          <p>{error}</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="book-details" aria-busy={loading}>
-      <button className="back-button" onClick={onBack}>
-        {backLabel}
-      </button>
+      {backButton}
 
       <section className="book-header">
         {coverUrl && (
@@ -247,7 +264,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         </div>
       </section>
 
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p className="book-details-error" role="alert">
+          {error}
+        </p>
+      )}
 
       {book && summary.length > 0 && (
         <section className="book-summary">
