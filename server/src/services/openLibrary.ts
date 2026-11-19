@@ -5,6 +5,7 @@ import {
   openLibrarySimilarBook,
   openLibrarySimilarSearchResponse,
   openLibraryWork,
+  openLibraryWorkRecord,
   openLibraryAuthor,
   openLibraryEditionsResponse,
 } from "./openLibrarySchemas.ts";
@@ -32,6 +33,8 @@ const languageCodes = {
   Spanish: "spa",
   French: "fre",
 };
+
+const MAX_WORK_REDIRECTS = 3;
 
 // Works and authors rarely change, and the library page asks for every saved
 // book's details on each load, so keep them for an hour.
@@ -309,7 +312,19 @@ export async function getSimilarBooks(
 function getWork(key: string, signal?: AbortSignal) {
   return workCache.get(
     key,
-    (shared) => fetchOpenLibrary(`${key}.json`, openLibraryWork, shared),
+    async (shared) => {
+      let current = key;
+      for (let hop = 0; hop <= MAX_WORK_REDIRECTS; hop++) {
+        const record = await fetchOpenLibrary(
+          `${current}.json`,
+          openLibraryWorkRecord,
+          shared,
+        );
+        if (!("location" in record)) return record;
+        current = openLibraryWorkKey.parse(record.location);
+      }
+      throw new OpenLibraryError(`Too many redirects from ${key}`, 502);
+    },
     signal,
   );
 }

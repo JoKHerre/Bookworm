@@ -138,6 +138,25 @@ describe("BookDetailsPage", () => {
     expect(screen.queryByText("Summary")).not.toBeInTheDocument();
   });
 
+  it("details page moves to the key a merged book now uses", async () => {
+    vi.mocked(getBookDetails).mockImplementation((key) =>
+      Promise.resolve({ ...BOOK, key: "/works/OL9W", title: `Dune at ${key}` }),
+    );
+    renderDetails({ state: { backLabel: "Back to Search" } });
+
+    expect(
+      await screen.findByRole("heading", { name: "Dune at /works/OL9W" }),
+    ).toBeInTheDocument();
+    expect(getBookDetails).toHaveBeenLastCalledWith(
+      "/works/OL9W",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Back to Search" }),
+    ).toBeInTheDocument();
+  });
+
   it("details page shows only the error when the book can't load", async () => {
     vi.mocked(getBookDetails).mockRejectedValue(
       new Error("Unable to retrieve book details"),

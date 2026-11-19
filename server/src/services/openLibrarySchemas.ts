@@ -19,6 +19,12 @@ export const openLibrarySimilarSearchResponse = z.object({
   docs: z.array(z.unknown()),
 });
 
+// A merged work: Open Library points the old key at the work it became.
+export const openLibraryRedirect = z.object({
+  type: z.object({ key: z.literal("/type/redirect") }),
+  location: z.string(),
+});
+
 export const openLibraryWork = z.object({
   authors: z
     .array(z.object({ author: z.object({ key: z.string() }) }))
@@ -32,6 +38,11 @@ export const openLibraryWork = z.object({
   covers: z.array(z.number()).optional(),
   subjects: z.array(z.string()).optional(),
 });
+
+export const openLibraryWorkRecord = z.union([
+  openLibraryRedirect,
+  openLibraryWork,
+]);
 
 export const openLibraryEdition = z.object({
   key: z.string(),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router";
 import {
   libraryCatalogRecordUrl,
   type AvailabilityResponse,
@@ -7,7 +7,7 @@ import {
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
 import BookISBNSection from "../components/BookISBNSection";
-import type { BookDetailsLocationState } from "../routes";
+import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../api/ratings";
 import {
   useLoginToFinish,
@@ -188,6 +188,13 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       {backLabel}
     </button>
   );
+
+  // a merged book loads under its new key, so move the page there
+  if (book && book.key !== bookKey) {
+    return (
+      <Navigate to={bookDetailsPath(book.key)} replace state={location.state} />
+    );
+  }
 
   // with nothing to show about the book, show only what went wrong
   if (error && !searchBook) {
