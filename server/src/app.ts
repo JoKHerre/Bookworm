@@ -15,6 +15,7 @@ import { collectionsRouter } from "./routes/collections.ts";
 import { interestsRouter } from "./routes/interests.ts";
 import { libraryRouter } from "./routes/library.ts";
 import { ratingsRouter } from "./routes/ratings.ts";
+import { recommendationsRouter } from "./routes/recommendations.ts";
 
 // The API with all of its middleware and routes, but not listening. Tests
 // mount this same app so they exercise the real route order.
@@ -30,6 +31,7 @@ export function createApp(): Express {
   app.use("/api/collections", collectionsRouter);
   app.use("/api/ratings", ratingsRouter);
   app.use("/api/interests", interestsRouter);
+  app.use("/api/recommendations", recommendationsRouter);
 
   app.get("/api/health", async (req: Request, res: Response) => {
     await db.execute(sql`select 1`);

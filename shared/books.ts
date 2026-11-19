@@ -144,6 +144,16 @@ export const similarBooksResponse = z.object({
 
 export type SimilarBooksResponse = z.infer<typeof similarBooksResponse>;
 
+// GET /api/recommendations
+
+export const MAX_RECOMMENDATIONS = 12;
+
+export const recommendationsResponse = z.object({
+  books: z.array(similarBookResult).max(MAX_RECOMMENDATIONS),
+});
+
+export type RecommendationsResponse = z.infer<typeof recommendationsResponse>;
+
 // GET /api/books/details?key=/works/OL...W
 
 export const bookDetailsQuery = z.object({
