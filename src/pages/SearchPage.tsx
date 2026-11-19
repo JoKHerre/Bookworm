@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   BOOK_GENRES,
@@ -55,6 +55,25 @@ function filtersFromParams(params: URLSearchParams): Filters {
   };
 }
 
+// How many pages of results the URL asks for. Show more counts up, so a
+// refresh or Back brings the same results.
+function pagesFromParams(params: URLSearchParams) {
+  const pages = Number(params.get("page"));
+  return Number.isInteger(pages) && pages > 1
+    ? Math.min(pages, MAX_SEARCH_PAGE)
+    : 1;
+}
+
+// a book can shift onto the next page between requests, so drop repeats
+function withoutRepeats(books: BookSearchResult[]) {
+  const seen = new Set<string>();
+  return books.filter((book) => {
+    if (seen.has(book.key)) return false;
+    seen.add(book.key);
+    return true;
+  });
+}
+
 function yearLabel(range: (typeof PUBLICATION_YEAR_RANGES)[number]) {
   return range === "before-1900" ? "Before 1900" : range;
 }
@@ -85,8 +104,12 @@ function SearchPage() {
   const [moreError, setMoreError] = useState("");
   const moreRequest = useRef<AbortController | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  // memoized on the query string so the search effect sees stable arrays
-  const searchString = searchParams.toString();
+  const urlPages = pagesFromParams(searchParams);
+  // memoized on the query string so the search effect sees stable arrays;
+  // the page count is left out so Show more doesn't search again
+  const paramsWithoutPage = new URLSearchParams(searchParams);
+  paramsWithoutPage.delete("page");
+  const searchString = paramsWithoutPage.toString();
   const filters = useMemo(
     () => filtersFromParams(new URLSearchParams(searchString)),
     [searchString],
@@ -138,6 +161,8 @@ function SearchPage() {
       document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 
+  const pagesToLoad = useEffectEvent(() => urlPages);
+
   useEffect(() => {
     if (!submittedQuery) return;
 
@@ -153,10 +178,20 @@ function SearchPage() {
       setMoreError("");
 
       try {
-        const data = await searchBooks(submittedQuery, signal, filters);
+        const pages = pagesToLoad();
+        const results = await Promise.all(
+          Array.from({ length: pages }, (_, i) =>
+            searchBooks(
+              submittedQuery,
+              signal,
+              i === 0 ? filters : { ...filters, page: i + 1 },
+            ),
+          ),
+        );
         if (!signal.aborted) {
-          setBooks(data.books);
-          setTotal(data.total);
+          setBooks(withoutRepeats(results.flatMap((data) => data.books)));
+          setTotal(results.at(-1)?.total ?? 0);
+          setPage(pages);
         }
       } catch (err) {
         if (signal.aborted) return;
@@ -189,16 +224,12 @@ function SearchPage() {
         page: next,
       });
       if (controller.signal.aborted) return;
-      // a book can shift onto the next page between requests
-      setBooks((current) => {
-        const keys = new Set(current.map((book) => book.key));
-        return [
-          ...current,
-          ...data.books.filter((book) => !keys.has(book.key)),
-        ];
-      });
+      setBooks((current) => withoutRepeats([...current, ...data.books]));
       setTotal(data.total);
       setPage(next);
+      const params = new URLSearchParams(searchParams);
+      params.set("page", String(next));
+      setSearchParams(params, { replace: true });
     } catch (err) {
       if (controller.signal.aborted) return;
       setMoreError(
