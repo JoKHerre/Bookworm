@@ -17,7 +17,8 @@ export function useInterests() {
   const userId = user?.id;
   const [state, setState] = useState<InterestsState | null>(null);
   const savedRef = useRef<BookGenre[]>([]); // the last list the server confirmed
-  const latestSaveRef = useRef(0);
+  const savingRef = useRef(false);
+  const queuedRef = useRef<BookGenre[] | null>(null); // changed while saving
 
   // state left over from another user is ignored
   const current = state && state.userId === userId ? state : null;
@@ -39,6 +40,31 @@ export function useInterests() {
     return () => controller.abort();
   }, [userId]);
 
+  function save(list: BookGenre[], forUser: number) {
+    savingRef.current = true;
+    saveInterests(list)
+      .then((saved) => {
+        savedRef.current = saved;
+        const queued = queuedRef.current;
+        queuedRef.current = null;
+        if (queued) {
+          save(queued, forUser);
+          return;
+        }
+        savingRef.current = false;
+        setState({ userId: forUser, genres: saved, error: "" });
+      })
+      .catch((err: unknown) => {
+        savingRef.current = false;
+        queuedRef.current = null;
+        setState({
+          userId: forUser,
+          genres: savedRef.current,
+          error: (err as Error).message,
+        });
+      });
+  }
+
   function toggle(genre: BookGenre) {
     if (!genres || userId === undefined) return;
     const next = genres.includes(genre)
@@ -46,23 +72,9 @@ export function useInterests() {
       : sortGenres([...genres, genre]);
     setState({ userId, genres: next, error: "" });
 
-    // only the newest save decides what's shown
-    const save = ++latestSaveRef.current;
-    saveInterests(next)
-      .then((saved) => {
-        savedRef.current = saved;
-        if (save === latestSaveRef.current) {
-          setState({ userId, genres: saved, error: "" });
-        }
-      })
-      .catch((err: unknown) => {
-        if (save !== latestSaveRef.current) return;
-        setState({
-          userId,
-          genres: savedRef.current,
-          error: (err as Error).message,
-        });
-      });
+    // changes made during a save go out together once it finishes
+    if (savingRef.current) queuedRef.current = next;
+    else save(next, userId);
   }
 
   return { genres, error: current?.error ?? "", toggle };
