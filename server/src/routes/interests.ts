@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.ts";
-import { userGenres } from "../db/schema.ts";
+import { userGenres, users } from "../db/schema.ts";
 import { requireAuth } from "../auth/middleware.ts";
 import type { ApiError } from "../../../shared/api.ts";
 import {
@@ -37,6 +37,12 @@ interestsRouter.put(
     const genres = sortGenres(parsed.data.genres);
 
     await db.transaction(async (tx) => {
+      // lock the user so overlapping saves run one after another
+      await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for("update");
       await tx.delete(userGenres).where(eq(userGenres.userId, userId));
       if (genres.length > 0) {
         await tx
