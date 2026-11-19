@@ -274,60 +274,58 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       {book && (
         <section className="library-availability">
           <h2>Library Availability</h2>
-          <div className="library-availability-content">
-            {availabilityError ? (
-              <p role="alert">{availabilityError}</p>
-            ) : availability === undefined ? (
-              <p role="status">Checking library...</p>
-            ) : availability.status === "not_found" ? (
-              <p>
-                {availability.reason === "no_isbns"
-                  ? "No ISBNs are available to check this book in the library catalog."
-                  : "No catalog match was found for the ISBNs checked."}
-              </p>
-            ) : availability.status === "incomplete" ? (
-              <p role="status">
-                {availability.reason === "deadline"
-                  ? "The library catalog check took too long to finish. A match may still exist."
-                  : "The library catalog check is incomplete. A match may still exist."}
-              </p>
-            ) : catalogRecord ? (
-              <>
-                <div className="library-record">
-                  <p className="library-record-title">
-                    <a href={libraryCatalogRecordUrl(catalogRecord.bibid)}>
-                      {catalogRecord.title}
-                    </a>
-                  </p>
-                  {catalogMetadata && (
-                    <p className="library-record-meta">{catalogMetadata}</p>
-                  )}
-                </div>
-                {branches.length === 0 ? (
-                  <p>
-                    Branch availability is not reported for this catalog record.
-                  </p>
-                ) : (
-                  <ul className="branches">
-                    {branches.map(([name, branch]) => (
-                      <li key={name}>
-                        {name}: {branch.available} of {branch.total} available
-                      </li>
-                    ))}
-                  </ul>
+          {availabilityError ? (
+            <p role="alert">{availabilityError}</p>
+          ) : availability === undefined ? (
+            <p role="status">Checking library...</p>
+          ) : availability.status === "not_found" ? (
+            <p>
+              {availability.reason === "no_isbns"
+                ? "No ISBNs are available to check this book in the library catalog."
+                : "No catalog match was found for the ISBNs checked."}
+            </p>
+          ) : availability.status === "incomplete" ? (
+            <p role="status">
+              {availability.reason === "deadline"
+                ? "The library catalog check took too long to finish. A match may still exist."
+                : "The library catalog check is incomplete. A match may still exist."}
+            </p>
+          ) : catalogRecord ? (
+            <>
+              <div className="library-record">
+                <p className="library-record-title">
+                  <a href={libraryCatalogRecordUrl(catalogRecord.bibid)}>
+                    {catalogRecord.title}
+                  </a>
+                </p>
+                {catalogMetadata && (
+                  <p className="library-record-meta">{catalogMetadata}</p>
                 )}
-              </>
-            ) : null}
-            {canRetryAvailability && (
-              <button
-                className="availability-retry-button"
-                type="button"
-                onClick={retryAvailability}
-              >
-                Retry
-              </button>
-            )}
-          </div>
+              </div>
+              {branches.length === 0 ? (
+                <p>
+                  Branch availability is not reported for this catalog record.
+                </p>
+              ) : (
+                <ul className="branches">
+                  {branches.map(([name, branch]) => (
+                    <li key={name}>
+                      {name}: {branch.available} of {branch.total} available
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : null}
+          {canRetryAvailability && (
+            <button
+              className="availability-retry-button"
+              type="button"
+              onClick={retryAvailability}
+            >
+              Retry
+            </button>
+          )}
         </section>
       )}
 
