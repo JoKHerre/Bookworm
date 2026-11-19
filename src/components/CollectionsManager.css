@@ -87,6 +87,22 @@
   line-height: 1.4;
 }
 
+.collections-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.collections-title-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.collections-title-link:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
 .collections-summary span {
   flex-shrink: 0;
   padding: 3px 10px;

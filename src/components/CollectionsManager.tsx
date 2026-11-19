@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router";
+import { collectionDetailsPath } from "../routes";
 import {
   CollectionApiError,
   createCollection,
@@ -293,7 +295,14 @@ export default function CollectionsManager() {
                 <li key={collection.id}>
                   <div className="collections-row">
                     <div className="collections-summary">
-                      <strong>{collection.name}</strong>
+                      <strong>
+                        <Link
+                          className="collections-title-link"
+                          to={collectionDetailsPath(collection.id)}
+                        >
+                          {collection.name}
+                        </Link>
+                      </strong>
                       <span>
                         {collection.bookCount}{" "}
                         {collection.bookCount === 1 ? "book" : "books"}

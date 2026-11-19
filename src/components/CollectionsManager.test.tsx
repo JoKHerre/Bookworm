@@ -35,6 +35,10 @@ describe("CollectionsManager", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Favorites")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Favorites" })).toHaveAttribute(
+      "href",
+      "/personal-library/collections/7",
+    );
   });
   it.each(["create", "rename"])(
     "preserves input and existing collections after a malformed %s response",
