@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router";
 import {
   libraryCatalogRecordUrl,
   type AvailabilityResponse,
@@ -7,7 +7,7 @@ import {
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
 import BookISBNSection from "../components/BookISBNSection";
-import type { BookDetailsLocationState } from "../routes";
+import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../api/ratings";
 import {
   useLoginToFinish,
@@ -21,6 +21,7 @@ import {
 import StarRating from "../components/StarRating";
 import { useAuth } from "../auth/useAuth";
 import "./BookDetailsPage.css";
+import { summaryParagraphs } from "./bookSummary";
 import SimilarAtLibrarySection from "../components/SimilarAtLibrarySection";
 
 function BookDetailsPage() {
@@ -159,10 +160,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
   usePendingAction("pendingRating", handleRate);
 
-  const summary =
+  const description =
     typeof book?.description === "string"
       ? book.description
       : book?.description?.value;
+  const summary = description ? summaryParagraphs(description) : [];
 
   const coverId = book?.covers?.[0] ?? searchBook?.cover_i;
   const coverUrl = coverId
@@ -181,11 +183,35 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     (availability?.status === "incomplete" &&
       availability.reason === "deadline");
 
+  const backButton = (
+    <button className="back-button" onClick={onBack}>
+      {backLabel}
+    </button>
+  );
+
+  // a merged book loads under its new key, so move the page there
+  if (book && book.key !== bookKey) {
+    return (
+      <Navigate to={bookDetailsPath(book.key)} replace state={location.state} />
+    );
+  }
+
+  // with nothing to show about the book, show only what went wrong
+  if (error && !searchBook) {
+    return (
+      <main className="book-details">
+        {backButton}
+        <section className="book-details-load-error" role="alert">
+          <h1 className="book-details-title">We couldn’t load this book</h1>
+          <p>{error}</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="book-details" aria-busy={loading}>
-      <button className="back-button" onClick={onBack}>
-        {backLabel}
-      </button>
+      {backButton}
 
       <section className="book-header">
         {coverUrl && (
@@ -245,12 +271,18 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         </div>
       </section>
 
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p className="book-details-error" role="alert">
+          {error}
+        </p>
+      )}
 
-      {book && summary && (
+      {book && summary.length > 0 && (
         <section className="book-summary">
           <h2>Summary</h2>
-          <p>{summary}</p>
+          {summary.map((paragraph, i) => (
+            <p key={i}>{paragraph}</p>
+          ))}
         </section>
       )}
 
@@ -270,60 +302,58 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       {book && (
         <section className="library-availability">
           <h2>Library Availability</h2>
-          <div className="library-availability-content">
-            {availabilityError ? (
-              <p role="alert">{availabilityError}</p>
-            ) : availability === undefined ? (
-              <p role="status">Checking library...</p>
-            ) : availability.status === "not_found" ? (
-              <p>
-                {availability.reason === "no_isbns"
-                  ? "No ISBNs are available to check this book in the library catalog."
-                  : "No catalog match was found for the ISBNs checked."}
-              </p>
-            ) : availability.status === "incomplete" ? (
-              <p role="status">
-                {availability.reason === "deadline"
-                  ? "The library catalog check took too long to finish. A match may still exist."
-                  : "The library catalog check is incomplete. A match may still exist."}
-              </p>
-            ) : catalogRecord ? (
-              <>
-                <div className="library-record">
-                  <p className="library-record-title">
-                    <a href={libraryCatalogRecordUrl(catalogRecord.bibid)}>
-                      {catalogRecord.title}
-                    </a>
-                  </p>
-                  {catalogMetadata && (
-                    <p className="library-record-meta">{catalogMetadata}</p>
-                  )}
-                </div>
-                {branches.length === 0 ? (
-                  <p>
-                    Branch availability is not reported for this catalog record.
-                  </p>
-                ) : (
-                  <ul className="branches">
-                    {branches.map(([name, branch]) => (
-                      <li key={name}>
-                        {name}: {branch.available} of {branch.total} available
-                      </li>
-                    ))}
-                  </ul>
+          {availabilityError ? (
+            <p role="alert">{availabilityError}</p>
+          ) : availability === undefined ? (
+            <p role="status">Checking library...</p>
+          ) : availability.status === "not_found" ? (
+            <p>
+              {availability.reason === "no_isbns"
+                ? "No ISBNs are available to check this book in the library catalog."
+                : "No catalog match was found for the ISBNs checked."}
+            </p>
+          ) : availability.status === "incomplete" ? (
+            <p role="status">
+              {availability.reason === "deadline"
+                ? "The library catalog check took too long to finish. A match may still exist."
+                : "The library catalog check is incomplete. A match may still exist."}
+            </p>
+          ) : catalogRecord ? (
+            <>
+              <div className="library-record">
+                <p className="library-record-title">
+                  <a href={libraryCatalogRecordUrl(catalogRecord.bibid)}>
+                    {catalogRecord.title}
+                  </a>
+                </p>
+                {catalogMetadata && (
+                  <p className="library-record-meta">{catalogMetadata}</p>
                 )}
-              </>
-            ) : null}
-            {canRetryAvailability && (
-              <button
-                className="availability-retry-button"
-                type="button"
-                onClick={retryAvailability}
-              >
-                Retry
-              </button>
-            )}
-          </div>
+              </div>
+              {branches.length === 0 ? (
+                <p>
+                  Branch availability is not reported for this catalog record.
+                </p>
+              ) : (
+                <ul className="branches">
+                  {branches.map(([name, branch]) => (
+                    <li key={name}>
+                      {name}: {branch.available} of {branch.total} available
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : null}
+          {canRetryAvailability && (
+            <button
+              className="availability-retry-button"
+              type="button"
+              onClick={retryAvailability}
+            >
+              Retry
+            </button>
+          )}
         </section>
       )}
 

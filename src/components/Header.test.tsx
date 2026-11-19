@@ -24,6 +24,26 @@ describe("Header", () => {
     expect(auth.logout).toHaveBeenCalledTimes(1);
   });
 
+  it("header marks My Library on its own page and on import", () => {
+    const first = renderWithProviders(<Header />, {
+      route: "/personal-library",
+    });
+    expect(screen.getByRole("link", { name: "My Library" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    first.unmount();
+
+    renderWithProviders(<Header />, { route: "/import" });
+    expect(screen.getByRole("link", { name: "My Library" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.getByRole("link", { name: "Discover" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
   it("REF-01-T-3 header links only to pages that exist", () => {
     renderWithProviders(<Header />);
     const links = screen
