@@ -83,6 +83,10 @@
   font-size: 0.95rem;
 }
 
+.personal-library-empty-state h2 + button {
+  margin-top: 20px;
+}
+
 .personal-library-empty-state button {
   min-height: 44px;
   padding: 10px 20px;

@@ -250,6 +250,150 @@ describe("SearchPage", () => {
     ).toBeInTheDocument();
   });
 
+  describe("more results", () => {
+    function SearchLocation() {
+      return <p hidden>Search URL {useLocation().search}</p>;
+    }
+
+    function renderSearchWithUrl(route: string) {
+      return renderWithProviders(
+        <Routes>
+          <Route
+            path="/search"
+            element={
+              <>
+                <SearchPage />
+                <SearchLocation />
+              </>
+            }
+          />
+        </Routes>,
+        { route },
+      );
+    }
+
+    it("keeps the number of pages loaded in the URL", async () => {
+      vi.mocked(searchBooks)
+        .mockResolvedValueOnce({ books: [DUNE], total: 3 })
+        .mockResolvedValueOnce({ books: [EMMA], total: 3 });
+      renderSearchWithUrl("/search?q=dune");
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show more" }),
+      );
+      expect(
+        await screen.findByText("Search URL ?q=dune&page=2"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Showing 2 of 3 results")).toBeInTheDocument();
+      expect(searchBooks).toHaveBeenCalledTimes(2);
+
+      await userEvent.clear(searchBox());
+      await submitSearch("emma");
+      expect(await screen.findByText("Search URL ?q=emma")).toBeInTheDocument();
+    });
+
+    it("loads every page in the URL", async () => {
+      vi.mocked(searchBooks).mockImplementation((_q, _signal, filters) =>
+        Promise.resolve(
+          filters?.page === 2
+            ? { books: [EMMA], total: 3 }
+            : { books: [DUNE], total: 3 },
+        ),
+      );
+      renderSearchWithUrl("/search?q=dune&page=2");
+
+      expect(
+        await screen.findByText("Showing 2 of 3 results"),
+      ).toBeInTheDocument();
+      expect(searchBooks).toHaveBeenCalledWith("dune", expect.anything(), {
+        genre: [],
+        language: "",
+        year: "",
+      });
+      expect(searchBooks).toHaveBeenCalledWith("dune", expect.anything(), {
+        genre: [],
+        language: "",
+        year: "",
+        page: 2,
+      });
+      expect(searchBooks).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows the next page below the first", async () => {
+      vi.mocked(searchBooks)
+        .mockResolvedValueOnce({ books: [DUNE], total: 2 })
+        .mockResolvedValueOnce({ books: [DUNE, EMMA], total: 2 });
+      renderSearch("/search?q=dune&language=English");
+
+      expect(
+        await screen.findByText("Showing 1 of 2 results"),
+      ).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Show more" }));
+
+      expect(
+        await screen.findByText("Showing 2 of 2 results"),
+      ).toBeInTheDocument();
+      expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+        genre: [],
+        language: "English",
+        year: "",
+        page: 2,
+      });
+      const results = screen.getByRole("region", {
+        name: "Book search results",
+      });
+      expect(
+        within(results).getAllByRole("button", { name: /View details/ }),
+      ).toHaveLength(2);
+      expect(
+        screen.queryByRole("button", { name: "Show more" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("keeps the results when the next page fails", async () => {
+      vi.mocked(searchBooks)
+        .mockResolvedValueOnce({ books: [DUNE], total: 2 })
+        .mockRejectedValueOnce(new Error("Unable to load books."));
+      renderSearch("/search?q=dune");
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show more" }),
+      );
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Unable to load books.",
+      );
+      expect(screen.getByText("Showing 1 of 2 results")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Show more" }),
+      ).toBeInTheDocument();
+    });
+
+    it("starts over for a new search", async () => {
+      vi.mocked(searchBooks)
+        .mockResolvedValueOnce({ books: [DUNE], total: 2 })
+        .mockResolvedValueOnce({ books: [EMMA], total: 2 })
+        .mockResolvedValueOnce({ books: [EMMA], total: 1 });
+      renderSearch("/search?q=dune");
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Show more" }),
+      );
+      await screen.findByText("Showing 2 of 2 results");
+      await userEvent.clear(searchBox());
+      await submitSearch("emma");
+
+      expect(
+        await screen.findByText("Showing 1 of 1 result"),
+      ).toBeInTheDocument();
+      expect(searchBooks).toHaveBeenLastCalledWith("emma", expect.anything(), {
+        genre: [],
+        language: "",
+        year: "",
+      });
+    });
+  });
+
   describe("before a search", () => {
     it("TST-01-T-1 search page suggests example searches", async () => {
       renderSearch();

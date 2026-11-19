@@ -77,6 +77,20 @@
   gap: 24px;
 }
 
+.book-details-load-error {
+  margin-top: 24px;
+}
+
+.book-details-load-error p,
+.book-details-error {
+  color: var(--error);
+}
+
+.book-details-error {
+  margin-top: 24px;
+  font-weight: 600;
+}
+
 .book-details-title {
   margin: 0 0 8px;
   color: var(--olive);
@@ -168,10 +182,6 @@
   text-align: left;
 }
 
-.library-availability-content {
-  padding-inline-start: 16px;
-}
-
 .library-record {
   margin-bottom: 12px;
 }
@@ -219,6 +229,10 @@
 .book-summary p {
   line-height: 1.7;
   font-size: 16px;
+}
+
+.book-summary p + p {
+  margin-top: 12px;
 }
 
 .book-genres {
