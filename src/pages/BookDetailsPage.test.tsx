@@ -112,6 +112,23 @@ describe("BookDetailsPage", () => {
     expect(await screen.findByText("From an object.")).toBeInTheDocument();
   });
 
+  it("details page shows a Markdown summary as plain paragraphs", async () => {
+    vi.mocked(getBookDetails).mockResolvedValue({
+      ...BOOK,
+      description:
+        "**Book Two** of the saga.\r\n\r\nPaul rules.\r\n\r\n----------\r\nAlso contained in:\r\n- [Omnibus](https://openlibrary.org/works/OL2W)",
+    });
+    renderDetails();
+    const summary = await screen.findByRole("heading", { name: "Summary" });
+    const paragraphs = within(summary.parentElement!).getAllByText(/./, {
+      selector: "p",
+    });
+    expect(paragraphs.map((p) => p.textContent)).toEqual([
+      "Book Two of the saga.",
+      "Paul rules.",
+    ]);
+  });
+
   it("TST-01-T-1 details page shows a load error", async () => {
     vi.mocked(getBookDetails).mockRejectedValue(new Error("Book not found"));
     renderDetails();

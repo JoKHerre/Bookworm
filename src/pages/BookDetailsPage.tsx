@@ -21,6 +21,7 @@ import {
 import StarRating from "../components/StarRating";
 import { useAuth } from "../auth/useAuth";
 import "./BookDetailsPage.css";
+import { summaryParagraphs } from "./bookSummary";
 import SimilarAtLibrarySection from "../components/SimilarAtLibrarySection";
 
 function BookDetailsPage() {
@@ -159,10 +160,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
   usePendingAction("pendingRating", handleRate);
 
-  const summary =
+  const description =
     typeof book?.description === "string"
       ? book.description
       : book?.description?.value;
+  const summary = description ? summaryParagraphs(description) : [];
 
   const coverId = book?.covers?.[0] ?? searchBook?.cover_i;
   const coverUrl = coverId
@@ -247,10 +249,12 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
 
       {error && <p role="alert">{error}</p>}
 
-      {book && summary && (
+      {book && summary.length > 0 && (
         <section className="book-summary">
           <h2>Summary</h2>
-          <p>{summary}</p>
+          {summary.map((paragraph, i) => (
+            <p key={i}>{paragraph}</p>
+          ))}
         </section>
       )}
 
