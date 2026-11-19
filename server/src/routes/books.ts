@@ -1,4 +1,5 @@
 import { Router, type Response } from "express";
+import type { ApiError } from "../../../shared/api.ts";
 import {
   bookSuggestionsQuery,
   bookDetailsQuery,
@@ -8,7 +9,6 @@ import {
   type BookDetails,
   type BookISBNs,
   type BookSearchResponse,
-  type BooksError,
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 
@@ -24,11 +24,17 @@ import {
   OpenLibraryError,
 } from "../services/openLibrary.ts";
 
+import {
+  titleSearchQuery,
+  type TitleSearchResponse,
+} from "../../../shared/titleSearch.ts";
+import { searchLibraryByTitle } from "../services/libraryCatalog.ts";
+
 export const booksRouter: Router = Router();
 
 booksRouter.get(
   "/suggestions",
-  async (req, res: Response<BookSearchResponse | BooksError>) => {
+  async (req, res: Response<BookSearchResponse | ApiError>) => {
     const parsed = bookSuggestionsQuery.safeParse(req.query);
 
     if (!parsed.success) {
@@ -53,7 +59,7 @@ booksRouter.get(
 
 booksRouter.get(
   "/search",
-  async (req, res: Response<BookSearchResponse | BooksError>) => {
+  async (req, res: Response<BookSearchResponse | ApiError>) => {
     let genre = req.query.genre;
     if (typeof genre === "string") genre = [genre];
     if (Array.isArray(genre)) genre = genre.filter((value) => value !== "");
@@ -81,7 +87,7 @@ booksRouter.get(
 
 booksRouter.get(
   "/details",
-  async (req, res: Response<BookDetails | BooksError>) => {
+  async (req, res: Response<BookDetails | ApiError>) => {
     const parsed = bookDetailsQuery.safeParse(req.query);
     if (!parsed.success) {
       res.status(400).json({
@@ -113,7 +119,7 @@ booksRouter.get(
 
 booksRouter.get(
   "/similar",
-  async (req, res: Response<SimilarBooksResponse | BooksError>) => {
+  async (req, res: Response<SimilarBooksResponse | ApiError>) => {
     const parsed = similarBooksQuery.safeParse(req.query);
     if (!parsed.success) {
       res.status(400).json({ error: "Invalid book key" });
@@ -144,29 +150,26 @@ booksRouter.get(
   },
 );
 
-booksRouter.get(
-  "/isbns",
-  async (req, res: Response<BookISBNs | BooksError>) => {
-    const parsed = bookISBNsQuery.safeParse(req.query);
-    if (!parsed.success) {
-      res.status(400).json({
-        error: parsed.error.issues[0]?.message ?? "Invalid ISBN query",
-      });
-      return;
-    }
+booksRouter.get("/isbns", async (req, res: Response<BookISBNs | ApiError>) => {
+  const parsed = bookISBNsQuery.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: parsed.error.issues[0]?.message ?? "Invalid ISBN query",
+    });
+    return;
+  }
 
-    try {
-      res.json(await getISBNsForWork(parsed.data));
-    } catch (error) {
-      console.error("Book ISBN lookup error:", error);
-      res.status(502).json({ error: "Unable to retrieve ISBNs" });
-    }
-  },
-);
+  try {
+    res.json(await getISBNsForWork(parsed.data));
+  } catch (error) {
+    console.error("Book ISBN lookup error:", error);
+    res.status(502).json({ error: "Unable to retrieve ISBNs" });
+  }
+});
 
 booksRouter.get(
   "/availability",
-  async (req, res: Response<AvailabilityResponse | BooksError>) => {
+  async (req, res: Response<AvailabilityResponse | ApiError>) => {
     const parsed = bookDetailsQuery.pick({ key: true }).safeParse(req.query);
     if (!parsed.success) {
       res
@@ -199,6 +202,49 @@ booksRouter.get(
       });
       if (!res.destroyed) {
         res.status(502).json({ error: "Could not check library availability" });
+      }
+    } finally {
+      res.off("close", onClose);
+    }
+  },
+);
+
+booksRouter.get(
+  "/library-search",
+  async (req, res: Response<TitleSearchResponse | ApiError>) => {
+    const parsed = titleSearchQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.issues[0]?.message ?? "Invalid library search",
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.once("close", onClose);
+    const started = Date.now();
+
+    try {
+      // 20 second limit for both requests
+      const results = await searchLibraryByTitle(
+        parsed.data.title,
+        parsed.data.format,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
+      );
+      if (!res.destroyed) res.json({ results });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      console.error("Library title search failed:", {
+        title: parsed.data.title,
+        format: parsed.data.format,
+        durationMs: Date.now() - started,
+        error,
+      });
+      if (!res.destroyed) {
+        res.status(502).json({ error: "Could not search the library catalog" });
       }
     } finally {
       res.off("close", onClose);

@@ -1,12 +1,11 @@
 .book-details {
   flex: 1;
   min-height: 100vh;
-  padding: 40px 24px;
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
   background: var(--cream);
   color: var(--olive);
   box-sizing: border-box;
   width: 100%;
-  max-width: 1120px;
   margin-inline: auto;
   text-align: left;
 }
@@ -243,10 +242,6 @@
 }
 
 @media (max-width: 760px) {
-  .book-details {
-    padding: 28px 20px;
-  }
-
   .book-header {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;
@@ -266,4 +261,29 @@
   .save-library-button {
     width: 100%;
   }
+}
+
+.saved-book-status {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  font-weight: 650;
+  color: var(--olive);
+}
+
+.saved-book-status span::before {
+  content: "✓ ";
+}
+
+.saved-book-status select {
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 10px;
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 8px;
 }

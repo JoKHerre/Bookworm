@@ -1,23 +1,24 @@
+import { ApiRequestError } from "../api/client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
-import { getBookDetails } from "../booksApi";
+import { getBookDetails } from "../api/books";
 import {
-  CollectionApiError,
   getCollection,
   removeBookFromCollection,
   type CollectionSummary,
-} from "../collectionsApi";
+} from "../api/collections";
 import SavedBookCard, {
   type SavedBookCardData,
 } from "../components/SavedBookCard";
-import { LibraryApiError, updateBookReadingStatus } from "../libraryApi";
-import { getRatings } from "../ratingsApi";
+import { errorMessage } from "../api/client";
+import { updateReadingStatus } from "../api/library";
+import { getRatings } from "../api/ratings";
 import {
   bookDetailsPath,
   type AuthLocationState,
   type BookDetailsLocationState,
 } from "../routes";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import "./CollectionDetailsPage.css";
 
 export default function CollectionDetailsPage() {
@@ -123,7 +124,7 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
             ? error.message
             : "Could not load this collection. Please try again.",
         );
-        if (error instanceof CollectionApiError) {
+        if (error instanceof ApiRequestError) {
           setUnavailable(error.status === 400 || error.status === 404);
           if (error.status === 401) setSessionExpired(true);
         }
@@ -154,10 +155,7 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
   }
 
   function handleMissingOrExpired(error: unknown) {
-    if (!(
-      error instanceof CollectionApiError || error instanceof LibraryApiError
-    ))
-      return false;
+    if (!(error instanceof ApiRequestError)) return false;
     if (error.status === 401) {
       setSessionExpired(true);
       return true;
@@ -208,12 +206,12 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
       ),
     );
     try {
-      const savedStatus = await updateBookReadingStatus(book.id, status);
+      const savedStatus = await updateReadingStatus(book.id, status);
       if (mounted.current)
         setBooks((current) =>
           current.map((item) =>
             item.id === book.id
-              ? { ...item, readingStatus: savedStatus }
+              ? { ...item, readingStatus: savedStatus.readingStatus }
               : item,
           ),
         );
@@ -229,10 +227,9 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
       if (!handleMissingOrExpired(error))
         setStatusErrors((current) => ({
           ...current,
-          [book.id]:
-            error instanceof Error
-              ? error.message
-              : "Could not update reading status. Please try again.",
+          [book.id]: errorMessage(error, {
+            fallback: "Could not update reading status. Please try again.",
+          }),
         }));
     } finally {
       finishAction(book.id);

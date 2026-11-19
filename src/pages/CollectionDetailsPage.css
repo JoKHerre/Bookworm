@@ -6,9 +6,7 @@
 }
 
 .collection-details-page {
-  width: min(100% - 48px, 1120px);
-  margin: 0 auto;
-  padding: 36px 0 64px;
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
 }
 
 .collection-back-link {
@@ -95,11 +93,4 @@
 .collection-details-page :is(a, button):focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 3px;
-}
-
-@media (max-width: 640px) {
-  .collection-details-page {
-    width: calc(100% - 32px);
-    padding-top: 24px;
-  }
 }

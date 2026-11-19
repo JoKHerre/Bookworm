@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import type { NextFunction, Request, Response } from "express";
-import type { Server } from "node:http";
 import {
   assertTestDatabaseUrl,
-  cookieParser,
   createTestBookKey,
   eq,
-  express,
+  startTestServer,
 } from "./test-utils.ts";
 
 assertTestDatabaseUrl();
@@ -16,20 +13,18 @@ const [
   { db, pool },
   { bookRatings, users },
   { createSession, generateSessionToken },
-  { loadSession },
-  { ratingsRouter },
+  { createApp },
 ] = await Promise.all([
   import("../src/db/index.ts"),
   import("../src/db/schema.ts"),
   import("../src/db/session.ts"),
-  import("../src/auth/middleware.ts"),
-  import("../src/routes/ratings.ts"),
+  import("../src/app.ts"),
 ]);
 
 // trackers
 const createdUserIds = new Set<number>();
 let emailCounter = 0;
-let server: Server;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 
 // insert a temporary user and session, then return the user's ID and session token
@@ -62,10 +57,10 @@ async function putRating(body: unknown, token?: string) {
 }
 
 // send a GET request to /api/ratings; include a session cookie if a token is provided
-async function getRatings(token?: string) {
+async function getRatings(token?: string, query = "") {
   const headers = new Headers();
   if (token) headers.set("cookie", `session=${token}`);
-  return fetch(`${baseUrl}/api/ratings`, { headers });
+  return fetch(`${baseUrl}/api/ratings${query}`, { headers });
 }
 
 // return all rating rows for a given bookKey
@@ -74,33 +69,12 @@ async function rowsForBook(bookKey: string) {
 }
 
 before(async () => {
-  const app = express();
-  app.use(express.json());
-  app.use(cookieParser());
-  app.use(loadSession);
-  app.use("/api/ratings", ratingsRouter);
-  app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
-    if (res.headersSent) return next(error);
-    res.status(500).json({ error: "Internal server error" });
-  });
-
-  server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
-    listener.once("error", reject);
-  });
-
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 after(async () => {
   try {
-    if (server?.listening) {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      });
-    }
+    await closeServer();
   } finally {
     try {
       for (const userId of createdUserIds) {
@@ -250,4 +224,39 @@ test("COL-04-T-4 lists an updated rating once with its latest value", async () =
   assert.deepEqual(await response.json(), {
     ratings: [{ bookKey, rating: 4 }],
   });
+});
+
+test("REF-01-T-2 returns only the requested book's rating", async () => {
+  const user = await createSignedInUser();
+  const [first, second] = [createTestBookKey(), createTestBookKey()];
+  await putRating({ bookKey: first, rating: 2 }, user.token);
+  await putRating({ bookKey: second, rating: 5 }, user.token);
+
+  const response = await getRatings(
+    user.token,
+    `?bookKey=${encodeURIComponent(second)}`,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ratings: [{ bookKey: second, rating: 5 }],
+  });
+
+  const unrated = await getRatings(
+    user.token,
+    `?bookKey=${encodeURIComponent(createTestBookKey())}`,
+  );
+  assert.deepEqual(await unrated.json(), { ratings: [] });
+});
+
+test("REF-01-T-2 rejects an invalid bookKey filter", async () => {
+  const user = await createSignedInUser();
+  for (const query of [
+    "?bookKey=OL1W",
+    "?bookKey=/works/OL1W&bookKey=/works/OL2W",
+    "?other=1",
+  ]) {
+    const response = await getRatings(user.token, query);
+    assert.equal(response.status, 400, query);
+    assert.deepEqual(await response.json(), { error: "Invalid book key" });
+  }
 });

@@ -1,23 +1,17 @@
 import { useId } from "react";
 import type { BookDetails } from "../../shared/books";
 import {
-  READING_STATUSES,
+  READING_STATUS_OPTIONS,
   type ReadingStatus,
 } from "../../shared/readingStatus";
 import StarDisplay from "./StarDisplay";
 import "./SavedBookCard.css";
 
-const STATUS_LABELS: Record<ReadingStatus, string> = {
-  to_be_read: "To Be Read",
-  currently_reading: "Currently Reading",
-  finished: "Finished",
-};
-
 export interface SavedBookCardData {
   id: number;
   bookKey: string;
   readingStatus: ReadingStatus;
-  details: BookDetails | null;
+  details: BookDetails | null | undefined;
 }
 
 interface Props {
@@ -48,12 +42,15 @@ export default function SavedBookCard({
   disabled = false,
 }: Props) {
   const errorId = useId();
-  const title = book.details?.title ?? "Book details unavailable";
+  const title =
+    book.details === undefined
+      ? "Loading…"
+      : (book.details?.title ?? "Book details unavailable");
   const coverId = book.details?.covers?.[0];
   const destination = removeFrom === "library" ? "my library" : "collection";
   const busy = isRemoving || isUpdatingReadingStatus;
   return (
-    <li className="saved-book-card">
+    <li className="saved-book-card" aria-busy={book.details === undefined}>
       {coverId ? (
         <img
           className="saved-book-cover"
@@ -62,7 +59,7 @@ export default function SavedBookCard({
         />
       ) : (
         <div
-          className="saved-book-cover saved-book-cover--placeholder"
+          className={`saved-book-cover saved-book-cover--${book.details === undefined ? "loading" : "placeholder"}`}
           aria-hidden="true"
         />
       )}
@@ -77,11 +74,15 @@ export default function SavedBookCard({
             {title}
           </button>
         </h3>
-        <p>{book.details?.authors?.join(", ") || "Author unavailable"}</p>
+        {book.details !== undefined && (
+          <p>{book.details?.authors?.join(", ") || "Author unavailable"}</p>
+        )}
         {rating !== undefined && <StarDisplay rating={rating} />}
-        {!book.details && <p className="saved-book-key">{book.bookKey}</p>}
+        {book.details === null && (
+          <p className="saved-book-key">{book.bookKey}</p>
+        )}
       </div>
-      <div className="saved-book-status">
+      <div className="saved-book-card-status">
         <select
           aria-label={`Reading status for ${title}`}
           aria-busy={isUpdatingReadingStatus}
@@ -92,9 +93,9 @@ export default function SavedBookCard({
             onReadingStatusChange(event.target.value as ReadingStatus)
           }
         >
-          {READING_STATUSES.map((value) => (
+          {READING_STATUS_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>
-              {STATUS_LABELS[value]}
+              {label}
             </option>
           ))}
         </select>

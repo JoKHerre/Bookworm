@@ -1,15 +1,28 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import type { AvailabilityResponse } from "../../shared/availability";
+import {
+  libraryCatalogRecordUrl,
+  type AvailabilityResponse,
+} from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
-import { getBookDetails, getBookAvailability } from "../booksApi";
-import BookISBNSection from "../components/BookISBNSection";
+import { getBookDetails, getBookAvailability } from "../api/books";
 import BookCollectionAssignment from "../components/BookCollectionAssignment";
-import type { AuthLocationState, BookDetailsLocationState } from "../routes";
-import { getRatings, saveRating } from "../ratingsApi";
+import BookISBNSection from "../components/BookISBNSection";
+import type { BookDetailsLocationState } from "../routes";
+import { getRatings, saveRating } from "../api/ratings";
+import {
+  useLoginToFinish,
+  usePendingAction,
+  useSavedBooks,
+} from "../library/useSavedBooks";
+import {
+  READING_STATUS_OPTIONS,
+  type ReadingStatus,
+} from "../../shared/readingStatus";
 import StarRating from "../components/StarRating";
-import { useAuth } from "../useAuth";
+import { useAuth } from "../auth/useAuth";
 import "./BookDetailsPage.css";
+import SimilarAtLibrarySection from "../components/SimilarAtLibrarySection";
 
 function BookDetailsPage() {
   const params = useParams();
@@ -41,8 +54,11 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false); // used to control save button's availability
-  const [saveMessage, setSaveMessage] = useState(""); // used to display message to user after attempting to save a book
+  const { saved, busyKeys, errors, save, setReadingStatus, rememberSavedBook } =
+    useSavedBooks();
+  const savedBook = saved.get(bookKey);
+  const savingBook = busyKeys.has(bookKey);
+  const loginToFinish = useLoginToFinish();
   const [rating, setRating] = useState<number | null>(null); // the signed-in user's rating of this book
   const [ratingSaving, setRatingSaving] = useState(false); // used to disable the rating control during a request
   const [ratingMessage, setRatingMessage] = useState(""); // message shown after attempting to save a rating
@@ -100,7 +116,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     if (userId === undefined) return;
     const controller = new AbortController();
 
-    getRatings(controller.signal)
+    getRatings(controller.signal, bookKey)
       .then((ratings) => {
         const existing = ratings.find((r) => r.bookKey === bookKey);
         // don't overwrite a rating the user has already picked while this loaded
@@ -113,67 +129,18 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     return () => controller.abort();
   }, [bookKey, userId]);
 
-  function goToLogin() {
-    const state: AuthLocationState = { from: location };
-    void navigate("/login", { state, replace: true });
-  }
-
-  async function signInAgain() {
-    // Clear the stale auth state so the login route will not redirect us back.
-    await logout();
-    goToLogin();
-  }
-
   function retryAvailability() {
     setAvailability(undefined);
     setAvailabilityError(null);
     setAvailabilityAttempt((attempt) => attempt + 1);
   }
 
-  // function to handle saving a book to the user's personal library
-  async function handleSave() {
-    // set saving state to true and clear any previous save message
-    setSaving(true);
-    setSaveMessage("");
-
-    try {
-      // send POST request with the bookKey to /api/library
-      const response = await fetch("/api/library", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookKey }),
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        error?: string;
-      };
-
-      // interpret response status + show appropriate message to user through saveMessage
-      if (response.status === 201) {
-        // success
-        setSaveMessage("Book saved to your library.");
-      } else if (response.status === 409) {
-        // duplicate conflict
-        setSaveMessage("This book is already in your library.");
-      } else if (response.status === 401) {
-        // unauthorized user
-        setSaveMessage("Please sign in to save books to your library.");
-      } else {
-        // other error: generic error msg
-        setSaveMessage(
-          data.error ?? "Could not save this book. Please try again.",
-        );
-      }
-    } catch {
-      // network or other error: generic error msg
-      setSaveMessage("Could not save this book. Please try again.");
-    } finally {
-      // re-enable save button after request is complete, by setting saving to false
-      setSaving(false);
-    }
-  }
-
   // function to handle rating a book: optimistically show the new rating, roll back if saving fails
   async function handleRate(newRating: number) {
+    if (!user) {
+      loginToFinish({ pendingRating: newRating });
+      return;
+    }
     const previousRating = rating;
     setRating(newRating);
     setRatingSaving(true);
@@ -185,14 +152,14 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
     } catch (err) {
       setRating(previousRating);
       setRatingMessage(
-        err instanceof Error
-          ? err.message
-          : "Could not save your rating. Please try again.",
+        err instanceof Error ? err.message : "Could not save your rating.",
       );
     } finally {
       setRatingSaving(false);
     }
   }
+
+  usePendingAction("pendingRating", handleRate);
 
   const summary =
     typeof book?.description === "string"
@@ -244,100 +211,102 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
         <div className="book-info">
           <div>
             <h1 className="book-details-title">{title}</h1>
+
             <p className="book-details-author">
               {searchBook?.author_name?.join(", ") ||
                 book?.authors.join(", ") ||
                 "Unknown author"}
             </p>
           </div>
-          {user && (
-            <div className="book-rating-group">
-              <StarRating
-                value={rating}
-                onChange={(value) => void handleRate(value)}
-                disabled={ratingSaving || loading || !book}
-              />
-              {ratingMessage && <p role="status">{ratingMessage}</p>}
-            </div>
-          )}
+          <div className="book-rating-group" aria-label="Your rating">
+            <StarRating
+              value={rating}
+              onChange={(value) => void handleRate(value)}
+              disabled={ratingSaving || loading || !book}
+            />
+            {ratingMessage && <p role="status">{ratingMessage}</p>}
+          </div>
           <section
             className="book-save-group"
-            aria-labelledby="book-save-title"
+            aria-labelledby="book-save-heading"
           >
-            <h2 id="book-save-title">Save and organize</h2>
-            {user ? (
-              <button
-                className="save-library-button"
-                type="button"
-                onClick={handleSave}
-                disabled={saving || loading || !book}
-              >
-                {saving ? "Saving..." : "Save to My Library"}
-              </button>
+            <h2 id="book-save-heading">Save and organize</h2>
+            {savedBook ? (
+              <label className="saved-book-status">
+                <span>In your library</span>
+                <select
+                  value={savedBook.readingStatus}
+                  aria-busy={savingBook}
+                  disabled={savingBook}
+                  onChange={(event) =>
+                    void setReadingStatus(
+                      bookKey,
+                      event.target.value as ReadingStatus,
+                    )
+                  }
+                >
+                  {READING_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : (
               <button
                 className="save-library-button"
                 type="button"
-                onClick={goToLogin}
+                onClick={() => void save(bookKey)}
+                disabled={savingBook || loading || !book}
               >
-                Log in to save
+                {savingBook ? "Saving..." : "Save to My Library"}
               </button>
             )}
-            {saveMessage && (
-              <p className="book-save-message" role="status">
-                {saveMessage}
-              </p>
+            {errors[bookKey] && <p role="alert">{errors[bookKey]}</p>}
+            {user ? (
+              <BookCollectionAssignment
+                key={`${bookKey}:${user.id}`}
+                bookKey={bookKey}
+                title={title}
+                onLogin={async () => {
+                  await logout();
+                  loginToFinish();
+                }}
+                onAdded={rememberSavedBook}
+              />
+            ) : (
+              <button
+                className="save-library-button"
+                type="button"
+                onClick={() => loginToFinish()}
+              >
+                Log in to organize
+              </button>
             )}
-            {book &&
-              !loading &&
-              (user ? (
-                <BookCollectionAssignment
-                  key={`${bookKey}:${user.id}`}
-                  bookKey={bookKey}
-                  title={title}
-                  onLogin={signInAgain}
-                />
-              ) : (
-                <section
-                  className="book-collection-assignment"
-                  aria-label="Collections"
-                >
-                  <h3>Add to a collection</h3>
-                  <p>Sign in to add this book to your collections.</p>
-                  <button type="button" onClick={goToLogin}>
-                    Log in to organize
-                  </button>
-                </section>
-              ))}
           </section>
         </div>
       </section>
 
       {error && <p role="alert">{error}</p>}
 
-      {book && (
-        <>
-          <section className="book-summary">
-            <h2>Summary</h2>
-            <p>{summary || "No summary available."}</p>
-          </section>
+      {book && summary && (
+        <section className="book-summary">
+          <h2>Summary</h2>
+          <p>{summary}</p>
+        </section>
+      )}
 
-          <section className="book-genres">
-            <h2>Tags</h2>
-
-            {book.tags.length > 0 ? (
-              <div className="genre-list">
-                {book.tags.map((tag) => (
-                  <span className="genre-tag" key={tag}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p>No tags available.</p>
-            )}
-          </section>
-        </>
+      {book && book.tags.length > 0 && (
+        <section className="book-genres">
+          <h2>Tags</h2>
+          <div className="genre-list">
+            {book.tags.map((tag) => (
+              <span className="genre-tag" key={tag}>
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
       )}
 
       {book && (
@@ -364,9 +333,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
               <>
                 <div className="library-record">
                   <p className="library-record-title">
-                    <a
-                      href={`https://catalog.santacruzpl.org/polaris/search/title.aspx?ctx=1.1033.0.0.1&cn=${encodeURIComponent(catalogRecord.bibid)}`}
-                    >
+                    <a href={libraryCatalogRecordUrl(catalogRecord.bibid)}>
                       {catalogRecord.title}
                     </a>
                   </p>
@@ -403,8 +370,24 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       )}
 
       {book && <BookISBNSection bookKey={bookKey} />}
+
+      {book && (
+        <SimilarAtLibrarySection
+          key={`${book.title}-book`}
+          title={book.title}
+          format="book"
+          heading="Similar Books available at Santa Cruz Public Library"
+        />
+      )}
+      {book && (
+        <SimilarAtLibrarySection
+          key={`${book.title}-ebook`}
+          title={book.title}
+          format="ebook"
+          heading="Similar eBooks available at Santa Cruz Public Library"
+        />
+      )}
     </main>
   );
 }
-
 export default BookDetailsPage;

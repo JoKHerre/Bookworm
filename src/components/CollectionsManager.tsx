@@ -1,14 +1,14 @@
+import { ApiRequestError } from "../api/client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { collectionDetailsPath } from "../routes";
 import {
-  CollectionApiError,
   createCollection,
   deleteCollection,
   listCollections,
   renameCollection,
   type CollectionSummary,
-} from "../collectionsApi";
+} from "../api/collections";
 import "./CollectionsManager.css";
 
 type Editor =
@@ -148,7 +148,7 @@ export default function CollectionsManager() {
         failure instanceof Error
           ? failure.message
           : "Could not save changes. Please try again.";
-      if (failure instanceof CollectionApiError && failure.status === 404) {
+      if (failure instanceof ApiRequestError && failure.status === 404) {
         closeEditor(true);
         setNotice("This collection is no longer available.");
         setAttempt((current) => current + 1);

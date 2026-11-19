@@ -78,14 +78,14 @@
   overflow-wrap: anywhere;
 }
 
-.saved-book-status {
+.saved-book-card-status {
   display: flex;
   flex-direction: column;
   gap: 5px;
   margin-top: 14px;
 }
 
-.saved-book-status select {
+.saved-book-card-status select {
   width: 100%;
   min-height: 30px;
   padding: 3px 12px;
@@ -98,12 +98,12 @@
   cursor: pointer;
 }
 
-.saved-book-status select:focus-visible {
+.saved-book-card-status select:focus-visible {
   outline: 2px solid var(--olive);
   outline-offset: 2px;
 }
 
-.saved-book-status select:disabled {
+.saved-book-card-status select:disabled {
   cursor: wait;
   opacity: 0.7;
 }
@@ -140,4 +140,18 @@
 .saved-book-remove:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 3px;
+}
+
+.saved-book-cover--loading {
+  animation: saved-book-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes saved-book-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .saved-book-cover--loading {
+    animation: none;
+  }
 }

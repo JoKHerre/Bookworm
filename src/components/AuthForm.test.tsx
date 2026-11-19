@@ -25,7 +25,7 @@ describe("AuthForm", () => {
 
   it("TST-01-T-1 register form submits", async () => {
     const { auth } = renderWithProviders(<AuthForm mode="register" />);
-    await fillAndSubmit("Register");
+    await fillAndSubmit("Sign up");
     expect(auth.register).toHaveBeenCalledWith({
       email: "a@b.co",
       password: "password123",
@@ -51,10 +51,69 @@ describe("AuthForm", () => {
       { route: "/login" },
     );
     await userEvent.click(
-      screen.getByRole("button", { name: "Need an account? Sign Up" }),
+      screen.getByRole("button", { name: "Need an account? Sign up" }),
     );
     expect(
-      await screen.findByRole("heading", { name: "Register" }),
+      await screen.findByRole("heading", { name: "Sign up" }),
+    ).toBeInTheDocument();
+  });
+
+  it("TST-01-T-1 sign up form checks the password length when leaving the field", async () => {
+    renderWithProviders(<AuthForm mode="register" />);
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAccessibleDescription("At least 8 characters.");
+
+    await userEvent.type(password, "short");
+    expect(password).not.toHaveAttribute("aria-invalid");
+    await userEvent.tab();
+    expect(password).toHaveAttribute("aria-invalid", "true");
+    expect(password).toHaveAccessibleDescription(
+      "Use at least 8 characters (5 so far).",
+    );
+
+    await userEvent.type(password, "abc");
+    expect(password).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("TST-01-T-1 login form doesn't apply the new password rule", async () => {
+    renderWithProviders(<AuthForm mode="login" />);
+    const password = screen.getByLabelText("Password");
+    await userEvent.type(password, "short");
+    await userEvent.tab();
+    expect(password).not.toHaveAttribute("aria-invalid");
+    expect(password).not.toHaveAccessibleDescription();
+  });
+
+  it("TST-01-T-1 auth form shows and hides the password", async () => {
+    renderWithProviders(<AuthForm mode="login" />);
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show password" }),
+    );
+    expect(password).toHaveAttribute("type", "text");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Hide password" }),
+    );
+    expect(password).toHaveAttribute("type", "password");
+  });
+
+  it("TST-01-T-1 auth form explains a save waiting on login", () => {
+    renderWithProviders(<AuthForm mode="login" />, {
+      route: {
+        pathname: "/login",
+        state: {
+          from: {
+            pathname: "/books/works/OL1W",
+            state: { pendingSave: "/works/OL1W" },
+          },
+        },
+      },
+    });
+    expect(
+      screen.getByText(
+        "We'll save the book to your library as soon as you're in.",
+      ),
     ).toBeInTheDocument();
   });
 });

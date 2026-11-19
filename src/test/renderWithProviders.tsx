@@ -3,10 +3,10 @@ import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import { vi } from "vitest";
 import type { PublicUser } from "../../shared/auth";
-import { AuthContext, type AuthContextValue } from "../useAuth";
+import { AuthContext, type AuthContextValue } from "../auth/useAuth";
 
 interface Options {
-  route?: string | { pathname: string; state?: unknown };
+  route?: string | { pathname: string; search?: string; state?: unknown };
   user?: PublicUser | null;
   loading?: boolean;
 }

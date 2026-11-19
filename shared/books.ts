@@ -6,43 +6,42 @@ export const openLibraryWorkKey = z
 
 // GET /api/books/search?q=...&genre=...&language=...&year=...
 
+export const BOOK_GENRES = [
+  "Fantasy",
+  "Sci-fi",
+  "Mystery",
+  "Romance",
+  "Horror",
+  "History",
+  "Thriller",
+  "Adventure",
+  "Biography",
+  "Non-fiction",
+  "Poetry",
+] as const;
+
+export const BOOK_LANGUAGES = ["English", "Spanish", "French"] as const;
+
+export const PUBLICATION_YEAR_RANGES = [
+  "2020-present",
+  "2010-2019",
+  "2000-2009",
+  "1990-1999",
+  "1980-1989",
+  "1970-1979",
+  "1950-1969",
+  "1900-1949",
+  "before-1900",
+] as const;
+
 export const bookSearchQuery = z.object({
   q: z
     .string({ error: "Please enter a book title or author" })
     .trim()
     .min(1, "Please enter a book title or author"),
-  genre: z
-    .array(
-      z.enum([
-        "Fantasy",
-        "Sci-fi",
-        "Mystery",
-        "Romance",
-        "Horror",
-        "History",
-        "Thriller",
-        "Adventure",
-        "Biography",
-        "Non-fiction",
-        "Poetry",
-      ]),
-    )
-    .default([]),
-  language: z.enum(["", "English", "Spanish", "French"]).default(""),
-  year: z
-    .enum([
-      "",
-      "2020-present",
-      "2010-2019",
-      "2000-2009",
-      "1990-1999",
-      "1980-1989",
-      "1970-1979",
-      "1950-1969",
-      "1900-1949",
-      "before-1900",
-    ])
-    .default(""),
+  genre: z.array(z.enum(BOOK_GENRES)).default([]),
+  language: z.enum(["", ...BOOK_LANGUAGES]).default(""),
+  year: z.enum(["", ...PUBLICATION_YEAR_RANGES]).default(""),
 });
 
 export type BookSearchQuery = z.infer<typeof bookSearchQuery>;
@@ -97,8 +96,6 @@ export const bookSuggestionsQuery = z.object({
     }, "Please enter a more specific query"),
 });
 
-export type BookSuggestionsQuery = z.infer<typeof bookSuggestionsQuery>;
-
 export const bookSearchResult = z.object({
   key: z.string(),
   title: z.string(),
@@ -139,8 +136,6 @@ export const bookDetailsQuery = z.object({
   key: openLibraryWorkKey,
   includeAuthors: z.enum(["true", "false"]).optional(),
 });
-
-export type BookDetailsQuery = z.infer<typeof bookDetailsQuery>;
 
 export const bookDetails = z.object({
   key: z.string(),
@@ -221,11 +216,3 @@ export const bookISBNs = z.object({
 });
 
 export type BookISBNs = z.infer<typeof bookISBNs>;
-
-// Error body returned by any books route on failure
-
-export const booksError = z.object({
-  error: z.string(),
-});
-
-export type BooksError = z.infer<typeof booksError>;

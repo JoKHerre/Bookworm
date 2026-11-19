@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
-import type { NextFunction, Request, Response } from "express";
-import type { Server } from "node:http";
 import {
   assertTestDatabaseUrl,
-  cookieParser,
   createTestBookKey,
   eq,
-  express,
+  startTestServer,
 } from "./test-utils.ts";
 
 assertTestDatabaseUrl();
@@ -17,20 +14,18 @@ const [
   { db, pool },
   { savedBooks, users },
   { createSession, generateSessionToken },
-  { loadSession },
-  { libraryRouter },
+  { createApp },
 ] = await Promise.all([
   import("../src/db/index.ts"),
   import("../src/db/schema.ts"),
   import("../src/db/session.ts"),
-  import("../src/auth/middleware.ts"),
-  import("../src/routes/library.ts"),
+  import("../src/app.ts"),
 ]);
 
 // trackers
 const createdUserIds = new Set<number>();
 let emailCounter = 0;
-let server: Server;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 
 // insert a temporary user with a unique email and a placeholder password hash, then return new user's ID and a session token
@@ -113,36 +108,13 @@ async function rowsForBook(bookKey: string) {
 
 // before tests, create an express app with the necessary installations
 before(async () => {
-  const app = express();
-  app.use(express.json());
-  app.use(cookieParser());
-  app.use(loadSession);
-  app.use("/api/library", libraryRouter);
-  app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
-    if (res.headersSent) return next(error);
-    res.status(500).json({ error: "Internal server error" });
-  });
-
-  // listen on a random port on localhost, and store the server instance and base URL for use in tests
-  server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
-    listener.once("error", reject);
-  });
-
-  // ensure server is listening and has a valid address
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 // after tests, close the server and db connection, and delete any remaining test users
 after(async () => {
   try {
-    if (server?.listening) {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()));
-      });
-    }
+    await closeServer();
   } finally {
     try {
       for (const userId of createdUserIds) {

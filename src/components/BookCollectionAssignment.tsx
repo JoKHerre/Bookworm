@@ -1,16 +1,18 @@
+import { ApiRequestError } from "../api/client";
+import type { SavedBook } from "../../shared/library";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import {
   addBookToCollection,
-  CollectionApiError,
   listCollectionsForBook,
   type CollectionMembershipSummary,
-} from "../collectionsApi";
+} from "../api/collections";
 import "./BookCollectionAssignment.css";
 
 interface Props {
   bookKey: string;
   title: string;
+  onAdded?: (book: SavedBook) => void;
   onLogin: () => void | Promise<void>;
 }
 
@@ -19,6 +21,7 @@ export default function BookCollectionAssignment({
   bookKey,
   title,
   onLogin,
+  onAdded,
 }: Props) {
   const id = useId();
   const [collections, setCollections] = useState<CollectionMembershipSummary[]>(
@@ -66,7 +69,7 @@ export default function BookCollectionAssignment({
             ? failure.message
             : "Could not load your collections. Please try again.",
         );
-        if (failure instanceof CollectionApiError && failure.status === 401)
+        if (failure instanceof ApiRequestError && failure.status === 401)
           setSessionExpired(true);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -88,8 +91,9 @@ export default function BookCollectionAssignment({
     setError("");
     setNotice("");
     try {
-      await addBookToCollection(collection.id, bookKey);
+      const savedBook = await addBookToCollection(collection.id, bookKey);
       if (!mounted.current) return;
+      onAdded?.(savedBook);
       setCollections((current) =>
         current.map((item) =>
           item.id === collection.id
@@ -108,7 +112,7 @@ export default function BookCollectionAssignment({
           ? failure.message
           : "Could not add this book. Please try again.",
       );
-      if (failure instanceof CollectionApiError) {
+      if (failure instanceof ApiRequestError) {
         if (failure.status === 401) setSessionExpired(true);
         if (failure.status === 404 || failure.status === 409) {
           setSelectedId("");

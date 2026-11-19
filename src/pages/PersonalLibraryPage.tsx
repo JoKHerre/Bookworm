@@ -1,99 +1,130 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
-import { type ReadingStatus } from "../../shared/readingStatus";
+import {
+  READING_STATUS_LABELS,
+  type ReadingStatus,
+} from "../../shared/readingStatus";
 import { filterByTags, libraryTags } from "../../shared/tags";
 import SavedBookCard from "../components/SavedBookCard";
 import CollectionsManager from "../components/CollectionsManager";
-import { getRatings } from "../ratingsApi";
+import type { SavedBook } from "../../shared/library";
+import { getBookDetails } from "../api/books";
+import { errorMessage } from "../api/client";
+import {
+  getLibrary,
+  removeSavedBook,
+  updateReadingStatus as saveReadingStatus,
+} from "../api/library";
+import { getRatings } from "../api/ratings";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import "./PersonalLibraryPage.css";
 
-// define error messages
 const SESSION_EXPIRED_MESSAGE =
-  "Your session has expired. Please sign in again.";
+  "Your session has expired. Please log in again.";
+const LOAD_ERROR = "Could not load your personal library.";
 const STATUS_UPDATE_ERROR_MESSAGE =
-  "Could not update this book's reading status. Please try again.";
+  "Could not update this book's reading status.";
+// how long Undo stays offered before a removal is sent to the server
+export const UNDO_REMOVE_MS = 6000;
+// shelves in the order people look for them
+const SHELVES: ReadingStatus[] = [
+  "currently_reading",
+  "to_be_read",
+  "finished",
+];
 
-// define the shape of a saved book object as returned by the server
-interface SavedBook {
-  id: number;
-  bookKey: string;
-  createdAt: string;
-  readingStatus: ReadingStatus;
+interface PersonalLibraryBook extends SavedBook {
+  details: BookDetails | null | undefined; // undefined while still loading
 }
 
-// PersonalLibraryBook: SavedBook plus any additional details
-interface PersonalLibraryBook extends SavedBook {
-  details: BookDetails | null;
+interface PendingRemoval {
+  id: number;
+  title: string;
 }
 
 function PersonalLibraryPage() {
   const navigate = useNavigate();
-  const [books, setBooks] = useState<PersonalLibraryBook[]>([]); // the saved books
-  const [loading, setLoading] = useState(true); // whether the list of saved books is currently loading
-  const [error, setError] = useState(""); // message to display in case of error loading the saved books
-  const [removalError, setRemovalError] = useState(""); // message to display if removing a book fails
-  const [removingBookIds, setRemovingBookIds] = useState<Set<number>>(
-    () => new Set(),
-  ); // saved-book rows whose removal requests are in progress
+  const [books, setBooks] = useState<PersonalLibraryBook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [removalError, setRemovalError] = useState("");
+  // a removed book stays hidden here until Undo runs out, then it's deleted
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
+    null,
+  );
+  const removalTimer = useRef<number | undefined>(undefined);
+  const pendingRemovalRef = useRef<PendingRemoval | null>(null);
   const [updatingReadingStatusIds, setUpdatingReadingStatusIds] = useState<
     Set<number>
-  >(() => new Set()); // saved-book rows whose reading status requests are in progress
+  >(() => new Set());
   const [readingStatusErrors, setReadingStatusErrors] = useState<
     Record<number, string>
-  >({}); // errors to display beside the affected book's status control
-  const [ratings, setRatings] = useState<Map<string, number>>(() => new Map()); // the user's rating for each rated bookKey
-  const [selectedTags, setSelectedTags] = useState<string[]>([]); // tags a book must all have to be shown; empty shows every book
-  const [loadAttempt, setLoadAttempt] = useState(0); // counter to trigger reloading the saved books when the user clicks "Try again"
+  >({}); // keyed by saved-book id
+  const [ratings, setRatings] = useState<Map<string, number>>(() => new Map());
+  const [selectedTags, setSelectedTags] = useState<string[]>([]); // a book must have every one; empty shows all
+  const [loadAttempt, setLoadAttempt] = useState(0); // bumped by "Try again" to reload
 
-  // remove a book:
-  async function removeBook(id: number, title: string) {
-    const genericRemovalError = `Could not remove “${title}” from your library. Please try again.`;
-    let requestError = "";
-
-    // clear any previous removal error msg + add book's id to set of books being removed
-    setRemovalError("");
-    setRemovingBookIds((currentIds) => new Set(currentIds).add(id));
-
+  async function commitRemoval(removal: PendingRemoval) {
     try {
-      // send DELETE request to server
-      const response = await fetch(`/api/library/${id}`, { method: "DELETE" });
-
-      // handle error status codes with error messages to display to user
-      if (response.status === 401) {
-        requestError = SESSION_EXPIRED_MESSAGE;
-      } else if (response.status === 404) {
-        requestError = `Could not find “${title}” in your library to remove.`;
-      } else if (!response.ok) {
-        requestError = genericRemovalError;
-      } else {
-        // successful DELETE: update the visible list by filtering out the removed book
-        setBooks((currentBooks) =>
-          currentBooks.filter((book) => book.id !== id),
-        );
-      }
-    } catch {
-      // Network failures should use a friendly message instead of a browser error.
-      requestError = genericRemovalError;
+      await removeSavedBook(removal.id);
+      setBooks((currentBooks) =>
+        currentBooks.filter((book) => book.id !== removal.id),
+      );
+    } catch (err) {
+      setRemovalError(
+        errorMessage(err, {
+          fallback: `Could not remove “${removal.title}” from your library.`,
+          byStatus: {
+            401: SESSION_EXPIRED_MESSAGE,
+            404: `Could not find “${removal.title}” in your library to remove.`,
+          },
+        }),
+      );
     } finally {
-      // remove the book's id from the set of books being removed, regardless of success or failure
-      setRemovingBookIds((currentIds) => {
-        const nextIds = new Set(currentIds);
-        nextIds.delete(id);
-        return nextIds;
-      });
+      setPendingRemoval((current) =>
+        current?.id === removal.id ? null : current,
+      );
     }
-
-    if (requestError) setRemovalError(requestError);
   }
+
+  function flushRemoval() {
+    window.clearTimeout(removalTimer.current);
+    const removal = pendingRemovalRef.current;
+    pendingRemovalRef.current = null;
+    if (removal) void commitRemoval(removal);
+  }
+
+  function removeBook(id: number, title: string) {
+    flushRemoval(); // only one removal waits on Undo at a time
+    setRemovalError("");
+    const removal = { id, title };
+    pendingRemovalRef.current = removal;
+    setPendingRemoval(removal);
+    removalTimer.current = window.setTimeout(flushRemoval, UNDO_REMOVE_MS);
+  }
+
+  function undoRemoval() {
+    window.clearTimeout(removalTimer.current);
+    pendingRemovalRef.current = null;
+    setPendingRemoval(null);
+  }
+
+  // leaving the page doesn't cancel a removal, it just stops waiting for Undo
+  useEffect(
+    () => () => {
+      window.clearTimeout(removalTimer.current);
+      const removal = pendingRemovalRef.current;
+      if (removal) void removeSavedBook(removal.id).catch(() => {});
+    },
+    [],
+  );
 
   async function updateReadingStatus(
     id: number,
     title: string,
     readingStatus: ReadingStatus,
   ) {
-    // capture current status, to be restored if the update fails
     const previousStatus = books.find((book) => book.id === id)?.readingStatus;
     if (!previousStatus) return;
 
@@ -110,50 +141,16 @@ function PersonalLibraryPage() {
       ),
     );
 
-    let requestError = "";
     try {
-      // attempt PATCH request to update the reading status on the server
-      const response = await fetch(`/api/library/${id}/reading-status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ readingStatus }),
-      });
-
-      // assign requestError based on the response status code, if applicable
-      if (response.status === 401) {
-        requestError = SESSION_EXPIRED_MESSAGE;
-      } else if (response.status === 404) {
-        requestError = `Could not find “${title}” in your library to update.`;
-      } else if (!response.ok) {
-        requestError = STATUS_UPDATE_ERROR_MESSAGE;
-      } else {
-        // successful PATCH
-        // update book in the state with its new reading status as returned by the server
-        const data = (await response.json()) as {
-          id: number;
-          readingStatus: ReadingStatus;
-        };
-        setBooks((currentBooks) =>
-          currentBooks.map((book) =>
-            book.id === id
-              ? { ...book, readingStatus: data.readingStatus }
-              : book,
-          ),
-        );
-      }
-    } catch {
-      requestError = STATUS_UPDATE_ERROR_MESSAGE;
-    } finally {
-      // remove the book's id from the set of books being updated, regardless of success or failure
-      setUpdatingReadingStatusIds((currentIds) => {
-        const nextIds = new Set(currentIds);
-        nextIds.delete(id);
-        return nextIds;
-      });
-    }
-
-    // if error, restore previous reading status and display error msg
-    if (requestError) {
+      const updated = await saveReadingStatus(id, readingStatus);
+      setBooks((currentBooks) =>
+        currentBooks.map((book) =>
+          book.id === id
+            ? { ...book, readingStatus: updated.readingStatus }
+            : book,
+        ),
+      );
+    } catch (err) {
       setBooks((currentBooks) =>
         currentBooks.map((book) =>
           book.id === id ? { ...book, readingStatus: previousStatus } : book,
@@ -161,109 +158,111 @@ function PersonalLibraryPage() {
       );
       setReadingStatusErrors((currentErrors) => ({
         ...currentErrors,
-        [id]: requestError,
+        [id]: errorMessage(err, {
+          fallback: STATUS_UPDATE_ERROR_MESSAGE,
+          byStatus: {
+            401: SESSION_EXPIRED_MESSAGE,
+            404: `Could not find “${title}” in your library to update.`,
+          },
+        }),
       }));
+    } finally {
+      setUpdatingReadingStatusIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(id);
+        return nextIds;
+      });
     }
   }
 
   useEffect(() => {
-    let isCurrentRequest = true;
+    const controller = new AbortController();
+    const { signal } = controller;
 
-    // loading the personal library: fetch list of saved books, then fetch details for each book
+    // show the saved books as soon as they arrive, then fill in each book's
+    // details as it loads; a failed details lookup leaves details null
     async function loadPersonalLibrary() {
-      // set loading to true and clear any previous error message
       setLoading(true);
       setError("");
 
       try {
-        // requests GET /api/library to retrieve the user's saved books
-        const response = await fetch("/api/library");
+        const { books: savedBooks } = await getLibrary(signal);
+        if (signal.aborted) return;
+        setBooks(savedBooks.map((book) => ({ ...book, details: undefined })));
+        setLoading(false);
 
-        // interprets error status codes and sets error msg to display to user
-        if (response.status === 401) {
-          throw new Error(SESSION_EXPIRED_MESSAGE);
-        }
-        if (!response.ok) {
-          throw new Error("Could not load your personal library.");
-        }
-
-        // else, successful response: parse the JSON and fetch details for each saved book
-        // read response, treat it as an object containing an array of SavedBook's, called "books"
-        const data = (await response.json()) as { books: SavedBook[] };
-        const booksWithDetails = await Promise.all(
-          data.books.map(async (savedBook) => {
-            // for each SavedBook
-            try {
-              // fetch book's details (title, author, etc) using bookKey
-              const detailsResponse = await fetch(
-                `/api/books/details?key=${encodeURIComponent(savedBook.bookKey)}`,
+        for (const { id, bookKey } of savedBooks) {
+          void getBookDetails(bookKey, signal)
+            .catch(() => null)
+            .then((details) => {
+              if (signal.aborted) return;
+              setBooks((currentBooks) =>
+                currentBooks.map((book) =>
+                  book.id === id ? { ...book, details } : book,
+                ),
               );
-
-              // if fails, return the savedBook with details set to null
-              if (!detailsResponse.ok) {
-                return { ...savedBook, details: null };
-              }
-
-              // success: read book details and return the savedBook with its details
-              const details = (await detailsResponse.json()) as BookDetails;
-              return { ...savedBook, details };
-            } catch {
-              // any other error: also return the savedBook with details set to null
-              return { ...savedBook, details: null };
-            }
-          }),
-        );
+            });
+        }
 
         // ratings are optional extras: if they fail to load, cards just show no rating
-        const userRatings = await getRatings().catch(() => []);
-
-        // if current request, store the array of saved books w their details in the books state
-        if (isCurrentRequest) {
-          setBooks(booksWithDetails);
+        const userRatings = await getRatings(signal).catch(() => []);
+        if (!signal.aborted) {
           setRatings(new Map(userRatings.map((r) => [r.bookKey, r.rating])));
         }
       } catch (loadError) {
-        // load error: store error msg
-        if (isCurrentRequest) {
+        if (!signal.aborted) {
           setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Could not load your personal library.",
+            errorMessage(loadError, {
+              fallback: LOAD_ERROR,
+              byStatus: { 401: SESSION_EXPIRED_MESSAGE },
+            }),
           );
-        }
-      } finally {
-        // set loading to false, to signify that request is complete
-        if (isCurrentRequest) {
           setLoading(false);
         }
       }
     }
 
-    // call the function to load the personal library
     void loadPersonalLibrary();
-
-    return () => {
-      isCurrentRequest = false;
-    };
+    return () => controller.abort();
   }, [loadAttempt]);
 
   function viewBook(bookKey: string) {
     const state: BookDetailsLocationState = {
-      backLabel: "Back to My Personal Library",
+      backLabel: "Back to My Library",
     };
     void navigate(bookDetailsPath(bookKey), { state });
   }
 
+  const listedBooks = books.filter((book) => book.id !== pendingRemoval?.id);
   // selected tags that no longer exist in the library are ignored
-  const availableTags = libraryTags(books);
+  const availableTags = libraryTags(listedBooks);
   const activeTags = selectedTags.filter((tag) => availableTags.includes(tag));
-  const visibleBooks = filterByTags(books, activeTags);
+  const visibleBooks = filterByTags(listedBooks, activeTags);
 
   function toggleTag(tag: string) {
     setSelectedTags(
       activeTags.includes(tag)
         ? activeTags.filter((activeTag) => activeTag !== tag)
         : [...activeTags, tag],
+    );
+  }
+
+  function renderBook(book: PersonalLibraryBook) {
+    const title = book.details?.title ?? "Book details unavailable";
+    return (
+      <SavedBookCard
+        key={book.id}
+        book={book}
+        rating={ratings.get(book.bookKey)}
+        removeFrom="library"
+        onViewBook={() => viewBook(book.bookKey)}
+        onReadingStatusChange={(status) =>
+          void updateReadingStatus(book.id, title, status)
+        }
+        onRemove={() => removeBook(book.id, title)}
+        isUpdatingReadingStatus={updatingReadingStatusIds.has(book.id)}
+        readingStatusError={readingStatusErrors[book.id]}
+      />
     );
   }
 
@@ -280,33 +279,30 @@ function PersonalLibraryPage() {
           </Link>
         </section>
 
-        {/* saved books collection */}
         <section
           className="personal-library-books"
           aria-labelledby="personal-library-books-title"
         >
-          <div className="personal-library-books-heading">
+          <header className="personal-library-books-heading">
             <div>
               <h2 id="personal-library-books-title">Books</h2>
-              <p>Books you’ve saved to your personal library.</p>
+              <p>Books you’ve saved to your personal library</p>
             </div>
-          </div>
-
+          </header>
           {removalError && (
             <p className="personal-library-removal-error" role="alert">
               {removalError}
             </p>
           )}
 
-          {/* display loading msg, error + try again button if failure, empty state if no saved books, or the list of saved books */}
           {loading ? (
             <p className="personal-library-message" role="status">
-              Loading your personal library...
+              Loading…
             </p>
           ) : error ? (
             <div className="personal-library-empty-state" role="alert">
-              <h3>We couldn’t load your books</h3>
-              <p>{error}</p>
+              <h2>We couldn’t load your books</h2>
+              {error !== LOAD_ERROR && <p>{error}</p>}
               <button
                 type="button"
                 onClick={() => setLoadAttempt((attempt) => attempt + 1)}
@@ -314,10 +310,9 @@ function PersonalLibraryPage() {
                 Try again
               </button>
             </div>
-          ) : books.length === 0 ? (
+          ) : listedBooks.length === 0 ? (
             <div className="personal-library-empty-state">
-              <h3>Your library is ready for its first book</h3>
-              <p>Explore books and save the ones you’re interested in.</p>
+              <h2>Your library is ready for its first book</h2>
               <button type="button" onClick={() => void navigate("/search")}>
                 Discover books
               </button>
@@ -353,40 +348,47 @@ function PersonalLibraryPage() {
                   No books match these tags.
                 </p>
               ) : (
-                <ul className="saved-book-grid" aria-label="Saved books">
-                  {visibleBooks.map((book) => (
-                    <SavedBookCard
-                      key={book.id}
-                      book={book}
-                      rating={ratings.get(book.bookKey)}
-                      removeFrom="library"
-                      onViewBook={() => viewBook(book.bookKey)}
-                      onReadingStatusChange={(status) =>
-                        void updateReadingStatus(
-                          book.id,
-                          book.details?.title ?? "Book details unavailable",
-                          status,
-                        )
-                      }
-                      onRemove={() =>
-                        void removeBook(
-                          book.id,
-                          book.details?.title ?? "Book details unavailable",
-                        )
-                      }
-                      isRemoving={removingBookIds.has(book.id)}
-                      isUpdatingReadingStatus={updatingReadingStatusIds.has(
-                        book.id,
-                      )}
-                      readingStatusError={readingStatusErrors[book.id]}
-                    />
-                  ))}
-                </ul>
+                SHELVES.map((status) => {
+                  const shelf = visibleBooks.filter(
+                    (book) => book.readingStatus === status,
+                  );
+                  if (shelf.length === 0) return null;
+                  const headingId = `shelf-${status}`;
+                  return (
+                    <section
+                      className="personal-library-shelf"
+                      key={status}
+                      aria-labelledby={headingId}
+                    >
+                      <h3 id={headingId}>
+                        {READING_STATUS_LABELS[status]}{" "}
+                        <span className="personal-library-shelf-count">
+                          {shelf.length}
+                        </span>
+                      </h3>
+                      <ul
+                        className="saved-book-grid"
+                        aria-labelledby={headingId}
+                      >
+                        {shelf.map(renderBook)}
+                      </ul>
+                    </section>
+                  );
+                })
               )}
             </>
           )}
         </section>
         <CollectionsManager />
+
+        {pendingRemoval && (
+          <div className="personal-library-undo" role="status">
+            <span>Removed “{pendingRemoval.title}”.</span>
+            <button type="button" onClick={undoRemoval}>
+              Undo
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

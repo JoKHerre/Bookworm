@@ -10,17 +10,22 @@ import { useState } from "react";
 import { Route, Routes, useLocation, useNavigate } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookDetails } from "../../shared/books";
-import { getBookAvailability, getBookDetails, getBookISBNs } from "../booksApi";
-import { getRatings } from "../ratingsApi";
-import { AuthContext, useAuth } from "../useAuth";
+import {
+  getBookAvailability,
+  getBookDetails,
+  getBookISBNs,
+  searchLibraryByTitle,
+} from "../api/books";
+import { getRatings } from "../api/ratings";
+import { AuthContext, useAuth } from "../auth/useAuth";
 import type { AuthLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import BookDetailsPage from "./BookDetailsPage";
 import PersonalLibraryPage from "./PersonalLibraryPage";
 import CollectionDetailsPage from "./CollectionDetailsPage";
 
-vi.mock("../booksApi");
-vi.mock("../ratingsApi");
+vi.mock("../api/books");
+vi.mock("../api/ratings");
 const USER = { id: 1, email: "reader@example.test" };
 const BOOKS = [
   {
@@ -116,6 +121,7 @@ const removeDune = () =>
 
 beforeEach(() => {
   stubApi();
+  vi.mocked(searchLibraryByTitle).mockResolvedValue({ results: [] });
   vi.mocked(getBookDetails).mockImplementation(async (key) =>
     DETAILS.find((book) => book.key === key)!,
   );
@@ -440,9 +446,9 @@ describe("CollectionDetailsPage", () => {
     expect(within(collections).getByText("1 book")).toBeInTheDocument();
     // Membership removal did not remove the saved book from the library list.
     expect(
-      await within(
-        screen.getByRole("list", { name: "Saved books" }),
-      ).findByText("Dune"),
+      await within(screen.getByRole("region", { name: "Books" })).findByText(
+        "Dune",
+      ),
     ).toBeInTheDocument();
   });
   it("discards late loads when navigating to another collection", async () => {

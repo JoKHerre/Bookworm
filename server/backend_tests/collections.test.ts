@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { spawn, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
-import { createServer } from "node:net";
-import { fileURLToPath } from "node:url";
 import type { ReadingStatus } from "../../shared/readingStatus.ts";
 import { after, before, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { assertTestDatabaseUrl, createTestBookKey, eq } from "./test-utils.ts";
+import {
+  assertTestDatabaseUrl,
+  createTestBookKey,
+  eq,
+  startTestServer,
+} from "./test-utils.ts";
 
 // confirm that test db url is set
 assertTestDatabaseUrl();
@@ -16,68 +17,28 @@ const [
   { db, pool },
   { collectionBooks, collections, savedBooks, sessions, users },
   { createSession, generateSessionToken },
+  { createApp },
 ] = await Promise.all([
   import("../src/db/index.ts"),
   import("../src/db/schema.ts"),
   import("../src/db/session.ts"),
+  import("../src/app.ts"),
 ]);
 
 const userIds: number[] = [];
-let server: ChildProcess;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 const collectionsPath = "/api/collections";
 
-// runs once before all tests
+// mount the real app so route order and middleware are exercised by every endpoint test
 before(async () => {
-  // Reserve an available port, then launch the real entry point so route mounts
-  // and middleware order are exercised by every endpoint test.
-
-  // find an available port by creating a temporary server and listening on port 0
-  const reservation = createServer();
-  reservation.listen(0, "127.0.0.1");
-  await once(reservation, "listening");
-  const address = reservation.address();
-  assert.ok(address && typeof address !== "string");
-  await new Promise<void>((resolve, reject) => {
-    reservation.close((error) => (error ? reject(error) : resolve()));
-  });
-  baseUrl = `http://127.0.0.1:${address.port}`;
-
-  // spawn the server process with the reserved port in the environment
-  server = spawn(
-    process.execPath,
-    [fileURLToPath(new URL("../src/index.ts", import.meta.url))],
-    {
-      env: { ...process.env, PORT: String(address.port) },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  let output = "";
-  server.stdout!.on("data", (chunk: Buffer) => {
-    output += chunk.toString();
-  });
-  server.stderr!.on("data", (chunk: Buffer) => {
-    output += chunk.toString();
-  });
-  const deadline = Date.now() + 10_000;
-  while (
-    !output.includes(`API listening on http://localhost:${address.port}`)
-  ) {
-    assert.equal(server.exitCode, null, `API exited during startup: ${output}`);
-    assert.ok(Date.now() < deadline, `API did not start: ${output}`);
-    await delay(20);
-  }
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 // runs once after all tests
 after(async () => {
   try {
-    // stop backend server if it is still running
-    if (server && server.exitCode === null && server.signalCode === null) {
-      const exited = once(server, "exit");
-      server.kill();
-      await exited;
-    }
+    await closeServer();
   } finally {
     try {
       // delete any temporary users created during tests

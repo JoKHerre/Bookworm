@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, test } from "node:test";
-import type { Server } from "node:http";
-import express from "express";
 import type { BookDetails } from "../../shared/books.ts";
 import { toTags } from "../../shared/tags.ts";
-import { booksRouter } from "../src/routes/books.ts";
+import { createApp } from "../src/app.ts";
+import { startTestServer } from "./test-utils.ts";
+import { clearOpenLibraryCache } from "../src/services/openLibrary.ts";
 
 const originalFetch = globalThis.fetch;
 const workKey = "/works/OL1W";
-let server: Server;
+let closeServer: () => Promise<void>;
 let baseUrl: string;
 
 function stubWork(body: object | null, status = 200) {
@@ -26,25 +26,16 @@ function getDetails() {
 }
 
 before(async () => {
-  const app = express();
-  app.use("/api/books", booksRouter);
-  server = await new Promise<Server>((resolve, reject) => {
-    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
-    listener.once("error", reject);
-  });
-  const address = server.address();
-  assert.ok(address && typeof address !== "string");
-  baseUrl = `http://127.0.0.1:${address.port}`;
+  ({ baseUrl, close: closeServer } = await startTestServer(createApp()));
 });
 
 after(async () => {
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
+  await closeServer();
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  clearOpenLibraryCache();
 });
 
 test("COL-06-T-1 normalizes subjects into lowercase tags", () => {

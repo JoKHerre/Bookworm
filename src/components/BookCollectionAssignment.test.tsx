@@ -10,7 +10,7 @@ import { MemoryRouter } from "react-router";
 import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import BookCollectionAssignment from "./BookCollectionAssignment";
-import type { CollectionMembershipSummary } from "../collectionsApi";
+import type { CollectionMembershipSummary } from "../api/collections";
 import { jsonResponse } from "../test/renderWithProviders";
 
 function renderWithRouter(ui: ReactElement) {
@@ -31,7 +31,15 @@ function setup(
   const fetchMock = vi.fn(
     async (_url: string, init?: RequestInit): Promise<Response> =>
       init?.method === "POST"
-        ? jsonResponse({ id: 9 }, 201)
+        ? jsonResponse(
+            {
+              id: 9,
+              bookKey: "/works/OL1W",
+              readingStatus: "to_be_read",
+              createdAt: "2026-01-01",
+            },
+            201,
+          )
         : jsonResponse({ collections }),
   );
   vi.stubGlobal("fetch", fetchMock);
@@ -59,7 +67,15 @@ describe("BookCollectionAssignment", () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       if (init?.method === "POST") {
         added = true;
-        return jsonResponse({}, 201);
+        return jsonResponse(
+          {
+            id: 9,
+            bookKey: "/works/OL1W",
+            readingStatus: "to_be_read",
+            createdAt: "2026-01-01",
+          },
+          201,
+        );
       }
       return jsonResponse({
         collections: [
@@ -313,7 +329,19 @@ describe("BookCollectionAssignment", () => {
       screen.getByRole("button", { name: "Refresh collections" }),
     ).toBeDisabled();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    await act(async () => resolve(jsonResponse({}, 201)));
+    await act(async () =>
+      resolve(
+        jsonResponse(
+          {
+            id: 9,
+            bookKey: "/works/OL1W",
+            readingStatus: "to_be_read",
+            createdAt: "2026-01-01",
+          },
+          201,
+        ),
+      ),
+    );
     expect(await screen.findByText(/Added “Dune”/)).toBeInTheDocument();
   });
   it("ignores an old mutation after a new book panel mounts", async () => {
@@ -335,7 +363,19 @@ describe("BookCollectionAssignment", () => {
       />,
     );
     await selectCollection();
-    await act(async () => resolve(jsonResponse({}, 201)));
+    await act(async () =>
+      resolve(
+        jsonResponse(
+          {
+            id: 9,
+            bookKey: "/works/OL1W",
+            readingStatus: "to_be_read",
+            createdAt: "2026-01-01",
+          },
+          201,
+        ),
+      ),
+    );
     expect(screen.queryByText(/Added “Dune”/)).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Favorites" })).toBeEnabled();
     await submit();
