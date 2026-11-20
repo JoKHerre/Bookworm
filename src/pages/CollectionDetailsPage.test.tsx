@@ -14,6 +14,7 @@ import {
   getBookAvailability,
   getBookDetails,
   getBookISBNs,
+  getSimilarBooks,
   searchLibraryByTitle,
 } from "../api/books";
 import { getRatings } from "../api/ratings";
@@ -121,6 +122,7 @@ const removeDune = () =>
 
 beforeEach(() => {
   stubApi();
+  vi.mocked(getSimilarBooks).mockResolvedValue({ books: [] });
   vi.mocked(searchLibraryByTitle).mockResolvedValue({ results: [] });
   vi.mocked(getBookDetails).mockImplementation(async (key) =>
     DETAILS.find((book) => book.key === key)!,
