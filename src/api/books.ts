@@ -1,6 +1,7 @@
 import {
   ISBN_EDITIONS_PAGE_SIZE,
   bookISBNs,
+  similarBooksResponse,
   type BookDetails,
   type BookISBNs,
   type BookISBNsQuery,
@@ -68,6 +69,19 @@ export function getBookDetails(
     new URLSearchParams({ key, includeAuthors: String(includeAuthors) }),
     signal,
   );
+}
+
+export async function getSimilarBooks(key: string, signal: AbortSignal) {
+  const data = await get<unknown>(
+    "similar",
+    new URLSearchParams({ key }),
+    signal,
+  );
+  const parsed = similarBooksResponse.safeParse(data);
+  if (!parsed.success) {
+    throw new Error("Unable to read similar books.");
+  }
+  return parsed.data;
 }
 
 export async function getBookISBNs(

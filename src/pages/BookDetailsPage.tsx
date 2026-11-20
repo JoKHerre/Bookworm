@@ -7,6 +7,7 @@ import {
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
 import BookISBNSection from "../components/BookISBNSection";
+import SimilarBooks from "../components/SimilarBooks";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
 import { getRatings, saveRating } from "../api/ratings";
 import {
@@ -358,6 +359,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       )}
 
       {book && <BookISBNSection bookKey={bookKey} />}
+      {book && <SimilarBooks bookKey={bookKey} />}
 
       {book && (
         <SimilarAtLibrarySection
