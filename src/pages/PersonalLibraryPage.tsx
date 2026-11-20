@@ -3,11 +3,11 @@ import { Link, useNavigate } from "react-router";
 import type { BookDetails } from "../../shared/books";
 import {
   READING_STATUS_LABELS,
-  READING_STATUS_OPTIONS,
   type ReadingStatus,
 } from "../../shared/readingStatus";
 import { filterByTags, libraryTags } from "../../shared/tags";
-import StarDisplay from "../components/StarDisplay";
+import SavedBookCard from "../components/SavedBookCard";
+import CollectionsManager from "../components/CollectionsManager";
 import type { SavedBook } from "../../shared/library";
 import { getBookDetails } from "../api/books";
 import { errorMessage } from "../api/client";
@@ -247,107 +247,22 @@ function PersonalLibraryPage() {
     );
   }
 
-  function renderBook({
-    id,
-    bookKey,
-    details,
-    readingStatus,
-  }: PersonalLibraryBook) {
-    const title =
-      details === undefined
-        ? "Loading…"
-        : (details?.title ?? "Book details unavailable");
-    const coverId = details?.covers?.[0];
-    const isUpdatingReadingStatus = updatingReadingStatusIds.has(id);
-    const readingStatusError = readingStatusErrors[id];
-    const rating = ratings.get(bookKey);
-
+  function renderBook(book: PersonalLibraryBook) {
+    const title = book.details?.title ?? "Book details unavailable";
     return (
-      <li
-        className="personal-library-book-card"
-        key={id}
-        aria-busy={details === undefined}
-      >
-        {coverId ? (
-          <img
-            className="personal-library-book-cover"
-            src={`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`}
-            alt={`Cover of ${title}`}
-          />
-        ) : (
-          <div
-            className={`personal-library-book-cover personal-library-book-cover--${
-              details === undefined ? "loading" : "placeholder"
-            }`}
-            aria-hidden="true"
-          />
-        )}
-        <div className="personal-library-book-details">
-          <h3>
-            <button
-              className="personal-library-book-title"
-              type="button"
-              aria-label={`View details for ${title}`}
-              onClick={() => viewBook(bookKey)}
-            >
-              {title}
-            </button>
-          </h3>
-          {details !== undefined && (
-            <p>{details?.authors.join(", ") || "Author unavailable"}</p>
-          )}
-          {rating !== undefined && <StarDisplay rating={rating} />}
-          {details === null && (
-            <p className="personal-library-book-key">{bookKey}</p>
-          )}
-        </div>
-        <div className="personal-library-book-status">
-          <select
-            aria-label={`Reading status for ${title}`}
-            aria-busy={isUpdatingReadingStatus}
-            aria-describedby={
-              readingStatusError ? `reading-status-error-${id}` : undefined
-            }
-            disabled={isUpdatingReadingStatus}
-            value={readingStatus}
-            onChange={(event) =>
-              void updateReadingStatus(
-                id,
-                title,
-                event.target.value as ReadingStatus,
-              )
-            }
-          >
-            {READING_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {isUpdatingReadingStatus && (
-            <p className="personal-library-book-status-message" role="status">
-              Saving status…
-            </p>
-          )}
-          {readingStatusError && (
-            <p
-              className="personal-library-book-status-error"
-              id={`reading-status-error-${id}`}
-              role="alert"
-            >
-              {readingStatusError}
-            </p>
-          )}
-        </div>
-        <button
-          className="personal-library-book-remove"
-          type="button"
-          aria-label={`Remove ${title} from my library`}
-          onClick={() => removeBook(id, title)}
-        >
-          Remove
-        </button>
-      </li>
+      <SavedBookCard
+        key={book.id}
+        book={book}
+        rating={ratings.get(book.bookKey)}
+        removeFrom="library"
+        onViewBook={() => viewBook(book.bookKey)}
+        onReadingStatusChange={(status) =>
+          void updateReadingStatus(book.id, title, status)
+        }
+        onRemove={() => removeBook(book.id, title)}
+        isUpdatingReadingStatus={updatingReadingStatusIds.has(book.id)}
+        readingStatusError={readingStatusErrors[book.id]}
+      />
     );
   }
 
@@ -364,95 +279,104 @@ function PersonalLibraryPage() {
           </Link>
         </section>
 
-        {removalError && (
-          <p className="personal-library-removal-error" role="alert">
-            {removalError}
-          </p>
-        )}
+        <section
+          className="personal-library-books"
+          aria-labelledby="personal-library-books-title"
+        >
+          <header className="personal-library-books-heading">
+            <h2 id="personal-library-books-title">Books</h2>
+          </header>
+          {removalError && (
+            <p className="personal-library-removal-error" role="alert">
+              {removalError}
+            </p>
+          )}
 
-        {loading ? (
-          <p className="personal-library-message" role="status">
-            Loading…
-          </p>
-        ) : error ? (
-          <div className="personal-library-empty-state" role="alert">
-            <h2>We couldn’t load your books</h2>
-            {error !== LOAD_ERROR && <p>{error}</p>}
-            <button
-              type="button"
-              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-            >
-              Try again
-            </button>
-          </div>
-        ) : listedBooks.length === 0 ? (
-          <div className="personal-library-empty-state">
-            <h2>Your library is ready for its first book</h2>
-            <button type="button" onClick={() => void navigate("/search")}>
-              Discover books
-            </button>
-          </div>
-        ) : (
-          <>
-            {availableTags.length > 0 && (
-              <fieldset className="personal-library-tag-filter">
-                <legend>Filter by tags</legend>
-                <div className="personal-library-tag-options">
-                  {availableTags.map((tag) => (
-                    <label key={tag}>
-                      <input
-                        type="checkbox"
-                        checked={activeTags.includes(tag)}
-                        onChange={() => toggleTag(tag)}
-                      />
-                      {tag}
-                    </label>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  disabled={activeTags.length === 0}
-                  onClick={() => setSelectedTags([])}
-                >
-                  Clear tags
-                </button>
-              </fieldset>
-            )}
-            {visibleBooks.length === 0 ? (
-              <p className="personal-library-message" role="status">
-                No books match these tags.
-              </p>
-            ) : (
-              SHELVES.map((status) => {
-                const shelf = visibleBooks.filter(
-                  (book) => book.readingStatus === status,
-                );
-                if (shelf.length === 0) return null;
-                const headingId = `shelf-${status}`;
-                return (
-                  <section
-                    className="personal-library-shelf"
-                    key={status}
-                    aria-labelledby={headingId}
+          {loading ? (
+            <p className="personal-library-message" role="status">
+              Loading…
+            </p>
+          ) : error ? (
+            <div className="personal-library-empty-state" role="alert">
+              <h2>We couldn’t load your books</h2>
+              {error !== LOAD_ERROR && <p>{error}</p>}
+              <button
+                type="button"
+                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              >
+                Try again
+              </button>
+            </div>
+          ) : listedBooks.length === 0 ? (
+            <div className="personal-library-empty-state">
+              <h2>Your library is ready for its first book</h2>
+              <button type="button" onClick={() => void navigate("/search")}>
+                Discover books
+              </button>
+            </div>
+          ) : (
+            <>
+              {availableTags.length > 0 && (
+                <fieldset className="personal-library-tag-filter">
+                  <legend>Filter by tags</legend>
+                  <div className="personal-library-tag-options">
+                    {availableTags.map((tag) => (
+                      <label key={tag}>
+                        <input
+                          type="checkbox"
+                          checked={activeTags.includes(tag)}
+                          onChange={() => toggleTag(tag)}
+                        />
+                        {tag}
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={activeTags.length === 0}
+                    onClick={() => setSelectedTags([])}
                   >
-                    <h2 id={headingId}>
-                      {READING_STATUS_LABELS[status]}{" "}
-                      <span className="personal-library-shelf-count">
-                        {shelf.length}
-                      </span>
-                    </h2>
-                    <ul
-                      className="personal-library-book-grid"
+                    Clear tags
+                  </button>
+                </fieldset>
+              )}
+              {visibleBooks.length === 0 ? (
+                <p className="personal-library-message" role="status">
+                  No books match these tags.
+                </p>
+              ) : (
+                SHELVES.map((status) => {
+                  const shelf = visibleBooks.filter(
+                    (book) => book.readingStatus === status,
+                  );
+                  if (shelf.length === 0) return null;
+                  const headingId = `shelf-${status}`;
+                  return (
+                    <section
+                      className="personal-library-shelf"
+                      key={status}
                       aria-labelledby={headingId}
                     >
-                      {shelf.map(renderBook)}
-                    </ul>
-                  </section>
-                );
-              })
-            )}
-          </>
-        )}
+                      <h3 id={headingId}>
+                        {READING_STATUS_LABELS[status]}{" "}
+                        <span className="personal-library-shelf-count">
+                          {shelf.length}
+                        </span>
+                      </h3>
+                      <ul
+                        className="saved-book-grid"
+                        aria-labelledby={headingId}
+                      >
+                        {shelf.map(renderBook)}
+                      </ul>
+                    </section>
+                  );
+                })
+              )}
+            </>
+          )}
+        </section>
+        <CollectionsManager />
 
         {pendingRemoval && (
           <div className="personal-library-undo" role="status">

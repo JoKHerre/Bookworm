@@ -6,6 +6,7 @@ import {
 } from "../../shared/availability";
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
+import BookCollectionAssignment from "../components/BookCollectionAssignment";
 import BookISBNSection from "../components/BookISBNSection";
 import SimilarBooks from "../components/SimilarBooks";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
@@ -36,7 +37,7 @@ function BookDetailsPage() {
 function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const backLabel =
     (location.state as BookDetailsLocationState | null)?.backLabel ?? "Back";
 
@@ -55,7 +56,8 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const [book, setBook] = useState<BookDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { saved, busyKeys, errors, save, setReadingStatus } = useSavedBooks();
+  const { saved, busyKeys, errors, save, setReadingStatus, rememberSavedBook } =
+    useSavedBooks();
   const savedBook = saved.get(bookKey);
   const savingBook = busyKeys.has(bookKey);
   const loginToFinish = useLoginToFinish();
@@ -215,60 +217,100 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
       {backButton}
 
       <section className="book-header">
-        {coverUrl && (
-          <img
-            className="book-cover"
-            src={coverUrl}
-            alt={`Cover of ${title}`}
-          />
-        )}
+        <div className="book-cover-frame">
+          {coverUrl ? (
+            <img
+              className="book-cover"
+              src={coverUrl}
+              alt={`Cover of ${title}`}
+            />
+          ) : (
+            <div
+              className="book-cover-placeholder"
+              role="img"
+              aria-label={`Cover unavailable for ${title}`}
+            >
+              <span>Cover unavailable</span>
+            </div>
+          )}
+        </div>
 
         <div className="book-info">
-          <h1 className="book-details-title">{title}</h1>
+          <div>
+            <h1 className="book-details-title">{title}</h1>
 
-          <p className="book-details-author">
-            {searchBook?.author_name?.join(", ") ||
-              book?.authors.join(", ") ||
-              "Unknown author"}
-          </p>
-          {savedBook ? (
-            <label className="saved-book-status">
-              <span>In your library</span>
-              <select
-                value={savedBook.readingStatus}
-                aria-busy={savingBook}
-                disabled={savingBook}
-                onChange={(event) =>
-                  void setReadingStatus(
-                    bookKey,
-                    event.target.value as ReadingStatus,
-                  )
-                }
+            <p className="book-details-author">
+              {searchBook?.author_name?.join(", ") ||
+                book?.authors.join(", ") ||
+                "Unknown author"}
+            </p>
+          </div>
+          <div className="book-rating-group" aria-label="Your rating">
+            <StarRating
+              value={rating}
+              onChange={(value) => void handleRate(value)}
+              disabled={ratingSaving || loading || !book}
+            />
+            {ratingMessage && <p role="status">{ratingMessage}</p>}
+          </div>
+          <section
+            className="book-save-group"
+            aria-labelledby="book-save-heading"
+          >
+            <h2 id="book-save-heading">Save and organize</h2>
+            {savedBook ? (
+              <label className="saved-book-status">
+                <span>In your library</span>
+                <select
+                  value={savedBook.readingStatus}
+                  aria-busy={savingBook}
+                  disabled={savingBook}
+                  onChange={(event) =>
+                    void setReadingStatus(
+                      bookKey,
+                      event.target.value as ReadingStatus,
+                    )
+                  }
+                >
+                  {READING_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <button
+                className="save-library-button"
+                type="button"
+                onClick={() => void save(bookKey)}
+                disabled={savingBook || loading || !book}
               >
-                {READING_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <button
-              className="save-library-button"
-              type="button"
-              onClick={() => void save(bookKey)}
-              disabled={savingBook || loading || !book}
-            >
-              {savingBook ? "Saving..." : "Save to My Library"}
-            </button>
-          )}
-          {errors[bookKey] && <p role="alert">{errors[bookKey]}</p>}
-          <StarRating
-            value={rating}
-            onChange={(value) => void handleRate(value)}
-            disabled={ratingSaving || loading || !book}
-          />
-          {ratingMessage && <p role="status">{ratingMessage}</p>}
+                {savingBook ? "Saving..." : "Save to My Library"}
+              </button>
+            )}
+            {errors[bookKey] && <p role="alert">{errors[bookKey]}</p>}
+            {user ? (
+              <BookCollectionAssignment
+                key={`${bookKey}:${user.id}`}
+                bookKey={bookKey}
+                title={title}
+                onLogin={async () => {
+                  await logout();
+                  loginToFinish();
+                }}
+                onAdded={rememberSavedBook}
+              />
+            ) : (
+              <button
+                className="save-library-button"
+                type="button"
+                onClick={() => loginToFinish()}
+              >
+                Log in to organize
+              </button>
+            )}
+          </section>
         </div>
       </section>
 
