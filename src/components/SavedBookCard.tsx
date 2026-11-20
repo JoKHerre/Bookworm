@@ -78,9 +78,6 @@ export default function SavedBookCard({
           <p>{book.details?.authors?.join(", ") || "Author unavailable"}</p>
         )}
         {rating !== undefined && <StarDisplay rating={rating} />}
-        {book.details === null && (
-          <p className="saved-book-key">{book.bookKey}</p>
-        )}
       </div>
       <div className="saved-book-card-status">
         <select

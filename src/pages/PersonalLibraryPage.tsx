@@ -284,10 +284,7 @@ function PersonalLibraryPage() {
           aria-labelledby="personal-library-books-title"
         >
           <header className="personal-library-books-heading">
-            <div>
-              <h2 id="personal-library-books-title">Books</h2>
-              <p>Books you’ve saved to your personal library</p>
-            </div>
+            <h2 id="personal-library-books-title">Books</h2>
           </header>
           {removalError && (
             <p className="personal-library-removal-error" role="alert">

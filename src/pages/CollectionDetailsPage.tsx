@@ -24,13 +24,13 @@ import "./CollectionDetailsPage.css";
 export default function CollectionDetailsPage() {
   const { collectionId = "" } = useParams();
   const { user } = useAuth();
-  if (!user) return null; // The route's RequireAuth guard handles sign-in navigation.
+  if (!user) return null; // The route's RequireAuth guard handles login navigation.
   const id = Number(collectionId);
   if (!/^\d+$/.test(collectionId) || id < 1 || id > 2_147_483_647) {
     return (
       <CollectionShell>
         <h1>Collection unavailable</h1>
-        <p role="alert">Invalid collection ID.</p>
+        <p role="alert">This collection link is invalid.</p>
       </CollectionShell>
     );
   }
@@ -122,7 +122,7 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
         setLoadError(
           error instanceof Error
             ? error.message
-            : "Could not load this collection. Please try again.",
+            : "Could not load this collection.",
         );
         if (error instanceof ApiRequestError) {
           setUnavailable(error.status === 400 || error.status === 404);
@@ -186,7 +186,7 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
           [book.id]:
             error instanceof Error
               ? error.message
-              : "Could not remove this book. Please try again.",
+              : "Could not remove this book from the collection.",
         }));
     } finally {
       finishAction(book.id);
@@ -228,7 +228,7 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
         setStatusErrors((current) => ({
           ...current,
           [book.id]: errorMessage(error, {
-            fallback: "Could not update reading status. Please try again.",
+            fallback: "Could not update this book's reading status.",
           }),
         }));
     } finally {
@@ -236,14 +236,13 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
     }
   }
 
-  async function signInAgain() {
+  async function logInAgain() {
     try {
       await logout();
       const state: AuthLocationState = { from: location };
       void navigate("/login", { state, replace: true });
     } catch {
-      if (mounted.current)
-        setLoginError("Could not open sign in. Please try again.");
+      if (mounted.current) setLoginError("Could not open the login page.");
     }
   }
 
@@ -270,8 +269,8 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
       </header>
       {sessionExpired && (
         <div role="alert">
-          <p>Your session has expired. Please sign in again.</p>
-          <button type="button" onClick={() => void signInAgain()}>
+          <p>Your session has expired. Please log in again.</p>
+          <button type="button" onClick={() => void logInAgain()}>
             Log in again
           </button>
         </div>
@@ -296,10 +295,7 @@ function CollectionDetailsContent({ collectionId }: { collectionId: number }) {
       ) : books.length === 0 ? (
         <div className="collection-empty-state">
           <h2>No books in this collection yet</h2>
-          <p>
-            Add books from their details pages to start building this
-            collection.
-          </p>
+          <p>Add books from their details pages.</p>
           <Link to="/search">Discover books</Link>
         </div>
       ) : (

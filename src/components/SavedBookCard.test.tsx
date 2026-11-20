@@ -68,13 +68,18 @@ describe("SavedBookCard", () => {
       screen.queryByText("Remove from collection"),
     ).not.toBeInTheDocument();
   });
-  it("keeps book identity and removal available without metadata", () => {
+  it("keeps the fallback and removal available without exposing an internal book key", () => {
     render(
       <ul>
         <SavedBookCard {...props()} book={{ ...BOOK, details: null }} />
       </ul>,
     );
-    expect(screen.getByText("/works/OL1W")).toBeInTheDocument();
+    expect(screen.queryByText("/works/OL1W")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "View details for Book details unavailable",
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Author unavailable")).toBeInTheDocument();
     expect(
       screen.getByRole("button", {

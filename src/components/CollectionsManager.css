@@ -39,12 +39,6 @@
   overflow-wrap: anywhere;
 }
 
-.collections-heading p {
-  margin: 4px 0 0;
-  color: var(--olive-text-muted);
-  font-size: 0.78rem;
-}
-
 .collections-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

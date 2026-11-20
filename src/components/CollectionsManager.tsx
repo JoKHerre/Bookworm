@@ -18,9 +18,10 @@ type Editor =
 // check collection name validity
 function validateCollectionName(name: string): string {
   const length = [...name.trim()].length;
-  return length < 1 || length > 100 || name.includes("\0")
-    ? "Enter a name of 1–100 characters without null characters."
-    : "";
+  if (length < 1) return "Enter a collection name.";
+  if (length > 100) return "Collection names can be up to 100 characters.";
+  if (name.includes("\0")) return "This name contains unsupported characters.";
+  return "";
 }
 
 export default function CollectionsManager() {
@@ -61,7 +62,7 @@ export default function CollectionsManager() {
           setLoadError(
             failure instanceof Error
               ? failure.message
-              : "Could not load collections.",
+              : "Could not load your collections.",
           );
         }
       } finally {
@@ -147,7 +148,11 @@ export default function CollectionsManager() {
       const message =
         failure instanceof Error
           ? failure.message
-          : "Could not save changes. Please try again.";
+          : editor.kind === "create"
+            ? "Could not create this collection."
+            : editor.kind === "rename"
+              ? "Could not rename this collection."
+              : "Could not delete this collection.";
       if (failure instanceof ApiRequestError && failure.status === 404) {
         closeEditor(true);
         setNotice("This collection is no longer available.");
@@ -193,9 +198,7 @@ export default function CollectionsManager() {
               setError("");
             }}
           />
-          <p id="collection-name-hint">
-            1–100 characters. Names must be unique in your collections.
-          </p>
+          <p id="collection-name-hint">Up to 100 characters.</p>
         </>
       )}
       {error && (
@@ -238,10 +241,12 @@ export default function CollectionsManager() {
         </button>
       </div>
       {pending && (
-        <p role="status">
+        <p className="visually-hidden" role="status">
           {editor.kind === "delete"
             ? "Deleting collection…"
-            : "Saving collection…"}
+            : editor.kind === "create"
+              ? "Creating collection…"
+              : "Saving collection…"}
         </p>
       )}
     </form>
@@ -253,10 +258,7 @@ export default function CollectionsManager() {
       aria-labelledby="collections-title"
     >
       <div className="collections-heading">
-        <div>
-          <h2 id="collections-title">Collections</h2>
-          <p>Collections you've created.</p>
-        </div>
+        <h2 id="collections-title">Collections</h2>
         <button
           ref={newButton}
           className="collections-button--primary"

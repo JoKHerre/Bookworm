@@ -31,7 +31,7 @@ describe("CollectionsManager", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderWithProviders(<CollectionsManager />);
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not read your collections",
+      "Could not load your collections",
     );
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Favorites")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("CollectionsManager", () => {
         }),
       );
       expect(await screen.findByRole("alert")).toHaveTextContent(
-        "Could not read",
+        "Could not confirm",
       );
       expect(screen.getByText("Favorites")).toBeInTheDocument();
       expect(input).toHaveValue("School");
@@ -91,20 +91,23 @@ describe("CollectionsManager", () => {
       screen.getByRole("button", { name: "New collection" }),
     ).toHaveFocus();
   });
-  it.each(["", "   ", "a".repeat(101), "bad\0name"])(
-    "rejects invalid name %j without a mutation",
-    async (name) => {
-      const { fetchMock } = setup([]);
-      const input = await openCreate();
-      fireEvent.change(input, { target: { value: name } });
-      await userEvent.click(
-        screen.getByRole("button", { name: "Create collection" }),
-      );
-      expect(screen.getByRole("alert")).toHaveTextContent("1–100");
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(input).toHaveValue(name);
-    },
-  );
+  it.each([
+    ["", "Enter a collection name."],
+    ["   ", "Enter a collection name."],
+    ["a".repeat(101), "Collection names can be up to 100 characters."],
+    ["bad\0name", "This name contains unsupported characters."],
+  ])("rejects invalid name %j without a mutation", async (name, message) => {
+    const { fetchMock } = setup([]);
+    const input = await openCreate();
+    fireEvent.change(input, { target: { value: name } });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Create collection" }),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(message);
+    expect(input).toHaveAccessibleDescription(message);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue(name);
+  });
   it.each(["a", "😀".repeat(100)])(
     "accepts the name length boundary",
     async (name) => {
@@ -185,8 +188,8 @@ describe("CollectionsManager", () => {
   it.each([
     [400, "1–100"],
     [401, "session has expired"],
-    [409, "already exists"],
-    [500, "Please try again"],
+    [409, "already have a collection with that name"],
+    [500, "Could not create this collection"],
   ])(
     "preserves input after HTTP %s and allows retry",
     async (status, message) => {
@@ -223,7 +226,7 @@ describe("CollectionsManager", () => {
       screen.getByRole("button", { name: "Delete collection" }),
     );
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not reach",
+      "Could not delete this collection",
     );
     expect(screen.getByText("Favorites")).toBeInTheDocument();
   });

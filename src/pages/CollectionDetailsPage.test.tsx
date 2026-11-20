@@ -161,7 +161,9 @@ describe("CollectionDetailsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Collection unavailable" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("Collection not found");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This collection is no longer available",
+    );
     expect(
       screen.queryByRole("button", { name: "Try again" }),
     ).not.toBeInTheDocument();
@@ -281,7 +283,9 @@ describe("CollectionDetailsPage", () => {
     expect(
       await screen.findByRole("heading", { name: "Collection unavailable" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("Collection not found");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "This collection is no longer available",
+    );
   });
   it("keeps fallback cards removable when metadata and ratings fail", async () => {
     const fetchMock = stubApi([BOOKS[0]!]);
@@ -293,7 +297,7 @@ describe("CollectionDetailsPage", () => {
     expect(
       await screen.findByText("Book details unavailable"),
     ).toBeInTheDocument();
-    expect(screen.getByText("/works/OL1W")).toBeInTheDocument();
+    expect(screen.queryByText("/works/OL1W")).not.toBeInTheDocument();
     await userEvent.click(
       screen.getByRole("button", {
         name: "Remove Book details unavailable from collection",
@@ -370,7 +374,7 @@ describe("CollectionDetailsPage", () => {
       const fetchMock = stubApi();
       renderPage(`/personal-library/collections/${id}`);
       expect(screen.getByRole("alert")).toHaveTextContent(
-        "Invalid collection ID",
+        "This collection link is invalid",
       );
       expect(fetchMock).not.toHaveBeenCalled();
     },
@@ -389,7 +393,7 @@ describe("CollectionDetailsPage", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({}));
     renderPage();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not read this collection",
+      "Could not load this collection",
     );
     expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
   });

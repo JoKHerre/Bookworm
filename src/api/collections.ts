@@ -44,10 +44,22 @@ const collectionDetailsResponse = z.object({
 
 export type CollectionDetails = CollectionDetailResponse;
 
+const operationErrors = {
+  list: "Could not load your collections.",
+  create: "Could not create this collection.",
+  rename: "Could not rename this collection.",
+  delete: "Could not delete this collection.",
+  membership: "Could not add this book to the collection.",
+  read: "Could not load this collection.",
+  remove: "Could not remove this book from the collection.",
+};
+
+type Operation = keyof typeof operationErrors;
+
 async function request(
   path: string,
-  init?: { method?: string; body?: unknown; signal?: AbortSignal },
-  operation: "manage" | "membership" | "read" | "remove" = "manage",
+  init: { method?: string; body?: unknown; signal?: AbortSignal } | undefined,
+  operation: Operation,
 ): Promise<unknown> {
   try {
     return await apiRequest<unknown>(`/api/collections${path}`, {
@@ -58,45 +70,26 @@ async function request(
   } catch (error) {
     if (!(error instanceof ApiRequestError)) throw error;
     if (error.status === 0)
-      throw new Error("Could not reach your collections. Please try again.", {
-        cause: error,
-      });
-    const messages: Record<number, string> = {
-      400:
-        operation === "membership"
-          ? "Could not add this book. The book or collection identifier is invalid."
-          : "Use a collection name of 1–100 characters without null characters.",
-      401: "Your session has expired. Please sign in again.",
-      404:
-        operation === "membership"
-          ? "This book or collection is no longer available."
-          : "This collection is no longer available.",
-      409:
-        operation === "membership"
-          ? "This book is already in this collection."
-          : "A collection with this name already exists. Choose another name.",
+      throw new Error(operationErrors[operation], { cause: error });
+    const messages: Partial<Record<number, string>> = {
+      401: "Your session has expired. Please log in again.",
+      404: "This collection is no longer available.",
     };
-    if (operation === "read" || operation === "remove") {
-      messages[400] =
-        operation === "read"
-          ? "Invalid collection ID."
-          : "Invalid collection or saved book ID.";
-      messages[404] =
-        operation === "read"
-          ? "Collection not found."
-          : "This book is no longer available in this collection.";
+    if (operation === "create" || operation === "rename") {
+      messages[400] = "Enter a collection name of 1–100 characters.";
+      messages[409] = "You already have a collection with that name.";
     }
-    const fallbackMessages = {
-      manage: "Could not save your collection changes. Please try again.",
-      membership:
-        "Could not add this book to the collection. Please try again.",
-      read: "Could not load this collection. Please try again.",
-      remove:
-        "Could not remove this book from the collection. Please try again.",
-    };
+    if (operation === "membership") {
+      messages[404] = "This book or collection is no longer available.";
+      messages[409] = "This book is already in this collection.";
+    }
+    if (operation === "read")
+      messages[400] = "This collection link is invalid.";
+    if (operation === "remove")
+      messages[404] = "This book is no longer in this collection.";
     throw new ApiRequestError(
       error.status,
-      messages[error.status] ?? fallbackMessages[operation],
+      messages[error.status] ?? operationErrors[operation],
     );
   }
 }
@@ -104,11 +97,11 @@ async function request(
 export async function listCollections(
   signal?: AbortSignal,
 ): Promise<CollectionSummary[]> {
-  const response = await request("", { signal });
+  const response = await request("", { signal }, "list");
   const data = await readResponse(
     response,
     collectionListResponse,
-    "Could not read your collections. Please try again.",
+    operationErrors.list,
   );
   return data.collections;
 }
@@ -126,14 +119,18 @@ async function readResponse<T extends z.ZodType>(
 export async function createCollection(
   name: string,
 ): Promise<CollectionSummary> {
-  const response = await request("", {
-    method: "POST",
-    body: { name: name.trim() },
-  });
+  const response = await request(
+    "",
+    {
+      method: "POST",
+      body: { name: name.trim() },
+    },
+    "create",
+  );
   return readResponse(
     response,
     collectionSummary,
-    "Could not read the created collection. Please try again.",
+    "Could not confirm that the collection was created. Reload My Library to check.",
   );
 }
 
@@ -141,19 +138,23 @@ export async function renameCollection(
   id: number,
   name: string,
 ): Promise<CollectionSummary> {
-  const response = await request(`/${id}`, {
-    method: "PATCH",
-    body: { name: name.trim() },
-  });
+  const response = await request(
+    `/${id}`,
+    {
+      method: "PATCH",
+      body: { name: name.trim() },
+    },
+    "rename",
+  );
   return readResponse(
     response,
     collectionSummary,
-    "Could not read the renamed collection. Please try again.",
+    "Could not confirm that the collection was renamed. Reload My Library to check.",
   );
 }
 
 export async function deleteCollection(id: number): Promise<void> {
-  await request(`/${id}`, { method: "DELETE" });
+  await request(`/${id}`, { method: "DELETE" }, "delete");
 }
 
 export async function getCollection(
@@ -164,7 +165,7 @@ export async function getCollection(
   return readResponse(
     response,
     collectionDetailsResponse,
-    "Could not read this collection. Please try again.",
+    operationErrors.read,
   );
 }
 
@@ -184,11 +185,11 @@ export async function listCollectionsForBook(
   signal?: AbortSignal,
 ): Promise<CollectionMembershipSummary[]> {
   const query = new URLSearchParams({ bookKey });
-  const response = await request(`?${query}`, { signal }, "membership");
+  const response = await request(`?${query}`, { signal }, "list");
   const data = await readResponse(
     response,
     membershipListResponse,
-    "Could not read your collection options. Please try again.",
+    operationErrors.list,
   );
   return data.collections;
 }
@@ -206,5 +207,9 @@ export async function addBookToCollection(
     },
     "membership",
   );
-  return readResponse(response, savedBook, "Could not read the saved book.");
+  return readResponse(
+    response,
+    savedBook,
+    "Could not confirm that the book was added. Refresh collections to check.",
+  );
 }

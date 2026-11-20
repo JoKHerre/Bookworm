@@ -71,13 +71,6 @@
   line-height: 1.4;
 }
 
-.saved-book-details .saved-book-key {
-  margin-top: 6px;
-  color: var(--olive-text-faint);
-  font-size: 0.68rem;
-  overflow-wrap: anywhere;
-}
-
 .saved-book-card-status {
   display: flex;
   flex-direction: column;

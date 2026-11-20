@@ -118,18 +118,16 @@ describe("BookCollectionAssignment", () => {
       />,
     );
     await userEvent.click(
-      await screen.findByRole("button", { name: "Log in to organize" }),
+      await screen.findByRole("button", { name: "Log in again" }),
     );
     expect(
-      await screen.findByText("Could not open sign in. Please try again."),
+      await screen.findByText("Could not open the login page."),
     ).toHaveAttribute("role", "alert");
     expect(screen.getByText(/session has expired/)).toBeInTheDocument();
   });
   it("loads membership flags and disables already-added options", async () => {
     setup([{ ...FAVORITES, containsBook: true }, SCHOOL]);
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Loading collection options",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("Loading collections");
     await screen.findByRole("combobox", { name: "Collection" });
     expect(
       screen.getByRole("option", { name: "Favorites — Already added" }),
@@ -306,9 +304,7 @@ describe("BookCollectionAssignment", () => {
       "session has expired",
     );
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Log in to organize" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Log in again" }));
     expect(onLogin).toHaveBeenCalledOnce();
   });
   it("blocks duplicate submissions until assignment finishes", async () => {

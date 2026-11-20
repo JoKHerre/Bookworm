@@ -53,7 +53,7 @@ describe("collectionsApi", () => {
   ])("rejects malformed collection detail data", async (body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
     await expect(getCollection(7)).rejects.toThrow(
-      "Could not read this collection",
+      "Could not load this collection",
     );
   });
   it("removes only membership using the saved-book ID and accepts empty 204", async () => {
@@ -76,20 +76,20 @@ describe("collectionsApi", () => {
       vi.stubGlobal("fetch", fetchMock);
       await expect(getCollection(7)).rejects.toThrow(
         status === 400
-          ? "Invalid collection ID"
+          ? "This collection link is invalid"
           : status === 401
             ? "session has expired"
             : status === 404
-              ? "Collection not found"
+              ? "This collection is no longer available"
               : "Could not load this collection",
       );
       await expect(removeBookFromCollection(7, 12)).rejects.toThrow(
         status === 400
-          ? "Invalid collection or saved book ID"
+          ? "Could not remove this book from the collection"
           : status === 401
             ? "session has expired"
             : status === 404
-              ? "no longer available in this collection"
+              ? "no longer in this collection"
               : "Could not remove this book",
       );
     },
@@ -102,7 +102,7 @@ describe("collectionsApi", () => {
   ])("rejects malformed collection lists", async (body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
     await expect(listCollections()).rejects.toThrow(
-      "Could not read your collections",
+      "Could not load your collections",
     );
   });
   it.each(["create", "rename"])(
@@ -122,8 +122,8 @@ describe("collectionsApi", () => {
             : renameCollection(7, "Favorites");
         await expect(result).rejects.toThrow(
           operation === "create"
-            ? "Could not read the created collection"
-            : "Could not read the renamed collection",
+            ? "Could not confirm that the collection was created"
+            : "Could not confirm that the collection was renamed",
         );
       }
     },
@@ -143,7 +143,11 @@ describe("collectionsApi", () => {
           : operation === "create"
             ? createCollection("Favorites")
             : renameCollection(7, "Favorites");
-      await expect(result).rejects.toThrow("Could not read");
+      await expect(result).rejects.toThrow(
+        operation === "list"
+          ? "Could not load your collections"
+          : "Could not confirm",
+      );
     },
   );
   it.each([
@@ -154,7 +158,7 @@ describe("collectionsApi", () => {
   ])("rejects malformed membership summaries", async (body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
     await expect(listCollectionsForBook("/works/OL1W")).rejects.toThrow(
-      "Could not read your collection options",
+      "Could not load your collections",
     );
   });
   it("loads membership flags for the encoded work key", async () => {
@@ -200,7 +204,7 @@ describe("collectionsApi", () => {
     );
   });
   it.each([
-    [400, "identifier is invalid"],
+    [400, "Could not add this book"],
     [401, "session has expired"],
     [404, "book or collection"],
     [409, "already in this collection"],
@@ -266,8 +270,8 @@ describe("collectionsApi", () => {
     [400, "1–100"],
     [401, "session has expired"],
     [404, "no longer available"],
-    [409, "already exists"],
-    [500, "Please try again"],
+    [409, "already have a collection with that name"],
+    [500, "Could not create this collection"],
   ])("handles HTTP %s", async (status, message) => {
     vi.stubGlobal(
       "fetch",
@@ -283,7 +287,7 @@ describe("collectionsApi", () => {
       vi.fn().mockRejectedValue(new TypeError("Failed to fetch")),
     );
     await expect(listCollections()).rejects.toThrow(
-      "Could not reach your collections",
+      "Could not load your collections",
     );
   });
 });

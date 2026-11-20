@@ -195,12 +195,12 @@ describe("BookDetailsPage", () => {
     vi.mocked(listCollectionsForBook).mockRejectedValue(
       new ApiRequestError(
         401,
-        "Your session has expired. Please sign in again.",
+        "Your session has expired. Please log in again.",
       ),
     );
     const { auth } = renderDetails({ user: USER });
     await userEvent.click(
-      await screen.findByRole("button", { name: "Log in to organize" }),
+      await screen.findByRole("button", { name: "Log in again" }),
     );
     expect(
       await screen.findByText("Login page, back to /books/works/OL1W"),

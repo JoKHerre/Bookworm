@@ -67,7 +67,7 @@ export default function BookCollectionAssignment({
         setLoadError(
           failure instanceof Error
             ? failure.message
-            : "Could not load your collections. Please try again.",
+            : "Could not load your collections.",
         );
         if (failure instanceof ApiRequestError && failure.status === 401)
           setSessionExpired(true);
@@ -102,15 +102,13 @@ export default function BookCollectionAssignment({
         ),
       );
       setSelectedId("");
-      setNotice(
-        `Added “${title}” to “${collection.name}”. This book has also been saved to My Library.`,
-      );
+      setNotice(`Added “${title}” to “${collection.name}”.`);
     } catch (failure) {
       if (!mounted.current) return;
       setError(
         failure instanceof Error
           ? failure.message
-          : "Could not add this book. Please try again.",
+          : "Could not add this book to the collection.",
       );
       if (failure instanceof ApiRequestError) {
         if (failure.status === 401) setSessionExpired(true);
@@ -128,7 +126,7 @@ export default function BookCollectionAssignment({
   return (
     <section className="book-collection-assignment" aria-label="Collections">
       <h3>Add to a collection</h3>
-      {loading && <p role="status">Loading collection options…</p>}
+      {loading && <p role="status">Loading collections…</p>}
       {loadError && <p role="alert">{loadError}</p>}
       {error && <p role="alert">{error}</p>}
       {sessionExpired ? (
@@ -138,12 +136,11 @@ export default function BookCollectionAssignment({
             void Promise.resolve()
               .then(onLogin)
               .catch(() => {
-                if (mounted.current)
-                  setError("Could not open sign in. Please try again.");
+                if (mounted.current) setError("Could not open the login page.");
               });
           }}
         >
-          Log in to organize
+          Log in again
         </button>
       ) : loadError ? (
         <button
@@ -222,7 +219,11 @@ export default function BookCollectionAssignment({
           </>
         )
       )}
-      {pending && <p role="status">Adding book to collection…</p>}
+      {pending && (
+        <p className="visually-hidden" role="status">
+          Adding book to collection…
+        </p>
+      )}
       {notice && <p role="status">{notice}</p>}
     </section>
   );
