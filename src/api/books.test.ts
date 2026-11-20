@@ -26,6 +26,21 @@ describe("api/books", () => {
     expect(url.searchParams.get("year")).toBe("2020-present");
   });
 
+  it("searchBooks asks for a page only past the first", async () => {
+    const fetchMock = vi.fn<(input: string) => Promise<Response>>(() =>
+      Promise.resolve(jsonResponse({ books: [], total: 0 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchBooks("dune", signal);
+    await searchBooks("dune", signal, { page: 3 });
+
+    const pages = fetchMock.mock.calls.map(([input]) =>
+      new URL(input, "http://localhost").searchParams.get("page"),
+    );
+    expect(pages).toEqual([null, "3"]);
+  });
+
   it("TST-01-T-1 books api maps failures", async () => {
     vi.stubGlobal(
       "fetch",

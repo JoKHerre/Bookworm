@@ -4,11 +4,13 @@ import {
   openLibrarySearchResponse,
   openLibrarySimilarSearchResponse,
   openLibraryWork,
+  openLibraryWorkRecord,
   openLibraryAuthor,
   openLibraryEditionsResponse,
 } from "./openLibrarySchemas.ts";
 
 import {
+  SEARCH_PAGE_SIZE,
   bookISBNs,
   openLibraryWorkKey,
   similarBooksResponse,
@@ -32,6 +34,8 @@ const languageCodes = {
   Spanish: "spa",
   French: "fre",
 };
+
+const MAX_WORK_REDIRECTS = 3;
 
 // Works and authors rarely change, and the library page asks for every saved
 // book's details on each load, so keep them for an hour.
@@ -87,12 +91,14 @@ async function fetchOpenLibrary<T extends z.ZodType>(
 async function searchOpenLibraryQuery(
   query: string,
   limit: number,
+  page = 1,
 ): Promise<BookSearchResponse> {
   const params = new URLSearchParams({
     q: query,
     fields: "key,title,author_name,first_publish_year,cover_i",
     limit: String(limit),
   });
+  if (page > 1) params.set("page", String(page));
 
   const data = await fetchOpenLibrary(
     `/search.json?${params.toString()}`,
@@ -140,7 +146,7 @@ export function searchOpenLibrary(
   const filteredQuery = constraints.length
     ? `(${q}) AND ${constraints.join(" AND ")}`
     : q;
-  return searchOpenLibraryQuery(filteredQuery, 20);
+  return searchOpenLibraryQuery(filteredQuery, SEARCH_PAGE_SIZE, query.page);
 }
 
 const openLibraryQuerySpecialCharacters = new Set('+-&|!(){}[]^"~*?:\\/');
@@ -239,7 +245,19 @@ export async function getSimilarBooks(
 function getWork(key: string, signal?: AbortSignal) {
   return workCache.get(
     key,
-    (shared) => fetchOpenLibrary(`${key}.json`, openLibraryWork, shared),
+    async (shared) => {
+      let current = key;
+      for (let hop = 0; hop <= MAX_WORK_REDIRECTS; hop++) {
+        const record = await fetchOpenLibrary(
+          `${current}.json`,
+          openLibraryWorkRecord,
+          shared,
+        );
+        if (!("location" in record)) return record;
+        current = openLibraryWorkKey.parse(record.location);
+      }
+      throw new OpenLibraryError(`Too many redirects from ${key}`, 502);
+    },
     signal,
   );
 }
