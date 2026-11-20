@@ -114,6 +114,23 @@ describe("BookDetailsPage", () => {
     expect(await screen.findByText("From an object.")).toBeInTheDocument();
   });
 
+  it("details page shows a Markdown summary as plain paragraphs", async () => {
+    vi.mocked(getBookDetails).mockResolvedValue({
+      ...BOOK,
+      description:
+        "**Book Two** of the saga.\r\n\r\nPaul rules.\r\n\r\n----------\r\nAlso contained in:\r\n- [Omnibus](https://openlibrary.org/works/OL2W)",
+    });
+    renderDetails();
+    const summary = await screen.findByRole("heading", { name: "Summary" });
+    const paragraphs = within(summary.parentElement!).getAllByText(/./, {
+      selector: "p",
+    });
+    expect(paragraphs.map((p) => p.textContent)).toEqual([
+      "Book Two of the saga.",
+      "Paul rules.",
+    ]);
+  });
+
   it("TST-01-T-1 details page shows a load error", async () => {
     vi.mocked(getBookDetails).mockRejectedValue(new Error("Book not found"));
     renderDetails();
@@ -121,6 +138,67 @@ describe("BookDetailsPage", () => {
       "Book not found",
     );
     expect(screen.queryByText("Summary")).not.toBeInTheDocument();
+  });
+
+  it("details page moves to the key a merged book now uses", async () => {
+    vi.mocked(getBookDetails).mockImplementation((key) =>
+      Promise.resolve({ ...BOOK, key: "/works/OL9W", title: `Dune at ${key}` }),
+    );
+    renderDetails({ state: { backLabel: "Back to Search" } });
+
+    expect(
+      await screen.findByRole("heading", { name: "Dune at /works/OL9W" }),
+    ).toBeInTheDocument();
+    expect(getBookDetails).toHaveBeenLastCalledWith(
+      "/works/OL9W",
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Back to Search" }),
+    ).toBeInTheDocument();
+  });
+
+  it("details page shows only the error when the book can't load", async () => {
+    vi.mocked(getBookDetails).mockRejectedValue(
+      new Error("Unable to retrieve book details"),
+    );
+    renderDetails();
+    expect(
+      await screen.findByRole("heading", {
+        name: "We couldn’t load this book",
+        level: 1,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Unable to retrieve book details",
+    );
+    expect(screen.queryByText("Unknown author")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save to My Library" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Your rating")).not.toBeInTheDocument();
+  });
+
+  it("details page keeps the search result when the book can't load", async () => {
+    vi.mocked(getBookDetails).mockRejectedValue(
+      new Error("Unable to retrieve book details"),
+    );
+    renderDetails({
+      state: {
+        searchBook: {
+          key: "/works/OL1W",
+          title: "Dune",
+          author_name: ["Frank Herbert"],
+        },
+      },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Unable to retrieve book details",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Dune", level: 1 }),
+    ).toBeInTheDocument();
   });
 
   it("TST-01-T-1 details page uses the search result it came from", async () => {

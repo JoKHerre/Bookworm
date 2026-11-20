@@ -33,33 +33,31 @@ function SimilarAtLibrarySection({
   return (
     <section className="library-availability">
       <h2>{heading}</h2>
-      <div className="library-availability-content">
-        {error ? (
-          <p role="alert">{error}</p>
-        ) : results === undefined ? (
-          <p role="status">Searching library...</p>
-        ) : results.length === 0 ? (
-          <p>No titles found.</p>
-        ) : (
-          results.map((r) => {
-            const meta = [r.author?.replace(/,$/, ""), r.format]
-              .filter(Boolean)
-              .join(" · ");
-            return (
-              <div className="library-record" key={r.bibid}>
-                <p className="library-record-title">
-                  <a
-                    href={`https://catalog.santacruzpl.org/polaris/search/title.aspx?ctx=1.1033.0.0.1&cn=${encodeURIComponent(r.bibid)}`}
-                  >
-                    {r.title}
-                  </a>
-                </p>
-                {meta && <p className="library-record-meta">{meta}</p>}
-              </div>
-            );
-          })
-        )}
-      </div>
+      {error ? (
+        <p role="alert">{error}</p>
+      ) : results === undefined ? (
+        <p role="status">Searching library...</p>
+      ) : results.length === 0 ? (
+        <p>No titles found.</p>
+      ) : (
+        results.map((r) => {
+          const meta = [r.author?.replace(/,$/, ""), r.format]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <div className="library-record" key={r.bibid}>
+              <p className="library-record-title">
+                <a
+                  href={`https://catalog.santacruzpl.org/polaris/search/title.aspx?ctx=1.1033.0.0.1&cn=${encodeURIComponent(r.bibid)}`}
+                >
+                  {r.title}
+                </a>
+              </p>
+              {meta && <p className="library-record-meta">{meta}</p>}
+            </div>
+          );
+        })
+      )}
     </section>
   );
 }

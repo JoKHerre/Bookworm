@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   BOOK_GENRES,
   BOOK_LANGUAGES,
+  MAX_SEARCH_PAGE,
   PUBLICATION_YEAR_RANGES,
   bookSuggestionsQuery,
   type BookSearchQuery,
@@ -38,7 +39,7 @@ function readRecentSearches(): string[] {
 }
 
 type ViewMode = "grid" | "list";
-type Filters = Omit<BookSearchQuery, "q">;
+type Filters = Omit<BookSearchQuery, "q" | "page">;
 
 // Filters live in the URL beside q, so a refresh or Back keeps them.
 // Values the filters don't offer are ignored.
@@ -52,6 +53,25 @@ function filtersFromParams(params: URLSearchParams): Filters {
       PUBLICATION_YEAR_RANGES.find((value) => value === params.get("year")) ??
       "",
   };
+}
+
+// How many pages of results the URL asks for. Show more counts up, so a
+// refresh or Back brings the same results.
+function pagesFromParams(params: URLSearchParams) {
+  const pages = Number(params.get("page"));
+  return Number.isInteger(pages) && pages > 1
+    ? Math.min(pages, MAX_SEARCH_PAGE)
+    : 1;
+}
+
+// a book can shift onto the next page between requests, so drop repeats
+function withoutRepeats(books: BookSearchResult[]) {
+  const seen = new Set<string>();
+  return books.filter((book) => {
+    if (seen.has(book.key)) return false;
+    seen.add(book.key);
+    return true;
+  });
 }
 
 function yearLabel(range: (typeof PUBLICATION_YEAR_RANGES)[number]) {
@@ -79,9 +99,17 @@ function SearchPage() {
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1); // the last page of results loaded
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState("");
+  const moreRequest = useRef<AbortController | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  // memoized on the query string so the search effect sees stable arrays
-  const searchString = searchParams.toString();
+  const urlPages = pagesFromParams(searchParams);
+  // memoized on the query string so the search effect sees stable arrays;
+  // the page count is left out so Show more doesn't search again
+  const paramsWithoutPage = new URLSearchParams(searchParams);
+  paramsWithoutPage.delete("page");
+  const searchString = paramsWithoutPage.toString();
   const filters = useMemo(
     () => filtersFromParams(new URLSearchParams(searchString)),
     [searchString],
@@ -133,6 +161,8 @@ function SearchPage() {
       document.removeEventListener("pointerdown", handleClickOutside);
   }, []);
 
+  const pagesToLoad = useEffectEvent(() => urlPages);
+
   useEffect(() => {
     if (!submittedQuery) return;
 
@@ -140,14 +170,28 @@ function SearchPage() {
     const { signal } = controller;
 
     async function search() {
+      moreRequest.current?.abort();
       setLoading(true);
       setError("");
+      setPage(1);
+      setLoadingMore(false);
+      setMoreError("");
 
       try {
-        const data = await searchBooks(submittedQuery, signal, filters);
+        const pages = pagesToLoad();
+        const results = await Promise.all(
+          Array.from({ length: pages }, (_, i) =>
+            searchBooks(
+              submittedQuery,
+              signal,
+              i === 0 ? filters : { ...filters, page: i + 1 },
+            ),
+          ),
+        );
         if (!signal.aborted) {
-          setBooks(data.books);
-          setTotal(data.total);
+          setBooks(withoutRepeats(results.flatMap((data) => data.books)));
+          setTotal(results.at(-1)?.total ?? 0);
+          setPage(pages);
         }
       } catch (err) {
         if (signal.aborted) return;
@@ -164,6 +208,37 @@ function SearchPage() {
     void search();
     return () => controller.abort();
   }, [submittedQuery, searchAttempt, filters]);
+
+  useEffect(() => () => moreRequest.current?.abort(), []);
+
+  async function loadMore() {
+    const controller = new AbortController();
+    moreRequest.current = controller;
+    const next = page + 1;
+    setLoadingMore(true);
+    setMoreError("");
+
+    try {
+      const data = await searchBooks(submittedQuery, controller.signal, {
+        ...filters,
+        page: next,
+      });
+      if (controller.signal.aborted) return;
+      setBooks((current) => withoutRepeats([...current, ...data.books]));
+      setTotal(data.total);
+      setPage(next);
+      const params = new URLSearchParams(searchParams);
+      params.set("page", String(next));
+      setSearchParams(params, { replace: true });
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setMoreError(
+        err instanceof Error ? err.message : "Unable to load more books",
+      );
+    } finally {
+      if (!controller.signal.aborted) setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (!showSuggestions) return;
@@ -606,6 +681,23 @@ function SearchPage() {
                 </div>
               ))}
             </section>
+          )}
+
+          {visibleBooks.length < total && page < MAX_SEARCH_PAGE && (
+            <div className="search-more">
+              {moreError && (
+                <p className="search-more-error" role="alert">
+                  {moreError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void loadMore()}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading..." : "Show more"}
+              </button>
+            </div>
           )}
         </>
       )}

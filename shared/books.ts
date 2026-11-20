@@ -34,6 +34,10 @@ export const PUBLICATION_YEAR_RANGES = [
   "before-1900",
 ] as const;
 
+export const SEARCH_PAGE_SIZE = 20;
+// Open Library gets slow and unreliable far into a result list
+export const MAX_SEARCH_PAGE = 50;
+
 export const bookSearchQuery = z.object({
   q: z
     .string({ error: "Please enter a book title or author" })
@@ -42,6 +46,12 @@ export const bookSearchQuery = z.object({
   genre: z.array(z.enum(BOOK_GENRES)).default([]),
   language: z.enum(["", ...BOOK_LANGUAGES]).default(""),
   year: z.enum(["", ...PUBLICATION_YEAR_RANGES]).default(""),
+  page: z.coerce
+    .number({ error: "Invalid page" })
+    .int("Invalid page")
+    .min(1, "Invalid page")
+    .max(MAX_SEARCH_PAGE, "Invalid page")
+    .optional(),
 });
 
 export type BookSearchQuery = z.infer<typeof bookSearchQuery>;
