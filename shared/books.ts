@@ -115,6 +115,8 @@ export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
 
 // GET /api/books/similar?key=/works/OL...W
 
+export const SIMILAR_BOOKS_LIMIT = 6;
+
 export const similarBooksQuery = z.object({
   key: openLibraryWorkKey,
 });
@@ -125,7 +127,7 @@ export const similarBookResult = bookSearchResult.extend({
 });
 
 export const similarBooksResponse = z.object({
-  books: z.array(similarBookResult).max(6),
+  books: z.array(similarBookResult).max(SIMILAR_BOOKS_LIMIT),
 });
 
 export type SimilarBooksResponse = z.infer<typeof similarBooksResponse>;
