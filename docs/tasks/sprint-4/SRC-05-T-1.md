@@ -15,7 +15,7 @@ Serves SRC-05 (exclude genres and content warnings from search results). Add a b
 ## Specs
 
 - Add `GET /api/books/content-warnings?key=/works/OL...W` in the existing books router. Reuse `openLibraryWorkKey` and `getBookDetails`, including cached work/author lookups and merged-work redirects. Invalid keys return 400 without upstream calls; missing works return 404; other Open Library failures return 502, using the shared `ApiError` format.
-- Return a shared, validated response from `shared/contentWarnings.ts` with status `found`, `not_found`, or `unavailable`. Found responses include warning text, category IDs from the entry's linked warning tags, source URL, and retrieval time. Other outcomes use `warnings: null`, with attribution when available.
+- Return a shared, validated response from `shared/contentWarnings.ts` with status `found`, `not_found`, or `unavailable`. Found responses include warning text, category IDs from the entry's linked warning tags, and `sourceUrl`. `not_found` includes the searched source URL; `unavailable` includes the last retrieved source URL or `null`. Both omit `warnings`.
 - Implement `server/src/services/contentWarnings.ts` with both work-key and supplied-title/author lookups. Require a matching title and book author; never rely on result order. Incomplete, failed, or uncertain lookups are unavailable.
 - Use the matched entry's linked warning tags for filtering categories, excluding genre/category links and unrelated tags elsewhere on the page. Retain its labelled warning list for original wording and qualifiers. Missing or unrecognized warning data is unavailable, not an empty warning list.
 - Define shared identifiers for supported warning categories, choosing the initial categories during implementation based on source warning tags. Map tags explicitly.
@@ -29,9 +29,19 @@ Serves SRC-05 (exclude genres and content warnings from search results). Add a b
 
 ## Acceptance criteria
 
-1. A matched book, including a merged Open Library work, returns its warning list with source attribution and retrieval time.
+1. A matched book, including a merged Open Library work, returns its warning list with its source URL.
 2. Invalid keys and Open Library failures return the specified HTTP errors.
 3. Matching requires title and book author, distinguishes missing records from unavailable information, and never automatically accepts the first result.
 4. Filtering categories come from the entry's warning tags; original warning text and qualifiers are retained, and unrelated tags are excluded.
 5. Failed, incomplete, or changed source pages return unavailable information without claiming the book has no warnings.
 6. Request limits, caching, and cancellation work; supplied-metadata lookups need no additional Open Library request.
+
+## Tests
+
+Implemented in `shared/contentWarnings.test.ts`.
+
+| Test name                                                | Setup                                                                     | Asserts                                                                           | Criterion |
+| -------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------- |
+| SRC-05-T-1 shares unique selectable warning IDs          | Check catalogue IDs, labels and inferred type; try an unsupported ID      | IDs are unique and typed; labels nonempty; unsupported ID rejected                | 4         |
+| SRC-05-T-1 validates found warnings and source URLs      | Validate found responses, then invalid warnings, IDs and URLs             | Valid responses accepted, including unmapped warnings; invalid responses rejected | 1, 4      |
+| SRC-05-T-1 validates not_found and unavailable responses | Validate `not_found` and `unavailable` responses, then malformed variants | Valid statuses and source URLs accepted; malformed variants rejected              | 5         |
