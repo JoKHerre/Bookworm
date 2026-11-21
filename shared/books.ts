@@ -20,6 +20,8 @@ export const BOOK_GENRES = [
   "Poetry",
 ] as const;
 
+export type BookGenre = (typeof BOOK_GENRES)[number];
+
 export const BOOK_LANGUAGES = ["English", "Spanish", "French"] as const;
 
 export const PUBLICATION_YEAR_RANGES = [
@@ -141,6 +143,16 @@ export const similarBooksResponse = z.object({
 });
 
 export type SimilarBooksResponse = z.infer<typeof similarBooksResponse>;
+
+// GET /api/recommendations
+
+export const MAX_RECOMMENDATIONS = 12;
+
+export const recommendationsResponse = z.object({
+  books: z.array(similarBookResult).max(MAX_RECOMMENDATIONS),
+});
+
+export type RecommendationsResponse = z.infer<typeof recommendationsResponse>;
 
 // GET /api/books/details?key=/works/OL...W
 

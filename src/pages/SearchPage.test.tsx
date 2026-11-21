@@ -10,11 +10,15 @@ import { Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
 import { getBookDetails, getBookSuggestions, searchBooks } from "../api/books";
-import type { AuthLocationState } from "../routes";
+import { getInterests, saveInterests } from "../api/interests";
+import { getRecommendations } from "../api/recommendations";
+import type { AuthLocationState, BookDetailsLocationState } from "../routes";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import SearchPage from "./SearchPage";
 
 vi.mock("../api/books");
+vi.mock("../api/interests");
+vi.mock("../api/recommendations");
 
 const DUNE: BookSearchResult = {
   key: "/works/OL1W",
@@ -30,7 +34,14 @@ const EMMA: BookSearchResult = {
 
 function Destination() {
   const location = useLocation();
-  return <p>Details at {location.pathname}</p>;
+  const searchBook = (location.state as BookDetailsLocationState | null)
+    ?.searchBook;
+  return (
+    <>
+      <p>Details at {location.pathname}</p>
+      {searchBook && <p>Passed {searchBook.title}</p>}
+    </>
+  );
 }
 
 function LoginDestination() {
@@ -74,6 +85,11 @@ describe("SearchPage", () => {
       total: 2,
     });
     vi.mocked(getBookSuggestions).mockResolvedValue({ books: [], total: 0 });
+    vi.mocked(getInterests).mockResolvedValue([]);
+    vi.mocked(saveInterests).mockImplementation((genres) =>
+      Promise.resolve(genres),
+    );
+    vi.mocked(getRecommendations).mockResolvedValue([]);
     localStorage.clear();
   });
   afterEach(() => {
@@ -459,6 +475,257 @@ describe("SearchPage", () => {
         screen.getByText("Details at /books/works/OL1W"),
       ).toBeInTheDocument();
       expect(getBookDetails).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("genres you like", () => {
+    const USER = { id: 1, email: "a@b.co" };
+
+    it("DIS-01-T-1 signed-in users can pick genres", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Mystery"]);
+      renderSearch("/search", USER);
+
+      const picker = await screen.findByRole("region", {
+        name: "Genres you like",
+      });
+      expect(
+        within(picker).getByRole("button", { name: "Mystery" }),
+      ).toHaveAttribute("aria-pressed", "true");
+
+      const fantasy = within(picker).getByRole("button", { name: "Fantasy" });
+      expect(fantasy).toHaveAttribute("aria-pressed", "false");
+      await userEvent.click(fantasy);
+
+      expect(fantasy).toHaveAttribute("aria-pressed", "true");
+      expect(saveInterests).toHaveBeenCalledWith(["Fantasy", "Mystery"]);
+    });
+
+    it("DIS-01-T-1 a failed save reverts the genre", async () => {
+      vi.mocked(saveInterests).mockRejectedValue(
+        new Error("Could not save your genres."),
+      );
+      renderSearch("/search", USER);
+
+      const fantasy = await screen.findByRole("button", { name: "Fantasy" });
+      await userEvent.click(fantasy);
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not save your genres.",
+      );
+      expect(fantasy).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("DIS-01-T-1 saves one change at a time", async () => {
+      let finishSave: (genres: ["Fantasy"]) => void = () => {};
+      vi.mocked(saveInterests).mockReturnValueOnce(
+        new Promise((resolve) => (finishSave = resolve)),
+      );
+      renderSearch("/search", USER);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Fantasy" }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Mystery" }));
+      await userEvent.click(screen.getByRole("button", { name: "Horror" }));
+      expect(saveInterests).toHaveBeenCalledTimes(1);
+      expect(saveInterests).toHaveBeenLastCalledWith(["Fantasy"]);
+
+      act(() => finishSave(["Fantasy"]));
+      await waitFor(() => expect(saveInterests).toHaveBeenCalledTimes(2));
+      expect(saveInterests).toHaveBeenLastCalledWith([
+        "Fantasy",
+        "Mystery",
+        "Horror",
+      ]);
+      for (const name of ["Fantasy", "Mystery", "Horror"]) {
+        expect(screen.getByRole("button", { name })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
+      }
+    });
+
+    it("DIS-01-T-1 a failed save drops the changes after it", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Poetry"]);
+      let failSave: (err: Error) => void = () => {};
+      vi.mocked(saveInterests).mockReturnValueOnce(
+        new Promise((_resolve, reject) => (failSave = reject)),
+      );
+      renderSearch("/search", USER);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Fantasy" }),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Mystery" }));
+
+      act(() => failSave(new Error("Could not save your genres.")));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not save your genres.",
+      );
+      expect(screen.getByRole("button", { name: "Poetry" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      for (const name of ["Fantasy", "Mystery"]) {
+        expect(screen.getByRole("button", { name })).toHaveAttribute(
+          "aria-pressed",
+          "false",
+        );
+      }
+      expect(saveInterests).toHaveBeenCalledTimes(1);
+    });
+
+    it("DIS-01-T-1 logged-out users don't see the genre picker", async () => {
+      renderSearch();
+      await screen.findByRole("heading", { name: "Try searching for" });
+      expect(
+        screen.queryByRole("heading", { name: "Genres you like" }),
+      ).not.toBeInTheDocument();
+      expect(getInterests).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("recommendations", () => {
+    const USER = { id: 1, email: "a@b.co" };
+
+    it("DIS-01-T-3 shows recommended books", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockResolvedValue([DUNE, EMMA]);
+      renderSearch("/search", USER);
+
+      const section = await screen.findByRole("region", {
+        name: "Recommended for you",
+      });
+      expect(
+        await within(section).findByRole("button", { name: /Dune/ }),
+      ).toHaveTextContent("Frank Herbert");
+      expect(
+        within(section).getByRole("button", { name: /Emma/ }),
+      ).toHaveTextContent("Jane Austen");
+    });
+
+    it("DIS-01-T-3 opens a recommended book", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockResolvedValue([DUNE]);
+      renderSearch("/search", USER);
+
+      await userEvent.click(
+        await screen.findByRole("button", { name: /Dune/ }),
+      );
+      expect(
+        screen.getByText("Details at /books/works/OL1W"),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Passed Dune")).toBeInTheDocument();
+    });
+
+    it("DIS-01-T-3 shows loading, empty, and error states", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Poetry"]);
+      let finish: (books: BookSearchResult[]) => void = () => {};
+      vi.mocked(getRecommendations).mockReturnValue(
+        new Promise((resolve) => (finish = resolve)),
+      );
+      const first = renderSearch("/search", USER);
+
+      expect(
+        await screen.findByText("Loading recommendations..."),
+      ).toBeInTheDocument();
+      act(() => finish([]));
+      expect(
+        await screen.findByText("No recommendations for these genres yet."),
+      ).toBeInTheDocument();
+      first.unmount();
+
+      vi.mocked(getRecommendations).mockRejectedValue(
+        new Error("Could not load recommendations."),
+      );
+      renderSearch("/search", USER);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Could not load recommendations.",
+      );
+    });
+
+    it("DIS-01-T-3 reloads recommendations after a saved change", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Poetry"]);
+      renderSearch("/search", USER);
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(1));
+
+      let finishSave: (genres: ["Fantasy", "Poetry"]) => void = () => {};
+      vi.mocked(saveInterests).mockReturnValueOnce(
+        new Promise((resolve) => (finishSave = resolve)),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Fantasy" }));
+      expect(getRecommendations).toHaveBeenCalledTimes(1);
+
+      act(() => finishSave(["Fantasy", "Poetry"]));
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(2));
+
+      vi.mocked(saveInterests).mockRejectedValueOnce(
+        new Error("Could not save your genres."),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Horror" }));
+      await screen.findByText("Could not save your genres.");
+      expect(getRecommendations).toHaveBeenCalledTimes(2);
+    });
+
+    it("DIS-01-T-3 keeps books on screen while reloading", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockResolvedValueOnce([DUNE]);
+      renderSearch("/search", USER);
+      const section = await screen.findByRole("region", {
+        name: "Recommended for you",
+      });
+      await within(section).findByRole("button", { name: /Dune/ });
+
+      let finish: (books: BookSearchResult[]) => void = () => {};
+      vi.mocked(getRecommendations).mockReturnValueOnce(
+        new Promise((resolve) => (finish = resolve)),
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Fantasy" }));
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(2));
+
+      expect(
+        within(section).getByRole("button", { name: /Dune/ }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("Loading recommendations..."),
+      ).not.toBeInTheDocument();
+
+      act(() => finish([EMMA]));
+      expect(
+        await within(section).findByRole("button", { name: /Emma/ }),
+      ).toBeInTheDocument();
+      expect(
+        within(section).queryByRole("button", { name: /Dune/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("DIS-01-T-3 a newer load cancels an older one", async () => {
+      vi.mocked(getInterests).mockResolvedValue(["Sci-fi"]);
+      vi.mocked(getRecommendations).mockReturnValueOnce(new Promise(() => {}));
+      renderSearch("/search", USER);
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(1));
+      const firstSignal = vi.mocked(getRecommendations).mock.calls[0]?.[0];
+      expect(firstSignal?.aborted).toBe(false);
+
+      await userEvent.click(screen.getByRole("button", { name: "Fantasy" }));
+      await waitFor(() => expect(getRecommendations).toHaveBeenCalledTimes(2));
+      expect(firstSignal?.aborted).toBe(true);
+    });
+
+    it("DIS-01-T-3 hides recommendations without liked genres", async () => {
+      const first = renderSearch();
+      await screen.findByRole("heading", { name: "Try searching for" });
+      expect(
+        screen.queryByRole("heading", { name: "Recommended for you" }),
+      ).not.toBeInTheDocument();
+      first.unmount();
+
+      renderSearch("/search", USER);
+      await screen.findByRole("heading", { name: "Genres you like" });
+      expect(
+        screen.queryByRole("heading", { name: "Recommended for you" }),
+      ).not.toBeInTheDocument();
+      expect(getRecommendations).not.toHaveBeenCalled();
     });
   });
 

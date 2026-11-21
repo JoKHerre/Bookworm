@@ -34,12 +34,10 @@ export function rankSimilarBooks(
   const ranked: { book: BookSearchResult; score: number }[] = [];
 
   for (const doc of docs) {
-    const parsed = openLibrarySimilarBook.safeParse(doc);
-    if (!parsed.success) continue;
+    const result = toWorkResult(doc);
+    if (!result) continue;
 
-    const { subject: rawSubjects = [], ...book } = parsed.data;
-    if (book.key.startsWith("OL")) book.key = `/works/${book.key}`;
-    if (!openLibraryWorkKey.safeParse(book.key).success) continue;
+    const { book, subject: rawSubjects } = result;
     if (book.key === workKey || seen.has(book.key)) continue;
 
     const candidateSubjects = normalizeSubjects(rawSubjects);
@@ -64,6 +62,17 @@ export function rankSimilarBooks(
       left.book.key.localeCompare(right.book.key),
   );
   return ranked.slice(0, SIMILAR_BOOKS_LIMIT).map(({ book }) => book);
+}
+
+// A search record with a canonical work key, or null when it's unusable.
+export function toWorkResult(doc: unknown) {
+  const parsed = openLibrarySimilarBook.safeParse(doc);
+  if (!parsed.success) return null;
+
+  const { subject = [], ...book } = parsed.data;
+  if (book.key.startsWith("OL")) book.key = `/works/${book.key}`;
+  if (!openLibraryWorkKey.safeParse(book.key).success) return null;
+  return { book, subject };
 }
 
 function normalizeSubjects(subjects: string[]) {
