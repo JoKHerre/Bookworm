@@ -28,7 +28,7 @@ function setup() {
 }
 
 // matches each row by its title: "match:<n>" is matched to /works/OL<n>W,
-// "pick:<n>" offers OL<n>W and OL<n+1>W, and anything else has no match
+// "pick:<n>" offers OL<n>W to OL<n+2>W, and anything else has no match
 function byTitle(rows: MatchImportRow[]): ImportMatch[] {
   return rows.map(({ title }) => {
     const [kind, n] = title.split(":");
@@ -41,6 +41,7 @@ function byTitle(rows: MatchImportRow[]): ImportMatch[] {
         candidates: [
           book(Number(n), title, "Jane Austen", 1815),
           book(Number(n) + 1, title, "Emma Tennant"),
+          book(Number(n) + 2, `${title}: Annotated`, "Jane Austen"),
         ],
       };
     }
@@ -306,19 +307,19 @@ describe("ImportBooksPage", () => {
         }),
     );
     setup();
-    const titles = Array.from({ length: 30 }, (_, i) => `match:${i + 1}`);
+    const titles = Array.from({ length: 8 }, (_, i) => `match:${i + 1}`);
     await uploadCsv(`title\n${titles.join("\n")}\n`);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Matching books… 0 of 30",
+      "Matching books… 0 of 8",
     );
     expect(
       screen.getByRole("button", { name: "Import 0 books" }),
     ).toBeDisabled();
 
     finish();
-    expect(await importButton("30 books")).toBeEnabled();
-    expect(sentTitles()).toEqual([titles.slice(0, 25), titles.slice(25)]);
+    expect(await importButton("8 books")).toBeEnabled();
+    expect(sentTitles()).toEqual([titles.slice(0, 6), titles.slice(6)]);
     expect(matchMock.mock.calls[0]?.[0][0]).toEqual({
       title: "match:1",
       author: "",
@@ -362,27 +363,33 @@ describe("ImportBooksPage", () => {
       .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
     vi.stubGlobal("fetch", fetchMock);
     setup();
-    await uploadCsv("title,author\npick:5,Jane Austen\n");
+    await uploadCsv("title,author\npick:5,Jane Austen\npick:10,\n");
 
     const section = await screen.findByRole("region", {
       name: "Pick the right book",
     });
-    const select = within(section).getByLabelText("pick:5 by Jane Austen");
-    expect(select).toHaveValue("");
+    const first = within(section).getByRole("combobox", {
+      name: "pick:5 by Jane Austen",
+    });
+    expect(first).toHaveValue("");
     expect(
-      within(select)
+      within(first)
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual([
       "Skip this book",
-      "pick:5 by Jane Austen (1815)",
-      "pick:5 by Emma Tennant",
+      "Jane Austen (1815)",
+      "Emma Tennant",
+      "pick:5: Annotated by Jane Austen",
     ]);
+    expect(
+      within(section).getByRole("combobox", { name: "pick:10" }),
+    ).toHaveValue("");
     expect(
       screen.getByRole("button", { name: "Import 0 books" }),
     ).toBeDisabled();
 
-    await userEvent.selectOptions(select, "/works/OL6W");
+    await userEvent.selectOptions(first, "/works/OL6W");
     await userEvent.click(await importButton("1 book"));
     await screen.findByText("Imported 1 book. 0 already in your library.");
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -415,9 +422,10 @@ describe("ImportBooksPage", () => {
     setup();
     await uploadCsv("title\nmatch:1\nmatch:2\n");
 
-    expect(
-      await screen.findByText("Could not look up 1 book."),
-    ).toBeInTheDocument();
+    const failed = await screen.findByRole("list", {
+      name: "Could not look up 1 book",
+    });
+    expect(within(failed).getByRole("listitem")).toHaveTextContent("match:1");
     expect(await importButton("1 book")).toBeEnabled();
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -429,11 +437,11 @@ describe("ImportBooksPage", () => {
   it("IMP-02-T-3 keeps going after a failed batch", async () => {
     matchMock.mockRejectedValueOnce(new Error("Could not match these books."));
     setup();
-    const titles = Array.from({ length: 26 }, (_, i) => `match:${i + 1}`);
+    const titles = Array.from({ length: 7 }, (_, i) => `match:${i + 1}`);
     await uploadCsv(`title\n${titles.join("\n")}\n`);
 
     expect(
-      await screen.findByText("Could not look up 25 books."),
+      await screen.findByRole("heading", { name: "Could not look up 6 books" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Import 1 book" }),
@@ -449,14 +457,16 @@ describe("ImportBooksPage", () => {
       }),
     );
     setup();
-    const titles = Array.from({ length: 26 }, (_, i) => `match:${i + 1}`);
+    const titles = Array.from({ length: 7 }, (_, i) => `match:${i + 1}`);
     await uploadCsv(`title\n${titles.join("\n")}\n`);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Your session has expired. Please log in again.",
     );
     expect(matchMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Could not look up 26 books.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Could not look up 7 books" }),
+    ).toBeInTheDocument();
   });
 
   it("IMP-02-T-3 aborts matching when the file changes", async () => {
