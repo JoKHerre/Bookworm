@@ -38,11 +38,11 @@ function rowLabel(row: ImportRow) {
 // the row's title is already the select's label, so only show a candidate's
 // title when it says something new
 function candidateLabel(book: BookSearchResult, rowTitle: string) {
-  const author = book.author_name?.join(", ");
-  let label = author ?? book.title;
-  if (author && normalizeTitle(book.title) !== normalizeTitle(rowTitle)) {
-    label = `${book.title} by ${author}`;
-  }
+  const author = book.author_name?.join(", ") || "Unknown author";
+  let label =
+    normalizeTitle(book.title) === normalizeTitle(rowTitle)
+      ? author
+      : `${book.title} by ${author}`;
   if (book.first_publish_year) label += ` (${book.first_publish_year})`;
   return label;
 }
@@ -67,6 +67,7 @@ function ImportBooksPage() {
   const [matches, setMatches] = useState<RowMatch[]>([]); // one per valid row
   const [progress, setProgress] = useState<{ done: number; total: number }>(); // set while rows are being matched
   const [picks, setPicks] = useState<Record<number, string>>({}); // row number → book key chosen for an ambiguous row
+  const [expired, setExpired] = useState(false); // the session expired while matching, so retrying can't work
   const [importing, setImporting] = useState(false); // whether the books are being saved to the library
   const [result, setResult] = useState<ImportBooksResponse | null>(null); // counts returned after importing
   const matchController = useRef<AbortController | null>(null);
@@ -87,6 +88,7 @@ function ImportBooksPage() {
     setReadyName("");
     setMatches([]);
     setPicks({});
+    setExpired(false);
     setResult(null);
     setError("");
     setFile(null);
@@ -130,7 +132,10 @@ function ImportBooksPage() {
       } catch (err) {
         if (controller.signal.aborted) return;
         expired = isExpiredSession(err);
-        if (expired) setError((err as Error).message);
+        if (expired) {
+          setError((err as Error).message);
+          setExpired(true);
+        }
         results = batch.map(() => ({ status: "failed" }));
       }
       if (controller.signal.aborted) return;
@@ -160,6 +165,7 @@ function ImportBooksPage() {
     setReadyName("");
     setMatches([]);
     setPicks({});
+    setExpired(false);
     setResult(null);
     let valid: ImportRow[] = [];
     try {
@@ -347,13 +353,15 @@ function ImportBooksPage() {
                     <li key={valid[i]!.row}>{rowLabel(valid[i]!)}</li>
                   ))}
                 </ul>
-                <button
-                  className="import-secondary"
-                  type="button"
-                  onClick={() => void matchRows(valid, failed)}
-                >
-                  Try again
-                </button>
+                {!expired && (
+                  <button
+                    className="import-secondary"
+                    type="button"
+                    onClick={() => void matchRows(valid, failed)}
+                  >
+                    Try again
+                  </button>
+                )}
               </section>
             )}
           </>
