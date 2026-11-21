@@ -285,7 +285,7 @@ function ImportBooksPage() {
                     >;
                     return (
                       <li key={row.row}>
-                        <label className="import-field">
+                        <label className="import-pick">
                           <span>{rowLabel(row)}</span>
                           <select
                             value={picks[row.row] ?? ""}

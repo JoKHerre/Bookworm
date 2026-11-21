@@ -136,11 +136,24 @@
   list-style: none;
 }
 
+.import-card section {
+  margin-top: 8px;
+}
+
+.import-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  font-weight: 600;
+}
+
 .import-picks select {
-  max-width: 100%;
+  width: min(100%, 30rem);
   padding: 8px 10px;
   font: inherit;
-  font-weight: 500;
+  font-size: 1rem;
+  font-weight: 400;
   color: var(--olive);
   background: var(--cream);
   border: 1.5px solid var(--tan);
