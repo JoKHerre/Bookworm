@@ -112,7 +112,7 @@ test("IMP-02-T-2 rejects invalid match bodies", async () => {
     [],
     {},
     { rows: [] },
-    { rows: Array.from({ length: 26 }, () => row("Dune")) },
+    { rows: Array.from({ length: 7 }, () => row("Dune")) },
     { rows: [{ author: "", isbn: "" }] },
     { rows: [row("   ")] },
     { rows: [row("Dune", "", "1234567890")] },
