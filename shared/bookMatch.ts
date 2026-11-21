@@ -77,7 +77,7 @@ export function matchTitle(
   );
 
   // Open Library often has several works for one book, so only books by
-  // different authors make a row ambiguous
+  // different authors make a row without an author ambiguous
   const byAuthor = new Map<string, BookSearchResult>();
   for (const book of passing) {
     const author = normalizeAuthor(book.author_name?.[0] ?? "");
@@ -86,7 +86,9 @@ export function matchTitle(
 
   const [first] = passing;
   if (!first) return { status: "none" };
-  if (byAuthor.size === 1) return { status: "matched", book: first };
+  if (row.author.trim() || byAuthor.size === 1) {
+    return { status: "matched", book: first };
+  }
   return {
     status: "ambiguous",
     candidates: [...byAuthor.values()].slice(0, MATCH_MAX_CANDIDATES),
