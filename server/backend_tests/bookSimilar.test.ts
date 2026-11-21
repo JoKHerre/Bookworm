@@ -79,17 +79,27 @@ afterEach(() => {
 test("DIS-02-T-1 returns six ranked unique canonical books", async () => {
   const docs = [
     { key: workKey, title: "Source", subject: sourceWork.subjects },
-    { key: "OL2W", title: "Same title", subject: ["Fantasy"] },
-    { key: "/works/OL10W", title: " same   TITLE ", subject: ["FANTASY"] },
+    { key: "OL1W", title: "Source duplicate", subject: sourceWork.subjects },
+    { key: "OL9W", title: " SOURCE   BOOK ", subject: sourceWork.subjects },
+    { key: "OL2W", title: "Same title", subject: ["Fantasy", "Friendship"] },
+    {
+      key: "/works/OL10W",
+      title: " same   TITLE ",
+      subject: ["FANTASY", " FRIENDSHIP "],
+    },
     {
       key: "/works/OL3W",
       title: "Higher overlap",
-      subject: ["Fantasy", "Adventure"],
+      subject: ["Fantasy", "Adventure", "Friendship"],
     },
-    { key: "/works/OL4W", title: "Beta", subject: ["Fantasy"] },
-    { key: "/works/OL5W", title: "Gamma", subject: ["Fantasy"] },
-    { key: "/works/OL6W", title: "Delta", subject: ["Fantasy"] },
-    { key: "/works/OL7W", title: "Epsilon", subject: ["Fantasy"] },
+    { key: "/works/OL4W", title: "Beta", subject: ["Fantasy", "Friendship"] },
+    { key: "/works/OL5W", title: "Gamma", subject: ["Fantasy", "Friendship"] },
+    { key: "/works/OL6W", title: "Delta", subject: ["Fantasy", "Friendship"] },
+    {
+      key: "/works/OL7W",
+      title: "Epsilon",
+      subject: ["Fantasy", "Friendship"],
+    },
     { key: "/works/OL8W", title: "Unrelated", subject: ["Fantasy fiction"] },
   ];
 
@@ -102,32 +112,40 @@ test("DIS-02-T-1 returns six ranked unique canonical books", async () => {
     assert.deepEqual(body, {
       books: [
         { key: "/works/OL3W", title: "Higher overlap" },
+        { key: "/works/OL9W", title: " SOURCE   BOOK " },
         { key: "/works/OL4W", title: "Beta" },
         { key: "/works/OL6W", title: "Delta" },
         { key: "/works/OL7W", title: "Epsilon" },
         { key: "/works/OL5W", title: "Gamma" },
-        { key: "/works/OL10W", title: " same   TITLE " },
       ],
     });
   }
 });
 
-// Criterion 2: selection uses source order, including ordinary broad subjects.
-test("DIS-02-T-1 selects the first three usable normalized subjects", async () => {
-  const boundary = "x".repeat(40);
+test("DIS-02-T-1 queries up to ten distinct nonblank subjects", async () => {
   stubBooks([], {
     ...sourceWork,
     subjects: [
-      " SOURCE   BOOK ",
       "",
       " ",
-      "x".repeat(41),
-      "nyt:fiction",
-      "  FICTION ",
-      "fiction",
+      "Accessible book",
+      "Protected DAISY",
+      "In library",
+      "Large type books",
+      "Reading level-grade 9",
+      "technical:tag",
       " Science   Fiction ",
-      boundary,
-      "Adventure",
+      "science fiction",
+      " Adventure ",
+      "Friendship",
+      "Young adult fiction",
+      "Dystopian fiction",
+      "Survival",
+      "Space travel",
+      "Magic",
+      "Courage",
+      "Mystery",
+      "Eleventh subject",
     ],
   });
   assert.deepEqual(await (await get()).json(), { books: [] });
@@ -135,13 +153,14 @@ test("DIS-02-T-1 selects the first three usable normalized subjects", async () =
   const params = upstreamRequests[1]!.searchParams;
   assert.equal(
     params.get("q"),
-    `subject:("fiction" OR "science fiction" OR "${boundary}")`,
+    'subject:("science fiction" OR "adventure" OR "friendship" OR "young adult fiction" OR "dystopian fiction" OR "survival" OR "space travel" OR "magic" OR "courage" OR "mystery")',
   );
   assert.equal(
     params.get("fields"),
     "key,title,author_name,first_publish_year,cover_i,subject",
   );
-  assert.deepEqual([...params.keys()].sort(), ["fields", "q"]);
+  assert.equal(params.get("limit"), "100");
+  assert.deepEqual([...params.keys()].sort(), ["fields", "limit", "q"]);
 });
 
 test("DIS-02-T-1 treats punctuation in subjects as literal query text", async () => {
@@ -154,7 +173,11 @@ test("DIS-02-T-1 treats punctuation in subjects as literal query text", async ()
 });
 
 test("DIS-02-T-1 skips malformed candidates and allows optional display metadata", async () => {
-  const book = { key: "/works/OL2W", title: "A book", subject: ["Fantasy"] };
+  const book = {
+    key: "/works/OL2W",
+    title: "A book",
+    subject: ["Fantasy", "Friendship"],
+  };
   stubBooks([
     null,
     { ...book, key: "/books/OL2M" },
@@ -169,7 +192,7 @@ test("DIS-02-T-1 skips malformed candidates and allows optional display metadata
     {
       key: "OL3W",
       title: "With metadata",
-      subject: ["Fantasy"],
+      subject: ["Fantasy", "Friendship"],
       author_name: ["Author"],
       first_publish_year: 2000,
       cover_i: 123,
@@ -192,7 +215,11 @@ test("DIS-02-T-1 skips malformed candidates and allows optional display metadata
 test("DIS-02-T-1 keeps the first qualifying duplicate work", async () => {
   stubBooks([
     { key: "OL2W", title: "Unrelated", subject: ["Cooking"] },
-    { key: "/works/OL2W", title: "First qualifying", subject: ["Fantasy"] },
+    {
+      key: "/works/OL2W",
+      title: "First qualifying",
+      subject: ["Fantasy", "Friendship"],
+    },
     {
       key: "OL2W",
       title: "Later higher overlap",
@@ -204,28 +231,74 @@ test("DIS-02-T-1 keeps the first qualifying duplicate work", async () => {
   });
 });
 
-test("DIS-02-T-1 counts distinct exact matches across all candidate subjects", async () => {
-  const filler = Array.from(
-    { length: 20 },
-    (_, index) => `Other subject ${index}`,
+test("DIS-02-T-1 ranks by normalized subject overlap", async () => {
+  stubBooks(
+    [
+      {
+        key: "OL2W",
+        title: "A broad match",
+        subject: [
+          "Fantasy",
+          "Friendship",
+          "History",
+          "Poetry",
+          "Cooking",
+          "Space",
+          "Travel",
+          "Romance",
+        ],
+      },
+      {
+        key: "OL3W",
+        title: "Z exact match",
+        subject: ["Fantasy", "Friendship"],
+      },
+      { key: "OL4W", title: "B sparse match", subject: ["Fantasy"] },
+    ],
+    { ...sourceWork, subjects: ["Fantasy", "Friendship"] },
   );
-  stubBooks([
+  const body = similarBooksResponse.parse(await (await get()).json());
+  assert.deepEqual(
+    body.books.map((book) => book.key),
+    ["/works/OL3W", "/works/OL4W", "/works/OL2W"],
+  );
+});
+
+test("DIS-02-T-1 counts distinct non-noise subject matches", async () => {
+  stubBooks(
+    [
+      {
+        key: "OL2W",
+        title: "Repeated label",
+        subject: ["Fantasy", "fantasy", " FANTASY "],
+      },
+      {
+        key: "OL3W",
+        title: "With noise",
+        subject: ["Fantasy", "Accessible book", "technical:tag"],
+      },
+      {
+        key: "OL4W",
+        title: "Qualifies",
+        subject: [" FANTASY ", " FRIENDSHIP "],
+      },
+      {
+        key: "OL5W",
+        title: "Alias",
+        subject: ["Fantasy fiction", "Friendship"],
+      },
+    ],
     {
-      key: "/works/OL2W",
-      title: "A duplicated match",
-      subject: ["Fantasy", "fantasy", " FANTASY "],
+      ...sourceWork,
+      subjects: [...sourceWork.subjects, "Accessible book", "technical:tag"],
     },
-    {
-      key: "/works/OL3W",
-      title: "Z two matches",
-      subject: [...filler, " ADVENTURE ", "  FriendSHIP "],
-    },
-    { key: "/works/OL4W", title: "Near match", subject: ["Fantasy fiction"] },
-  ]);
+  );
   assert.deepEqual(await (await get()).json(), {
     books: [
-      { key: "/works/OL3W", title: "Z two matches" },
-      { key: "/works/OL2W", title: "A duplicated match" },
+      { key: "/works/OL4W", title: "Qualifies" },
+      { key: "/works/OL2W", title: "Repeated label" },
+      { key: "/works/OL3W", title: "With noise" },
+      { key: "/works/OL5W", title: "Alias" },
     ],
   });
 });
@@ -235,7 +308,16 @@ test("DIS-02-T-1 skips candidate search without usable source subjects", async (
   for (const subjects of [
     undefined,
     [],
-    [" ", "Source Book", "x".repeat(41), "technical:tag"],
+    [" ", "", "  "],
+
+    [
+      "Accessible book",
+      "Protected DAISY",
+      "In library",
+      "Large type books",
+      "Reading level",
+      "technical:tag",
+    ],
   ]) {
     stubBooks([], { ...sourceWork, subjects });
     const response = await get();
@@ -250,7 +332,7 @@ test("DIS-02-T-1 returns empty results without unrelated fallback", async () => 
     [],
     [
       null,
-      { key: workKey, title: "Source", subject: ["Fantasy"] },
+      { key: workKey, title: "Source", subject: ["Fantasy", "Friendship"] },
       { key: "OL2W", title: "Other", subject: ["Cooking"] },
     ],
   ]) {
@@ -341,7 +423,7 @@ test("DIS-02-T-1 makes only a source request and one candidate search", async ()
   const docs = Array.from({ length: 100 }, (_, index) => ({
     key: `OL${index + 2}W`,
     title: `Book ${index}`,
-    subject: ["Fantasy"],
+    subject: ["Fantasy", "Friendship"],
   }));
   stubBooks(docs);
   assert.equal((await get()).status, 200);

@@ -2,7 +2,6 @@ import type z from "zod";
 
 import {
   openLibrarySearchResponse,
-  openLibrarySimilarBook,
   openLibrarySimilarSearchResponse,
   openLibraryWork,
   openLibraryWorkRecord,
@@ -21,13 +20,14 @@ import {
   type BookISBNsQuery,
   type BookSearchQuery,
   type BookSearchResponse,
-  type BookSearchResult,
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 import { toTags } from "../../../shared/tags.ts";
 import { PromiseCache } from "./cache.ts";
+import { getSimilarityProfile, rankSimilarBooks } from "./bookSimilarity.ts";
 
 const BASE_URL = "https://openlibrary.org";
+const MAX_SIMILAR_CANDIDATES = 100;
 
 const languageCodes = {
   English: "eng",
@@ -185,77 +185,6 @@ export async function searchOpenLibrarySuggestions(
   );
 }
 
-function normalizeSimilarityText(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function selectSimilaritySubjects(title: string, subjects: string[] = []) {
-  const selected: string[] = [];
-  const normalizedTitle = normalizeSimilarityText(title);
-
-  for (const value of subjects) {
-    const subject = normalizeSimilarityText(value);
-    if (
-      !subject ||
-      subject.length > 40 ||
-      subject.includes(":") ||
-      subject === normalizedTitle ||
-      selected.includes(subject)
-    ) {
-      continue;
-    }
-
-    selected.push(subject);
-    if (selected.length === 3) break;
-  }
-
-  return selected;
-}
-
-function rankSimilarBooks(
-  workKey: string,
-  subjects: string[],
-  docs: unknown[],
-): BookSearchResult[] {
-  const seen = new Set<string>();
-  const candidates: { book: BookSearchResult; score: number }[] = [];
-
-  for (const doc of docs) {
-    const parsed = openLibrarySimilarBook.safeParse(doc);
-    if (!parsed.success) continue;
-
-    const { subject = [], ...book } = parsed.data;
-    if (book.key.startsWith("OL")) book.key = `/works/${book.key}`;
-    if (!openLibraryWorkKey.safeParse(book.key).success) continue;
-    if (book.key === workKey || seen.has(book.key)) continue;
-
-    const candidateSubjects = subject.map(normalizeSimilarityText);
-    let score = 0;
-    for (const selectedSubject of subjects) {
-      if (candidateSubjects.includes(selectedSubject)) score++;
-    }
-    if (score === 0) continue;
-
-    // Invalid and unrelated records must not reserve a duplicate's work key.
-    seen.add(book.key);
-    candidates.push({ book, score });
-  }
-
-  candidates.sort((left, right) => {
-    if (left.score !== right.score) return right.score - left.score;
-
-    const leftTitle = normalizeSimilarityText(left.book.title);
-    const rightTitle = normalizeSimilarityText(right.book.title);
-    if (leftTitle < rightTitle) return -1;
-    if (leftTitle > rightTitle) return 1;
-    if (left.book.key < right.book.key) return -1;
-    if (left.book.key > right.book.key) return 1;
-    return 0;
-  });
-
-  return candidates.slice(0, 6).map(({ book }) => book);
-}
-
 export async function getSimilarBooks(
   workKey: string,
   signal?: AbortSignal,
@@ -278,15 +207,16 @@ export async function getSimilarBooks(
       throw new OpenLibraryError("Invalid source work", 502);
     }
 
-    const subjects = selectSimilaritySubjects(work.title, work.subjects);
-    if (subjects.length === 0) return { books: [] };
+    const profile = getSimilarityProfile(work.subjects);
+    if (profile.subjects.size === 0) return { books: [] };
 
-    const terms = subjects.map(
+    const terms = profile.querySubjects.map(
       (subject) => `"${escapeOpenLibraryQueryText(subject)}"`,
     );
     const params = new URLSearchParams({
       q: `subject:(${terms.join(" OR ")})`,
       fields: "key,title,author_name,first_publish_year,cover_i,subject",
+      limit: String(MAX_SIMILAR_CANDIDATES),
     });
 
     let data;
@@ -305,7 +235,7 @@ export async function getSimilarBooks(
     }
 
     return similarBooksResponse.parse({
-      books: rankSimilarBooks(key, subjects, data.docs),
+      books: rankSimilarBooks(key, profile, data.docs),
     });
   } finally {
     clearTimeout(timeout);
