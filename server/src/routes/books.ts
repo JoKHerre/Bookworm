@@ -29,8 +29,49 @@ import {
   type TitleSearchResponse,
 } from "../../../shared/titleSearch.ts";
 import { searchLibraryByTitle } from "../services/libraryCatalog.ts";
+import { getContentWarningsForWork } from "../services/contentWarnings.ts";
+import {
+  contentWarningsQuery,
+  type ContentWarningsResponse,
+} from "../../../shared/contentWarnings.ts";
 
 export const booksRouter: Router = Router();
+
+booksRouter.get(
+  "/content-warnings",
+  async (req, res: Response<ContentWarningsResponse | ApiError>) => {
+    const parsed = contentWarningsQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid book key" });
+      return;
+    }
+
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.once("close", onClose);
+    try {
+      const result = await getContentWarningsForWork(
+        parsed.data.key,
+        controller.signal,
+      );
+      if (!res.destroyed) res.json(result);
+    } catch (error) {
+      if (controller.signal.aborted || res.destroyed) return;
+      console.error("Book content warning lookup error:", error);
+      if (error instanceof OpenLibraryError && error.status === 404) {
+        res.status(404).json({ error: "Book not found" });
+        return;
+      }
+      res
+        .status(502)
+        .json({ error: "Unable to retrieve book content warnings" });
+    } finally {
+      res.off("close", onClose);
+    }
+  },
+);
 
 booksRouter.get(
   "/suggestions",
