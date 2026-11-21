@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { type PublicUser } from "../../shared/auth";
 import * as authApi from "../api/auth";
+import { onUnauthorized } from "../api/client";
 import { AuthContext, type AuthContextValue } from "./useAuth";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -13,6 +14,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => null)
       .then(setUser)
       .finally(() => setLoading(false));
+  }, []);
+
+  // a 401 from any other request means the session has ended
+  useEffect(() => {
+    onUnauthorized(() => setUser(null));
+    return () => onUnauthorized(null);
   }, []);
 
   const value: AuthContextValue = {
