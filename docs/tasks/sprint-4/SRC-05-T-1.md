@@ -23,7 +23,7 @@ Serves SRC-05 (exclude genres and content warnings from search results). Add a b
 ## Requirements
 
 - Scrape only relevant public pages on `https://triggerwarningdatabase.com/`, using backend Cheerio. Add no dependencies or database changes.
-- Bound source work to one active request, one search page, three candidate entries, 5-second request timeouts, and a 20-second lookup deadline. Reuse `PromiseCache` for successful lookups and support cancellation.
+- Bound source work to one active request, one search page, at most one matching entry, 5-second request timeouts, and a 20-second lookup deadline. Cache `found` and `not_found` results for one hour using `PromiseCache`; leave `unavailable` uncached. Support cancellation.
 - Keep warning categories separate from Open Library display tags and follow existing project conventions.
 - Preserve existing book behavior. Do not add warning requests to search, suggestions, similar books, or library lookups in this task.
 
