@@ -118,3 +118,68 @@
   outline: 3px solid var(--olive);
   outline-offset: 2px;
 }
+
+.import-status p {
+  margin: 0;
+}
+
+.import-status p + p {
+  margin-top: 4px;
+}
+
+.import-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-picks select {
+  max-width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--olive);
+  background: var(--cream);
+  border: 1.5px solid var(--tan);
+  border-radius: 8px;
+}
+
+.import-picks select:focus-visible,
+.import-secondary:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}
+
+.import-missing {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.import-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.import-failed p {
+  margin: 0;
+}
+
+.import-secondary {
+  padding: 8px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--olive);
+  background: transparent;
+  border: 1.5px solid var(--olive);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.import-secondary:hover {
+  background: var(--gold-wash);
+}

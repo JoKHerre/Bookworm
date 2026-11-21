@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   IMPORT_COLUMNS,
@@ -6,11 +6,19 @@ import {
   checkImportFile,
 } from "../../shared/bookImport";
 import {
+  IMPORT_MATCH_BATCH_SIZE,
+  type ImportMatch,
+} from "../../shared/bookMatch";
+import type { BookSearchResult } from "../../shared/books";
+import {
   parseImportCsv,
   validateImportRows,
+  type ImportRow,
   type ValidateImportResult,
 } from "../../shared/csvImport";
 import type { ImportBooksResponse } from "../../shared/library";
+import { matchImportRows } from "../api/books";
+import { ApiRequestError } from "../api/client";
 import { importBooks } from "../api/library";
 import "./ImportBooksPage.css";
 
@@ -18,20 +26,61 @@ function formatSize(bytes: number) {
   return bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`;
 }
 
+function books(n: number) {
+  return `${n} ${n === 1 ? "book" : "books"}`;
+}
+
+function rowLabel(row: ImportRow) {
+  return row.author ? `${row.title} by ${row.author}` : row.title;
+}
+
+function candidateLabel(book: BookSearchResult) {
+  let label = book.title;
+  if (book.author_name?.length) label += ` by ${book.author_name.join(", ")}`;
+  if (book.first_publish_year) label += ` (${book.first_publish_year})`;
+  return label;
+}
+
+function isExpiredSession(err: unknown) {
+  return (
+    err instanceof Error &&
+    err.cause instanceof ApiRequestError &&
+    err.cause.status === 401
+  );
+}
+
+// a valid row's match, or "pending" while it hasn't been looked up
+type RowMatch = ImportMatch | { status: "pending" };
+
 function ImportBooksPage() {
   const [file, setFile] = useState<File | null>(null); // the chosen file, only set when it passes the checks
   const [error, setError] = useState(""); // problem with the chosen file or reading it
   const [reading, setReading] = useState(false); // whether the file is being read
   const [parsed, setParsed] = useState<ValidateImportResult | null>(null); // the valid rows and row errors found in the file
   const [readyName, setReadyName] = useState(""); // name of the file that was read
+  const [matches, setMatches] = useState<RowMatch[]>([]); // one per valid row
+  const [progress, setProgress] = useState<{ done: number; total: number }>(); // set while rows are being matched
+  const [picks, setPicks] = useState<Record<number, string>>({}); // row number → book key chosen for an ambiguous row
   const [importing, setImporting] = useState(false); // whether the books are being saved to the library
   const [result, setResult] = useState<ImportBooksResponse | null>(null); // counts returned after importing
+  const matchController = useRef<AbortController | null>(null);
+
+  useEffect(() => () => matchController.current?.abort(), []);
+
+  function stopMatching() {
+    matchController.current?.abort();
+    matchController.current = null;
+    setProgress(undefined);
+  }
 
   // choosing (or clearing) a file replaces any previous result
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
     const chosen = event.target.files?.[0] ?? null;
+    stopMatching();
     setParsed(null);
     setReadyName("");
+    setMatches([]);
+    setPicks({});
     setResult(null);
     setError("");
     setFile(null);
@@ -42,21 +91,77 @@ function ImportBooksPage() {
     else setError(check.error);
   }
 
-  const total = parsed ? parsed.valid.length + parsed.errors.length : 0;
-  // only rows with an Open Library work key can be saved until title matching (IMP-02) exists
-  const importable = parsed?.valid.filter((row) => row.book_key) ?? [];
-  const unmatched = (parsed?.valid.length ?? 0) - importable.length;
+  // look up the valid rows at these indexes, one batch at a time
+  async function matchRows(rows: ImportRow[], indexes: number[]) {
+    stopMatching();
+    if (indexes.length === 0) return;
+    const controller = new AbortController();
+    matchController.current = controller;
+    setError("");
+    setMatches((prev) => {
+      const next = [...prev];
+      for (const i of indexes) next[i] = { status: "pending" };
+      return next;
+    });
+    setProgress({ done: 0, total: indexes.length });
+
+    for (
+      let start = 0;
+      start < indexes.length;
+      start += IMPORT_MATCH_BATCH_SIZE
+    ) {
+      const batch = indexes.slice(start, start + IMPORT_MATCH_BATCH_SIZE);
+      let results: ImportMatch[];
+      let expired = false;
+      try {
+        results = await matchImportRows(
+          batch.map((i) => {
+            const { title, author, isbn } = rows[i]!;
+            return { title, author, isbn };
+          }),
+          controller.signal,
+        );
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        expired = isExpiredSession(err);
+        if (expired) setError((err as Error).message);
+        results = batch.map(() => ({ status: "failed" }));
+      }
+      if (controller.signal.aborted) return;
+
+      // after an expired session, the rest of the rows are left failed too
+      const settled = expired ? indexes.slice(start) : batch;
+      setMatches((prev) => {
+        const next = [...prev];
+        settled.forEach((i, j) => {
+          next[i] = results[j] ?? { status: "failed" };
+        });
+        return next;
+      });
+      if (expired) break;
+      setProgress({ done: start + batch.length, total: indexes.length });
+    }
+
+    matchController.current = null;
+    setProgress(undefined);
+  }
 
   async function handleUpload() {
     if (!file) return;
+    stopMatching();
     setReading(true);
     setError("");
     setReadyName("");
+    setMatches([]);
+    setPicks({});
     setResult(null);
+    let valid: ImportRow[] = [];
     try {
       const result = parseImportCsv(await file.text());
       if (result.ok) {
-        setParsed(validateImportRows(result.rows));
+        const validated = validateImportRows(result.rows);
+        valid = validated.valid;
+        setParsed(validated);
         setReadyName(file.name);
       } else {
         setParsed(null);
@@ -67,13 +172,44 @@ function ImportBooksPage() {
     } finally {
       setReading(false);
     }
+
+    // rows with a book_key are already matched
+    setMatches(
+      valid.map((row) =>
+        row.book_key
+          ? { status: "matched", book: { key: row.book_key, title: row.title } }
+          : { status: "pending" },
+      ),
+    );
+    const unkeyed = valid.flatMap((row, i) => (row.book_key ? [] : [i]));
+    await matchRows(valid, unkeyed);
   }
+
+  const valid = parsed?.valid ?? [];
+  const total = parsed ? valid.length + parsed.errors.length : 0;
+  const matching = progress !== undefined;
+  const indexesWith = (status: RowMatch["status"]) =>
+    matches.flatMap((match, i) => (match.status === status ? [i] : []));
+  const matchedCount = indexesWith("matched").length;
+  const failed = indexesWith("failed");
+  const missing = indexesWith("none");
+  const ambiguous = indexesWith("ambiguous");
+
+  const bookKeys = [
+    ...new Set(
+      matches.flatMap((match, i) => {
+        if (match.status === "matched") return [match.book.key];
+        const pick = picks[valid[i]?.row ?? -1];
+        return match.status === "ambiguous" && pick ? [pick] : [];
+      }),
+    ),
+  ];
 
   async function handleImport() {
     setImporting(true);
     setError("");
     try {
-      setResult(await importBooks(importable.map((row) => row.book_key)));
+      setResult(await importBooks(bookKeys));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not import.");
     } finally {
@@ -110,7 +246,7 @@ function ImportBooksPage() {
         {result ? (
           <>
             <p className="import-status" role="status">
-              {`Imported ${result.added} ${result.added === 1 ? "book" : "books"}. ${result.alreadySaved} already in your library.`}
+              {`Imported ${books(result.added)}. ${result.alreadySaved} already in your library.`}
             </p>
             <Link className="import-link" to="/personal-library">
               Go to My Library
@@ -119,17 +255,89 @@ function ImportBooksPage() {
         ) : (
           readyName &&
           parsed && (
-            <p className="import-status" role="status">
-              {parsed.valid.length} of {total}{" "}
-              {total === 1 ? "book is" : "books are"} valid.
-            </p>
+            <div className="import-status" role="status">
+              <p>
+                {valid.length} of {total}{" "}
+                {total === 1 ? "book is" : "books are"} valid.
+              </p>
+              {progress ? (
+                <p>
+                  Matching books… {progress.done} of {progress.total}
+                </p>
+              ) : (
+                valid.length > 0 && <p>{books(matchedCount)} matched.</p>
+              )}
+            </div>
           )
         )}
 
-        {parsed && !result && unmatched > 0 && (
-          <p>
-            {`${unmatched} ${unmatched === 1 ? "book has" : "books have"} no book_key and will be skipped.`}
-          </p>
+        {parsed && !result && !matching && (
+          <>
+            {ambiguous.length > 0 && (
+              <section aria-labelledby="import-pick-title">
+                <h2 id="import-pick-title">Pick the right book</h2>
+                <ul className="import-picks">
+                  {ambiguous.map((i) => {
+                    const row = valid[i]!;
+                    const match = matches[i] as Extract<
+                      RowMatch,
+                      { status: "ambiguous" }
+                    >;
+                    return (
+                      <li key={row.row}>
+                        <label className="import-field">
+                          <span>{rowLabel(row)}</span>
+                          <select
+                            value={picks[row.row] ?? ""}
+                            onChange={(event) =>
+                              setPicks((prev) => ({
+                                ...prev,
+                                [row.row]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Skip this book</option>
+                            {match.candidates.map((book) => (
+                              <option key={book.key} value={book.key}>
+                                {candidateLabel(book)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+
+            {missing.length > 0 && (
+              <section aria-labelledby="import-missing-title">
+                <h2 id="import-missing-title">No match found</h2>
+                <ul
+                  className="import-missing"
+                  aria-labelledby="import-missing-title"
+                >
+                  {missing.map((i) => (
+                    <li key={valid[i]!.row}>{rowLabel(valid[i]!)}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {failed.length > 0 && (
+              <div className="import-failed">
+                <p>Could not look up {books(failed.length)}.</p>
+                <button
+                  className="import-secondary"
+                  type="button"
+                  onClick={() => void matchRows(valid, failed)}
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {parsed && !result && parsed.errors.length > 0 && (
@@ -159,12 +367,10 @@ function ImportBooksPage() {
           <button
             className="import-upload"
             type="button"
-            disabled={importable.length === 0 || importing}
+            disabled={bookKeys.length === 0 || importing || matching}
             onClick={() => void handleImport()}
           >
-            {importing
-              ? "Importing…"
-              : `Import ${importable.length} ${importable.length === 1 ? "book" : "books"}`}
+            {importing ? "Importing…" : `Import ${books(bookKeys.length)}`}
           </button>
         )}
       </div>
