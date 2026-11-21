@@ -317,7 +317,7 @@ describe("ImportBooksPage", () => {
     ).toBeDisabled();
 
     finish();
-    expect(await screen.findByText("30 books matched.")).toBeInTheDocument();
+    expect(await importButton("30 books")).toBeEnabled();
     expect(sentTitles()).toEqual([titles.slice(0, 25), titles.slice(25)]);
     expect(matchMock.mock.calls[0]?.[0][0]).toEqual({
       title: "match:1",
@@ -329,12 +329,12 @@ describe("ImportBooksPage", () => {
   it("IMP-02-T-3 skips matching for rows with a book key", async () => {
     setup();
     await uploadCsv("title,book_key\nDune,/works/OL9W\nmatch:1,\n");
-    expect(await screen.findByText("2 books matched.")).toBeInTheDocument();
+    expect(await importButton("2 books")).toBeEnabled();
     expect(sentTitles()).toEqual([["match:1"]]);
 
     matchMock.mockClear();
     await uploadCsv("title,book_key\nDune,/works/OL9W\n");
-    expect(await screen.findByText("1 book matched.")).toBeInTheDocument();
+    expect(await importButton("1 book")).toBeEnabled();
     expect(matchMock).not.toHaveBeenCalled();
   });
 
@@ -421,7 +421,7 @@ describe("ImportBooksPage", () => {
     expect(await importButton("1 book")).toBeEnabled();
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("2 books matched.")).toBeInTheDocument();
+    expect(await importButton("2 books")).toBeEnabled();
     expect(sentTitles()).toEqual([["match:1", "match:2"], ["match:1"]]);
     expect(screen.queryByText(/Could not look up/)).not.toBeInTheDocument();
   });
@@ -432,8 +432,12 @@ describe("ImportBooksPage", () => {
     const titles = Array.from({ length: 26 }, (_, i) => `match:${i + 1}`);
     await uploadCsv(`title\n${titles.join("\n")}\n`);
 
-    expect(await screen.findByText("1 book matched.")).toBeInTheDocument();
-    expect(screen.getByText("Could not look up 25 books.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Could not look up 25 books."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Import 1 book" }),
+    ).toBeInTheDocument();
     expect(matchMock).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

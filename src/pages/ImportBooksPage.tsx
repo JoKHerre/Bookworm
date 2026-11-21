@@ -190,7 +190,6 @@ function ImportBooksPage() {
   const matching = progress !== undefined;
   const indexesWith = (status: RowMatch["status"]) =>
     matches.flatMap((match, i) => (match.status === status ? [i] : []));
-  const matchedCount = indexesWith("matched").length;
   const failed = indexesWith("failed");
   const missing = indexesWith("none");
   const ambiguous = indexesWith("ambiguous");
@@ -260,12 +259,10 @@ function ImportBooksPage() {
                 {valid.length} of {total}{" "}
                 {total === 1 ? "book is" : "books are"} valid.
               </p>
-              {progress ? (
+              {progress && (
                 <p>
                   Matching books… {progress.done} of {progress.total}
                 </p>
-              ) : (
-                valid.length > 0 && <p>{books(matchedCount)} matched.</p>
               )}
             </div>
           )
