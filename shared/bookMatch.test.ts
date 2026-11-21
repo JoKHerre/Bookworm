@@ -105,6 +105,30 @@ test("IMP-02-T-1 reports ambiguous titles", () => {
   expect(
     matchTitle({ title: "Emma", author: "Jane Austen" }, [other, austen]),
   ).toStrictEqual({ status: "matched", book: austen });
+  // edition counts pick a clear favourite
+  const withEditions = (b: BookSearchResult, edition_count: number) => ({
+    ...b,
+    edition_count,
+  });
+  const eyre = withEditions(
+    book("OL20W", "Jane Eyre", ["Charlotte Brontë"]),
+    1170,
+  );
+  const guide = withEditions(book("OL21W", "Jane Eyre", ["Maggie Berg"]), 85);
+  expect(
+    matchTitle({ title: "Jane Eyre", author: "" }, [guide, eyre]),
+  ).toStrictEqual({ status: "matched", book: eyre });
+  for (const [top, rival] of [
+    [12, 3],
+    [9, 1],
+  ]) {
+    expect(
+      matchTitle({ title: "Jane Eyre", author: "" }, [
+        withEditions(eyre, top!),
+        withEditions(guide, rival!),
+      ]).status,
+    ).toBe("ambiguous");
+  }
 });
 
 test("IMP-02-T-1 reports no match", () => {

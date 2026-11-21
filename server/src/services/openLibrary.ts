@@ -272,7 +272,7 @@ const MATCH_CONCURRENCY = 3;
 function searchForMatch(params: Record<string, string>, signal: AbortSignal) {
   const query = new URLSearchParams({
     ...params,
-    fields: "key,title,author_name,first_publish_year,cover_i",
+    fields: "key,title,author_name,first_publish_year,cover_i,edition_count",
   });
   const path = `/search.json?${query.toString()}`;
   return matchSearchCache.get(

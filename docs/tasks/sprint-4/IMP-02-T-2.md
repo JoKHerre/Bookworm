@@ -20,7 +20,7 @@ Serves IMP-02 (match imported titles with known books so users don't have to fil
 - For each row, in `server/src/services/openLibrary.ts`:
   - With an ISBN, search `/search.json?isbn=<isbn>&limit=1`. A result returns `matched` with that work.
   - Otherwise, or when the ISBN finds nothing, search `/search.json?title=<title>&author=<author>` (no `author` when empty) for 10 results, and return `matchTitle(row, docs)`.
-  - Both searches use the fields `key,title,author_name,first_publish_year,cover_i`.
+  - Both searches use the fields `key,title,author_name,first_publish_year,cover_i,edition_count` (the edition count feeds the clear-favourite rule from IMP-02-T-1).
   - If Open Library fails or times out for a row, that row is `failed` and the others still return.
 - Run at most 3 rows at a time, and cache each search for an hour with the existing `PromiseCache`. Stop the remaining lookups if the client disconnects.
 - Add `matchImportRows(rows, signal?)` in `src/api/books.ts`. It validates the response with Zod and returns the results. A 401 throws "Your session has expired. Please log in again."; any other failure throws "Could not match these books."

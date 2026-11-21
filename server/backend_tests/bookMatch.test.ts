@@ -165,7 +165,7 @@ test("IMP-02-T-2 falls back to title search", async () => {
   assert.equal(search?.get("limit"), "10");
   assert.equal(
     search?.get("fields"),
-    "key,title,author_name,first_publish_year,cover_i",
+    "key,title,author_name,first_publish_year,cover_i,edition_count",
   );
 });
 

@@ -114,6 +114,8 @@ export const bookSearchResult = z.object({
   author_name: z.array(z.string()).optional(),
   first_publish_year: z.number().optional(),
   cover_i: z.number().optional(),
+  // only requested when matching imported books
+  edition_count: z.number().optional(),
 });
 
 export type BookSearchResult = z.infer<typeof bookSearchResult>;
