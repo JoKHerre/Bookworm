@@ -10,6 +10,10 @@
 import type { BookSearchResult } from "./books.ts";
 
 export const MATCH_MAX_CANDIDATES = 5;
+// A title-only row goes to the book with the most editions when it has at
+// least this many, and this many times more than any book by another author.
+export const MATCH_MIN_EDITIONS = 10;
+export const MATCH_EDITION_RATIO = 5;
 
 export type TitleMatch =
   | { status: "matched"; book: BookSearchResult }
@@ -65,6 +69,29 @@ export function authorsMatch(
   });
 }
 
+// by surname, so "Herman Hesse" and "Hermann Hesse" are one author
+function authorKey(book: BookSearchResult) {
+  return surname(normalizeAuthor(book.author_name?.[0] ?? ""));
+}
+
+// the candidate with far more editions than any book by another author
+function clearFavourite(candidates: readonly BookSearchResult[]) {
+  const editions = (book: BookSearchResult) => book.edition_count ?? 0;
+  const top = candidates.reduce((best, book) =>
+    editions(book) > editions(best) ? book : best,
+  );
+  const rival = Math.max(
+    0,
+    ...candidates
+      .filter((book) => authorKey(book) !== authorKey(top))
+      .map(editions),
+  );
+  return editions(top) >= MATCH_MIN_EDITIONS &&
+    editions(top) >= MATCH_EDITION_RATIO * rival
+    ? top
+    : undefined;
+}
+
 // candidates are in Open Library's search order
 export function matchTitle(
   row: { title: string; author: string },
@@ -80,9 +107,7 @@ export function matchTitle(
   // different authors make a row without an author ambiguous
   const byAuthor = new Map<string, BookSearchResult>();
   for (const book of passing) {
-    // by surname, so "Herman Hesse" and "Hermann Hesse" are one author
-    const author = surname(normalizeAuthor(book.author_name?.[0] ?? ""));
-    if (!byAuthor.has(author)) byAuthor.set(author, book);
+    if (!byAuthor.has(authorKey(book))) byAuthor.set(authorKey(book), book);
   }
 
   const [first] = passing;
@@ -90,6 +115,9 @@ export function matchTitle(
   if (row.author.trim() || byAuthor.size === 1) {
     return { status: "matched", book: first };
   }
+
+  const favourite = clearFavourite(passing);
+  if (favourite) return { status: "matched", book: favourite };
   return {
     status: "ambiguous",
     candidates: [...byAuthor.values()].slice(0, MATCH_MAX_CANDIDATES),
