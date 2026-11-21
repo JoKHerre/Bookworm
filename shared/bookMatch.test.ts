@@ -71,6 +71,15 @@ test("IMP-02-T-1 matches one author's book", () => {
       adaptation,
     ]),
   ).toStrictEqual({ status: "matched", book: novel });
+
+  // spellings of one author's name
+  const hesse = book("OL6W", "Siddhartha", ["Hermann Hesse"]);
+  expect(
+    matchTitle({ title: "Siddhartha", author: "" }, [
+      hesse,
+      book("OL7W", "Siddhartha", ["Herman Hesse"]),
+    ]),
+  ).toStrictEqual({ status: "matched", book: hesse });
 });
 
 test("IMP-02-T-1 reports ambiguous titles", () => {
