@@ -248,14 +248,16 @@ function ImportBooksPage() {
           </p>
         )}
 
-        <button
-          className={parsed ? "import-secondary" : "import-upload"}
-          type="button"
-          disabled={!file || reading}
-          onClick={() => void handleUpload()}
-        >
-          {reading ? "Reading…" : "Upload"}
-        </button>
+        {!result && (
+          <button
+            className={parsed ? "import-secondary" : "import-upload"}
+            type="button"
+            disabled={!file || reading}
+            onClick={() => void handleUpload()}
+          >
+            {reading ? "Reading…" : "Upload"}
+          </button>
+        )}
 
         {error && (
           <p className="import-error" role="alert">
@@ -381,11 +383,11 @@ function ImportBooksPage() {
           </section>
         )}
 
-        {parsed && !result && (
+        {!result && bookKeys.length > 0 && (
           <button
             className="import-upload"
             type="button"
-            disabled={bookKeys.length === 0 || importing || matching}
+            disabled={importing || matching}
             onClick={() => void handleImport()}
           >
             {importing ? "Importing…" : `Import ${books(bookKeys.length)}`}
