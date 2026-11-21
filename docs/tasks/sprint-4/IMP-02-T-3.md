@@ -15,10 +15,10 @@ Serves IMP-02 (match imported titles with known books so users don't have to fil
 ## Specs
 
 - In `src/pages/ImportBooksPage.tsx`, after a file is read and validated, valid rows with a `book_key` count as matched. The rest are sent to `matchImportRows` in batches of `IMPORT_MATCH_BATCH_SIZE`, one batch at a time. While this runs, a `role="status"` line shows "Matching books… <done> of <total>".
-- When a batch request fails, its rows count as failed and later batches still run. A 401 stops matching and shows the error in the `role="alert"` element.
+- When a batch request fails, its rows count as failed and later batches still run. A 401 stops matching and shows the error in the `role="alert"` element. The rows it left unmatched count as failed, without the "Try again" button, since retrying can't work until the user logs in again.
 - Choosing another file aborts matching that is still running.
 - When matching is done, show:
-  - A "Pick the right book" section for ambiguous rows. Each row shows its title (and author, if any) as the label of a select. Each candidate's option reads "Author (Year)", with the candidate's title in front when it differs from the row's or the candidate has no author. "Skip this book" is the first option and the default. Rows that are left ambiguous after the IMP-02-T-1 rules are ones Open Library can't settle, so nothing is chosen for the user.
+  - A "Pick the right book" section for ambiguous rows. Each row shows its title (and author, if any) as the label of a select. Each candidate's option reads "Author (Year)", with "Unknown author" when it has none, and the candidate's title in front when it differs from the row's. "Skip this book" is the first option and the default. Rows that are left ambiguous after the IMP-02-T-1 rules are ones Open Library can't settle, so nothing is chosen for the user.
   - A "No match found" section listing the title (and author) of each row with no match.
   - For failed rows, a "Could not look up <n> books" section (singular "1 book") listing their titles (and authors), and a "Try again" button that re-runs matching for those rows only.
 - The "Import <n> books" button counts the unique keys of matched rows and ambiguous rows with a chosen book, and imports them. It is disabled while matching runs. The message about rows lacking a `book_key` is removed.
@@ -51,5 +51,5 @@ Tested in `src/pages/ImportBooksPage.test.tsx` with Testing Library, mocking `sr
 | `IMP-02-T-3 lists books with no match`               | A `none` row appears under "No match found" and isn't imported               | 4         |
 | `IMP-02-T-3 retries failed rows`                     | A failed row is listed; "Try again" sends only that row and matches it       | 5         |
 | `IMP-02-T-3 keeps going after a failed batch`        | First batch rejects, second resolves; both are accounted for                 | 5         |
-| `IMP-02-T-3 stops matching on an expired session`    | A 401 shows the session message and makes no more calls                      | 5         |
+| `IMP-02-T-3 stops matching on an expired session`    | A 401 shows the session message, makes no more calls and offers no retry     | 5         |
 | `IMP-02-T-3 aborts matching when the file changes`   | Choosing a new file aborts the pending request's signal                      | 6         |
