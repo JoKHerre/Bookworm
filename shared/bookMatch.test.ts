@@ -58,6 +58,19 @@ test("IMP-02-T-1 matches one author's book", () => {
   expect(
     matchTitle({ title: "Dune", author: "Herbert, Frank" }, candidates),
   ).toStrictEqual({ status: "matched", book: first });
+
+  // an adaptation lists another author first
+  const adaptation = book("OL4W", "The Hobbit", [
+    "Charles Dixon",
+    "J.R.R. Tolkien",
+  ]);
+  const novel = book("OL5W", "The Hobbit", ["J.R.R. Tolkien"]);
+  expect(
+    matchTitle({ title: "The Hobbit", author: "Tolkien, J.R.R." }, [
+      novel,
+      adaptation,
+    ]),
+  ).toStrictEqual({ status: "matched", book: novel });
 });
 
 test("IMP-02-T-1 reports ambiguous titles", () => {
