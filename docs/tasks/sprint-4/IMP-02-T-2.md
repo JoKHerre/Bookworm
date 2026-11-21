@@ -14,7 +14,7 @@ Serves IMP-02 (match imported titles with known books so users don't have to fil
 
 ## Specs
 
-- Add `IMPORT_MATCH_BATCH_SIZE` = 25 and the request and response types to `shared/bookMatch.ts`. The body schema is `{ "rows": { "title": string, "author": string, "isbn": string }[] }` with `.strict()` on both levels: 1 to 25 rows, a non-empty title, and `isbn` empty or a valid ISBN-10/13 (reuse `hasValidIsbnChecksum`). Rows with a `book_key` are not sent.
+- Add `IMPORT_MATCH_BATCH_SIZE` = 6 (two rounds of the 3 concurrent lookups, so the page can show progress often) and the request and response types to `shared/bookMatch.ts`. The body schema is `{ "rows": { "title": string, "author": string, "isbn": string }[] }` with `.strict()` on both levels: 1 to 6 rows, a non-empty title, and `isbn` empty or a valid ISBN-10/13 (reuse `hasValidIsbnChecksum`). Rows with a `book_key` are not sent.
 - Add `POST /api/books/match`, behind `requireAuth`. An invalid body returns 400 `{ "error": "Invalid match request" }`; no session returns 401.
 - It returns 200 `{ "results": ImportMatch[] }`, one per row in request order, where `ImportMatch` is a `TitleMatch` or `{ "status": "failed" }`.
 - For each row, in `server/src/services/openLibrary.ts`:
@@ -32,7 +32,7 @@ Serves IMP-02 (match imported titles with known books so users don't have to fil
 
 ## Acceptance criteria
 
-1. An unauthenticated request returns 401; invalid bodies (empty rows, 26 rows, missing title, a bad ISBN, extra fields) return 400 and make no Open Library calls.
+1. An unauthenticated request returns 401; invalid bodies (empty rows, 7 rows, missing title, a bad ISBN, extra fields) return 400 and make no Open Library calls.
 2. A row with an ISBN Open Library knows is matched to that work without a title search.
 3. A row whose ISBN finds nothing, or that has no ISBN, is matched by title and author using `matchTitle`, so results can be matched, ambiguous or none.
 4. A failed Open Library call marks only that row as failed.

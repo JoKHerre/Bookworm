@@ -13,7 +13,7 @@ import { MAX_AUTHOR_LENGTH, MAX_TITLE_LENGTH } from "./csvImport.ts";
 import { hasValidIsbnChecksum } from "./isbn.ts";
 
 export const MATCH_MAX_CANDIDATES = 5;
-export const IMPORT_MATCH_BATCH_SIZE = 25;
+export const IMPORT_MATCH_BATCH_SIZE = 6;
 
 // POST /api/books/match. Rows with a book_key are not sent.
 export const matchImportRequest = z
@@ -125,7 +125,8 @@ export function matchTitle(
   // different authors make a row without an author ambiguous
   const byAuthor = new Map<string, BookSearchResult>();
   for (const book of passing) {
-    const author = normalizeAuthor(book.author_name?.[0] ?? "");
+    // by surname, so "Herman Hesse" and "Hermann Hesse" are one author
+    const author = surname(normalizeAuthor(book.author_name?.[0] ?? ""));
     if (!byAuthor.has(author)) byAuthor.set(author, book);
   }
 
