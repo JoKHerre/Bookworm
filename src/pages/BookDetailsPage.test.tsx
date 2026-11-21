@@ -639,6 +639,7 @@ describe("BookDetailsPage", () => {
           { route: "/books/works/OL1W" },
         );
         await screen.findByRole("region", { name: "Similar books" });
+        await waitFor(() => expect(getSimilarBooks).toHaveBeenCalledTimes(1));
         const oldSignal = vi.mocked(getSimilarBooks).mock.calls[0]?.[1];
 
         await userEvent.click(
@@ -675,6 +676,7 @@ describe("BookDetailsPage", () => {
       vi.mocked(getSimilarBooks).mockReturnValueOnce(new Promise(() => {}));
       const { unmount } = renderDetails();
       await screen.findByRole("region", { name: "Similar books" });
+      await waitFor(() => expect(getSimilarBooks).toHaveBeenCalledTimes(1));
       const signal = vi.mocked(getSimilarBooks).mock.calls[0]?.[1];
       expect(signal?.aborted).toBe(false);
 
