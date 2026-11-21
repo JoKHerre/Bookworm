@@ -7,9 +7,54 @@
 // 3. Otherwise, or if the ISBN finds nothing, the title and author search
 //    results are matched with matchTitle.
 
-import type { BookSearchResult } from "./books.ts";
+import z from "zod";
+import { bookSearchResult, type BookSearchResult } from "./books.ts";
+import { MAX_AUTHOR_LENGTH, MAX_TITLE_LENGTH } from "./csvImport.ts";
+import { hasValidIsbnChecksum } from "./isbn.ts";
 
 export const MATCH_MAX_CANDIDATES = 5;
+export const IMPORT_MATCH_BATCH_SIZE = 25;
+
+// POST /api/books/match. Rows with a book_key are not sent.
+export const matchImportRequest = z
+  .object({
+    rows: z
+      .array(
+        z
+          .object({
+            title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
+            author: z.string().trim().max(MAX_AUTHOR_LENGTH),
+            isbn: z
+              .string()
+              .refine((isbn) => isbn === "" || hasValidIsbnChecksum(isbn)),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(IMPORT_MATCH_BATCH_SIZE),
+  })
+  .strict();
+
+export type MatchImportRow = z.infer<typeof matchImportRequest>["rows"][number];
+
+export const importMatch = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("matched"), book: bookSearchResult }),
+  z.object({
+    status: z.literal("ambiguous"),
+    candidates: z.array(bookSearchResult),
+  }),
+  z.object({ status: z.literal("none") }),
+  // Open Library failed for this row
+  z.object({ status: z.literal("failed") }),
+]);
+
+export type ImportMatch = z.infer<typeof importMatch>;
+
+export const matchImportResponse = z.object({
+  results: z.array(importMatch),
+});
+
+export type MatchImportResponse = z.infer<typeof matchImportResponse>;
 
 export type TitleMatch =
   | { status: "matched"; book: BookSearchResult }
