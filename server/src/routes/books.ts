@@ -12,6 +12,11 @@ import {
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 
+import { requireAuth } from "../auth/middleware.ts";
+import {
+  matchImportRequest,
+  type MatchImportResponse,
+} from "../../../shared/bookMatch.ts";
 import { checkBookAvailability } from "../services/bookAvailability.ts";
 import type { AvailabilityResponse } from "../../../shared/availability.ts";
 
@@ -21,6 +26,7 @@ import {
   getBookDetails,
   getISBNsForWork,
   getSimilarBooks,
+  matchImportRows,
   OpenLibraryError,
 } from "../services/openLibrary.ts";
 
@@ -144,6 +150,38 @@ booksRouter.get(
         return;
       }
       res.status(502).json({ error: "Unable to retrieve similar books" });
+    } finally {
+      res.off("close", onClose);
+    }
+  },
+);
+
+// match imported rows to Open Library works (the book importer)
+booksRouter.post(
+  "/match",
+  requireAuth,
+  async (req, res: Response<MatchImportResponse | ApiError>) => {
+    const parsed = matchImportRequest.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid match request" });
+      return;
+    }
+
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.once("close", onClose);
+
+    try {
+      const results = await matchImportRows(
+        parsed.data.rows,
+        controller.signal,
+      );
+      if (!res.destroyed) res.json({ results });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      throw error;
     } finally {
       res.off("close", onClose);
     }

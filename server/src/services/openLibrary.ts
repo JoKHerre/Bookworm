@@ -25,6 +25,11 @@ import {
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 import { toTags } from "../../../shared/tags.ts";
+import {
+  matchTitle,
+  type ImportMatch,
+  type MatchImportRow,
+} from "../../../shared/bookMatch.ts";
 import { PromiseCache } from "./cache.ts";
 import {
   getSimilarityProfile,
@@ -56,12 +61,18 @@ const authorNameCache = new PromiseCache<string | undefined>(
 );
 // the same for every user, so one cached list per genre
 const genreBooksCache = new PromiseCache<BookSearchResult[]>(CACHE_TTL_MS, 20);
+// search results for imported rows, keyed by request path
+const matchSearchCache = new PromiseCache<BookSearchResult[]>(
+  CACHE_TTL_MS,
+  2000,
+);
 
 // For tests that stub fetch with different responses for the same key.
 export function clearOpenLibraryCache() {
   workCache.clear();
   authorNameCache.clear();
   genreBooksCache.clear();
+  matchSearchCache.clear();
 }
 
 export class OpenLibraryError extends Error {
@@ -256,6 +267,73 @@ export async function getSimilarBooks(
 }
 
 // Well-rated books for a genre, best first.
+const MATCH_CONCURRENCY = 3;
+
+function searchForMatch(params: Record<string, string>, signal: AbortSignal) {
+  const query = new URLSearchParams({
+    ...params,
+    fields: "key,title,author_name,first_publish_year,cover_i",
+  });
+  const path = `/search.json?${query.toString()}`;
+  return matchSearchCache.get(
+    path,
+    async (loadSignal) => {
+      const data = await fetchOpenLibrary(
+        path,
+        openLibrarySearchResponse,
+        loadSignal,
+      );
+      // only works can be saved to a library
+      return data.docs.filter(
+        (doc) => openLibraryWorkKey.safeParse(doc.key).success,
+      );
+    },
+    signal,
+  );
+}
+
+async function matchImportRow(
+  row: MatchImportRow,
+  signal: AbortSignal,
+): Promise<ImportMatch> {
+  try {
+    if (row.isbn) {
+      const [book] = await searchForMatch(
+        { isbn: row.isbn, limit: "1" },
+        signal,
+      );
+      if (book) return { status: "matched", book };
+    }
+
+    const params: Record<string, string> = { title: row.title, limit: "10" };
+    if (row.author) params.author = row.author;
+    return matchTitle(row, await searchForMatch(params, signal));
+  } catch (error) {
+    if (signal.aborted) throw error;
+    console.error("Import match error:", { title: row.title, error });
+    return { status: "failed" };
+  }
+}
+
+// Results are in row order. Throws only when the signal aborts.
+export async function matchImportRows(
+  rows: readonly MatchImportRow[],
+  signal: AbortSignal,
+): Promise<ImportMatch[]> {
+  const results: ImportMatch[] = [];
+  let next = 0;
+  async function worker() {
+    while (next < rows.length) {
+      const index = next++;
+      results[index] = await matchImportRow(rows[index]!, signal);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(MATCH_CONCURRENCY, rows.length) }, worker),
+  );
+  return results;
+}
+
 export function getGenreBooks(
   genre: BookGenre,
   signal?: AbortSignal,
