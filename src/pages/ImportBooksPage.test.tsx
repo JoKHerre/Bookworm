@@ -243,8 +243,8 @@ describe("ImportBooksPage", () => {
     await userEvent.click(upload());
     await screen.findByRole("status");
     expect(
-      screen.getByRole("button", { name: "Import 0 books" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^Import/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("IMP-01-T-5 page imports and shows the result", async () => {
@@ -267,6 +267,10 @@ describe("ImportBooksPage", () => {
     expect(
       screen.getByRole("link", { name: "Go to My Library" }),
     ).toHaveAttribute("href", "/personal-library");
+    // a finished import can't be read and imported again
+    expect(
+      screen.queryByRole("button", { name: "Upload" }),
+    ).not.toBeInTheDocument();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/library/import");
     expect(JSON.parse(init.body as string)).toEqual({
@@ -315,8 +319,8 @@ describe("ImportBooksPage", () => {
       "Matching books… 0 of 8",
     );
     expect(
-      screen.getByRole("button", { name: "Import 0 books" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^Import/ }),
+    ).not.toBeInTheDocument();
 
     finish();
     expect(await importButton("8 books")).toBeEnabled();
@@ -388,8 +392,8 @@ describe("ImportBooksPage", () => {
       within(section).getByRole("combobox", { name: "pick:10" }),
     ).toHaveValue("");
     expect(
-      screen.getByRole("button", { name: "Import 0 books" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: /^Import/ }),
+    ).not.toBeInTheDocument();
 
     await userEvent.selectOptions(first, "/works/OL6W");
     await userEvent.click(await importButton("1 book"));
