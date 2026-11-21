@@ -38,10 +38,17 @@ Serves SRC-05 (exclude genres and content warnings from search results). Add a b
 
 ## Tests
 
-Implemented in `shared/contentWarnings.test.ts`.
+Groups summarize shared schema tests and backend tests using mocked requests and HTML fixtures.
 
-| Test name                                                | Setup                                                                     | Asserts                                                                           | Criterion |
-| -------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------- |
-| SRC-05-T-1 shares unique selectable warning IDs          | Check catalogue IDs, labels and inferred type; try an unsupported ID      | IDs are unique and typed; labels nonempty; unsupported ID rejected                | 4         |
-| SRC-05-T-1 validates found warnings and source URLs      | Validate found responses, then invalid warnings, IDs and URLs             | Valid responses accepted, including unmapped warnings; invalid responses rejected | 1, 4      |
-| SRC-05-T-1 validates not_found and unavailable responses | Validate `not_found` and `unavailable` responses, then malformed variants | Valid statuses and source URLs accepted; malformed variants rejected              | 5         |
+| Test group                                                       | Setup                                                    | Asserts                                                                                          | Criterion |
+| ---------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------- |
+| SRC-05-T-1 validates shared schemas                              | Check IDs, labels and response variants                  | Unique typed IDs; valid responses accepted; invalid responses rejected                           | 1, 4, 5   |
+| SRC-05-T-1 returns warnings for a matched or merged work         | Request merged work twice; look up supplied metadata     | Warnings and source URL returned; metadata cached; supplied metadata needs no Open Library calls | 1, 6      |
+| SRC-05-T-1 rejects invalid keys and reports Open Library errors  | Invalid keys; upstream 404 or 500                        | 400 without upstream calls; 404 or 502 for upstream errors                                       | 2         |
+| SRC-05-T-1 matches only title and book author                    | Wrong books before match; wrong title or author          | Correct book accepted; no match returns not_found                                                | 3         |
+| SRC-05-T-1 maps warning tags to categories                       | Gatsby fixture; unsupported and unrelated tags           | Original wording and qualifiers retained; only supported entry tags produce IDs                  | 4         |
+| SRC-05-T-1 marks failed, incomplete or changed pages unavailable | Alter source pages; fail entry fetch, then recover       | Unavailable without warnings; failed result uncached; retry succeeds                             | 3, 5, 6   |
+| SRC-05-T-1 stays on the warning source                           | External entry link                                      | External page never fetched                                                                      | 6         |
+| SRC-05-T-1 caches and shares results until expiry                | Concurrent found/missing lookups; advance one hour       | Shared results cached, then refreshed                                                            | 3, 6      |
+| SRC-05-T-1 serializes requests and enforces time limits          | Hold body read; stall source requests and queued lookups | One active request; five-second request timeout; twenty-second lookup limit                      | 6         |
+| SRC-05-T-1 handles cancellation                                  | Disconnect endpoint caller during source read            | Source request aborted                                                                           | 6         |
