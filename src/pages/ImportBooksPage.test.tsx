@@ -28,7 +28,7 @@ function setup() {
 }
 
 // matches each row by its title: "match:<n>" is matched to /works/OL<n>W,
-// "pick:<n>" offers OL<n>W to OL<n+2>W, and anything else has no match
+// "pick:<n>" offers OL<n>W to OL<n+3>W, and anything else has no match
 function byTitle(rows: MatchImportRow[]): ImportMatch[] {
   return rows.map(({ title }) => {
     const [kind, n] = title.split(":");
@@ -42,6 +42,7 @@ function byTitle(rows: MatchImportRow[]): ImportMatch[] {
           book(Number(n), title, "Jane Austen", 1815),
           book(Number(n) + 1, title, "Emma Tennant"),
           book(Number(n) + 2, `${title}: Annotated`, "Jane Austen"),
+          book(Number(n) + 3, title.toUpperCase(), undefined, 2014),
         ],
       };
     }
@@ -381,6 +382,7 @@ describe("ImportBooksPage", () => {
       "Jane Austen (1815)",
       "Emma Tennant",
       "pick:5: Annotated by Jane Austen",
+      "Unknown author (2014)",
     ]);
     expect(
       within(section).getByRole("combobox", { name: "pick:10" }),
@@ -467,6 +469,9 @@ describe("ImportBooksPage", () => {
     expect(
       screen.getByRole("heading", { name: "Could not look up 7 books" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
   });
 
   it("IMP-02-T-3 aborts matching when the file changes", async () => {
