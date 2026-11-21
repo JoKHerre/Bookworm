@@ -7,6 +7,7 @@ import {
 } from "../../shared/bookImport";
 import {
   IMPORT_MATCH_BATCH_SIZE,
+  normalizeTitle,
   type ImportMatch,
 } from "../../shared/bookMatch";
 import type { BookSearchResult } from "../../shared/books";
@@ -34,9 +35,14 @@ function rowLabel(row: ImportRow) {
   return row.author ? `${row.title} by ${row.author}` : row.title;
 }
 
-function candidateLabel(book: BookSearchResult) {
-  let label = book.title;
-  if (book.author_name?.length) label += ` by ${book.author_name.join(", ")}`;
+// the row's title is already the select's label, so only show a candidate's
+// title when it says something new
+function candidateLabel(book: BookSearchResult, rowTitle: string) {
+  const author = book.author_name?.join(", ");
+  let label = author ?? book.title;
+  if (author && normalizeTitle(book.title) !== normalizeTitle(rowTitle)) {
+    label = `${book.title} by ${author}`;
+  }
   if (book.first_publish_year) label += ` (${book.first_publish_year})`;
   return label;
 }
@@ -236,6 +242,15 @@ function ImportBooksPage() {
           </p>
         )}
 
+        <button
+          className={parsed ? "import-secondary" : "import-upload"}
+          type="button"
+          disabled={!file || reading}
+          onClick={() => void handleUpload()}
+        >
+          {reading ? "Reading…" : "Upload"}
+        </button>
+
         {error && (
           <p className="import-error" role="alert">
             {error}
@@ -280,27 +295,27 @@ function ImportBooksPage() {
                       RowMatch,
                       { status: "ambiguous" }
                     >;
+                    const id = `import-pick-${row.row}`;
                     return (
-                      <li key={row.row}>
-                        <label className="import-pick">
-                          <span>{rowLabel(row)}</span>
-                          <select
-                            value={picks[row.row] ?? ""}
-                            onChange={(event) =>
-                              setPicks((prev) => ({
-                                ...prev,
-                                [row.row]: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Skip this book</option>
-                            {match.candidates.map((book) => (
-                              <option key={book.key} value={book.key}>
-                                {candidateLabel(book)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                      <li key={row.row} className="import-pick">
+                        <label htmlFor={id}>{rowLabel(row)}</label>
+                        <select
+                          id={id}
+                          value={picks[row.row] ?? ""}
+                          onChange={(event) =>
+                            setPicks((prev) => ({
+                              ...prev,
+                              [row.row]: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Skip this book</option>
+                          {match.candidates.map((book) => (
+                            <option key={book.key} value={book.key}>
+                              {candidateLabel(book, row.title)}
+                            </option>
+                          ))}
+                        </select>
                       </li>
                     );
                   })}
@@ -309,12 +324,9 @@ function ImportBooksPage() {
             )}
 
             {missing.length > 0 && (
-              <section aria-labelledby="import-missing-title">
-                <h2 id="import-missing-title">No match found</h2>
-                <ul
-                  className="import-missing"
-                  aria-labelledby="import-missing-title"
-                >
+              <section aria-labelledby="import-list-title">
+                <h2 id="import-list-title">No match found</h2>
+                <ul className="import-list" aria-labelledby="import-list-title">
                   {missing.map((i) => (
                     <li key={valid[i]!.row}>{rowLabel(valid[i]!)}</li>
                   ))}
@@ -323,8 +335,18 @@ function ImportBooksPage() {
             )}
 
             {failed.length > 0 && (
-              <div className="import-failed">
-                <p>Could not look up {books(failed.length)}.</p>
+              <section aria-labelledby="import-failed-title">
+                <h2 id="import-failed-title">
+                  Could not look up {books(failed.length)}
+                </h2>
+                <ul
+                  className="import-list"
+                  aria-labelledby="import-failed-title"
+                >
+                  {failed.map((i) => (
+                    <li key={valid[i]!.row}>{rowLabel(valid[i]!)}</li>
+                  ))}
+                </ul>
                 <button
                   className="import-secondary"
                   type="button"
@@ -332,7 +354,7 @@ function ImportBooksPage() {
                 >
                   Try again
                 </button>
-              </div>
+              </section>
             )}
           </>
         )}
@@ -350,15 +372,6 @@ function ImportBooksPage() {
             </ul>
           </section>
         )}
-
-        <button
-          className="import-upload"
-          type="button"
-          disabled={!file || reading}
-          onClick={() => void handleUpload()}
-        >
-          {reading ? "Reading…" : "Upload"}
-        </button>
 
         {parsed && !result && (
           <button
