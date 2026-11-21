@@ -18,7 +18,6 @@ Serves IMP-02 (match imported titles with known books so users don't have to fil
 - When a batch request fails, its rows count as failed and later batches still run. A 401 stops matching and shows the error in the `role="alert"` element.
 - Choosing another file aborts matching that is still running.
 - When matching is done, show:
-  - "<n> books matched." (singular "1 book matched.").
   - A "Pick the right book" section for ambiguous rows. Each row shows its title (and author, if any) and a select labelled by the title, with options "Title by Author (Year)" for each candidate and "Skip this book" as the default.
   - A "No match found" section listing the title (and author) of each row with no match.
   - For failed rows, "Could not look up <n> books." (singular "1 book") and a "Try again" button that re-runs matching for those rows only.
