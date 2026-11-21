@@ -125,7 +125,8 @@ export function matchTitle(
   // different authors make a row without an author ambiguous
   const byAuthor = new Map<string, BookSearchResult>();
   for (const book of passing) {
-    const author = normalizeAuthor(book.author_name?.[0] ?? "");
+    // by surname, so "Herman Hesse" and "Hermann Hesse" are one author
+    const author = surname(normalizeAuthor(book.author_name?.[0] ?? ""));
     if (!byAuthor.has(author)) byAuthor.set(author, book);
   }
 
