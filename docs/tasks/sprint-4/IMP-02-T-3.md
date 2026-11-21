@@ -21,8 +21,8 @@ Serves IMP-02 (match imported titles with known books so users don't have to fil
   - A "Pick the right book" section for ambiguous rows. Each row shows its title (and author, if any) as the label of a select. Each candidate's option reads "Author (Year)", with "Unknown author" when it has none, and the candidate's title in front when it differs from the row's. "Skip this book" is the first option and the default. Rows that are left ambiguous after the IMP-02-T-1 rules are ones Open Library can't settle, so nothing is chosen for the user.
   - A "No match found" section listing the title (and author) of each row with no match.
   - For failed rows, a "Could not look up <n> books" section (singular "1 book") listing their titles (and authors), and a "Try again" button that re-runs matching for those rows only.
-- The "Import <n> books" button counts the unique keys of matched rows and ambiguous rows with a chosen book, and imports them. It is disabled while matching runs. The message about rows lacking a `book_key` is removed.
-- The "Upload" button sits right below the file picker. Once a file has been read, it uses the outlined secondary style so "Import <n> books" is the only filled button.
+- The "Import <n> books" button counts the unique keys of matched rows and ambiguous rows with a chosen book, and imports them. It is disabled while matching runs and hidden when there is nothing to import, as IMP-01-T-5 specified. The message about rows lacking a `book_key` is removed.
+- The "Upload" button sits right below the file picker. Once a file has been read, it uses the outlined secondary style so "Import <n> books" is the only filled button. After an import it is hidden until another file is chosen, so the same file isn't imported twice.
 
 ## Requirements
 
