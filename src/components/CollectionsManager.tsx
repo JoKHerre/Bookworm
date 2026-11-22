@@ -49,6 +49,8 @@ export default function CollectionsManager({
   const [notice, setNotice] = useState("");
   const mounted = useRef(false);
   const busy = useRef(false);
+  const activeLoad = useRef<AbortController | null>(null);
+  const deferredRefresh = useRef(false);
   const newButton = useRef<HTMLButtonElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -63,7 +65,12 @@ export default function CollectionsManager({
   }, []);
 
   useEffect(() => {
+    if (busy.current) {
+      deferredRefresh.current = true;
+      return;
+    }
     const controller = new AbortController();
+    activeLoad.current = controller;
     async function loadCollections() {
       setLoading(true);
       setLoadError("");
@@ -119,11 +126,15 @@ export default function CollectionsManager({
           );
         }
       } finally {
+        if (activeLoad.current === controller) activeLoad.current = null;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
     void loadCollections();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (activeLoad.current === controller) activeLoad.current = null;
+    };
   }, [attempt, removedKeys, refreshVersion]);
 
   const displayedCollections = collections.map((collection) => ({
@@ -177,6 +188,13 @@ export default function CollectionsManager({
         return;
     }
     busy.current = true;
+    // Abort also invalidates the response if the request finishes despite cancellation.
+    if (activeLoad.current) {
+      activeLoad.current.abort();
+      activeLoad.current = null;
+      deferredRefresh.current = true;
+      setLoading(false);
+    }
     setPending(true);
     setError("");
     try {
@@ -222,11 +240,17 @@ export default function CollectionsManager({
       if (failure instanceof ApiRequestError && failure.status === 404) {
         closeEditor(true);
         setNotice("This collection is no longer available.");
-        setAttempt((current) => current + 1);
+        deferredRefresh.current = true;
       } else setError(message);
     } finally {
       busy.current = false;
-      if (mounted.current) setPending(false);
+      if (mounted.current) {
+        setPending(false);
+        if (deferredRefresh.current) {
+          deferredRefresh.current = false;
+          setAttempt((current) => current + 1);
+        }
+      }
     }
   }
 

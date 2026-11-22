@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import CollectionsManager from "./CollectionsManager";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 
@@ -22,7 +23,185 @@ async function openCreate() {
   );
   return screen.getByRole("textbox", { name: "Collection name" });
 }
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function setupRefreshing() {
+  const fetchMock = vi.fn<
+    (url: string, init?: RequestInit) => Promise<Response>
+  >(async () => jsonResponse({ collections: [collection] }));
+  vi.stubGlobal("fetch", fetchMock);
+  type Refresh = { removedBookKeys: string[]; refreshVersion: number };
+  let update!: (props: Refresh) => void;
+  function Harness() {
+    const [props, setProps] = useState<Refresh>({
+      removedBookKeys: [],
+      refreshVersion: 0,
+    });
+    update = setProps;
+    return <CollectionsManager {...props} />;
+  }
+  const view = renderWithProviders(<Harness />);
+  return {
+    fetchMock,
+    ...view,
+    refresh: (props: Refresh) => act(() => update(props)),
+  };
+}
+
 describe("CollectionsManager", () => {
+  it.each(["create", "rename", "delete"])(
+    "ignores a preexisting refresh after a successful %s and reloads confirmed data",
+    async (operation) => {
+      const { fetchMock, refresh } = setupRefreshing();
+      await screen.findByText("Favorites");
+      if (operation === "create") await openCreate();
+      else
+        await userEvent.click(
+          screen.getByRole("button", {
+            name: `${operation === "rename" ? "Rename" : "Delete"} Favorites`,
+          }),
+        );
+      if (operation !== "delete") {
+        const input = screen.getByRole("textbox", { name: "Collection name" });
+        await userEvent.clear(input);
+        await userEvent.type(input, "Updated");
+      }
+      const oldRefresh = deferredResponse();
+      fetchMock.mockReturnValueOnce(oldRefresh.promise);
+      refresh({ removedBookKeys: ["/works/OL1W"], refreshVersion: 0 });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      const oldSignal = fetchMock.mock.calls[1]?.[1]?.signal;
+      const updated = {
+        ...collection,
+        id: operation === "create" ? 8 : 7,
+        name: "Updated",
+        bookCount: operation === "create" ? 0 : 2,
+      };
+      const confirmed =
+        operation === "delete"
+          ? []
+          : operation === "create"
+            ? [collection, updated]
+            : [updated];
+      fetchMock
+        .mockResolvedValueOnce(
+          operation === "delete"
+            ? new Response(null, { status: 204 })
+            : jsonResponse(updated, operation === "create" ? 201 : 200),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({
+            collections: confirmed.map((item) => ({
+              ...item,
+              containsBook: false,
+            })),
+          }),
+        );
+      await userEvent.click(
+        screen.getByRole("button", {
+          name:
+            operation === "create"
+              ? "Create collection"
+              : operation === "rename"
+                ? "Save changes"
+                : "Delete collection",
+        }),
+      );
+      expect(oldSignal?.aborted).toBe(true);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+      if (operation === "delete") await screen.findByText(/No collections yet/);
+      else await screen.findByRole("link", { name: "Updated" });
+      await act(async () =>
+        oldRefresh.resolve(
+          jsonResponse({
+            collections: [{ ...collection, containsBook: true }],
+          }),
+        ),
+      );
+      if (operation === "delete")
+        expect(
+          screen.queryByRole("link", { name: "Favorites" }),
+        ).not.toBeInTheDocument();
+      else
+        expect(
+          screen.getByRole("link", { name: "Updated" }),
+        ).toBeInTheDocument();
+      if (operation === "rename")
+        expect(
+          screen.queryByRole("link", { name: "Favorites" }),
+        ).not.toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(
+        operation === "create"
+          ? "Created “Updated”"
+          : operation === "rename"
+            ? "Renamed collection to “Updated”"
+            : "Deleted “Favorites”",
+      );
+    },
+  );
+
+  it.each(["success", "failure"])(
+    "defers count refreshes during an edit and uses the latest removal state after %s",
+    async (outcome) => {
+      const { fetchMock, refresh } = setupRefreshing();
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Rename Favorites" }),
+      );
+      const input = screen.getByRole("textbox", { name: "Collection name" });
+      await userEvent.clear(input);
+      await userEvent.type(input, "Updated");
+      const mutation = deferredResponse();
+      fetchMock.mockReturnValueOnce(mutation.promise);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Save changes" }),
+      );
+      refresh({ removedBookKeys: ["/works/OL1W"], refreshVersion: 1 });
+      refresh({ removedBookKeys: ["/works/OL2W"], refreshVersion: 2 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const confirmed = {
+        ...collection,
+        name: outcome === "success" ? "Updated" : "Favorites",
+        bookCount: 1,
+      };
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ collections: [{ ...confirmed, containsBook: true }] }),
+      );
+      await act(async () =>
+        mutation.resolve(
+          outcome === "success"
+            ? jsonResponse(confirmed)
+            : jsonResponse({}, 409),
+        ),
+      );
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+      expect(fetchMock.mock.calls[2]?.[0]).toBe(
+        "/api/collections?bookKey=%2Fworks%2FOL2W",
+      );
+      expect(await screen.findByText("0 books")).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: confirmed.name }),
+      ).toBeInTheDocument();
+      if (outcome === "failure") {
+        expect(
+          screen.getByRole("textbox", { name: "Collection name" }),
+        ).toHaveValue("Updated");
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          "already have a collection with that name",
+        );
+      } else
+        expect(screen.getByRole("status")).toHaveTextContent(
+          "Renamed collection to “Updated”",
+        );
+    },
+  );
+
   it("reports malformed collection lists and recovers on retry", async () => {
     const fetchMock = vi
       .fn()
