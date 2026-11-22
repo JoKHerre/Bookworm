@@ -8,6 +8,7 @@ import {
   type CollectionMembershipSummary,
 } from "../api/collections";
 import "./BookCollectionAssignment.css";
+import "./Select.css";
 
 interface Props {
   bookKey: string;
@@ -219,6 +220,7 @@ export default function BookCollectionAssignment({
                   Collection
                 </label>
                 <select
+                  className="book-select"
                   id={`${id}-collection`}
                   value={selectedId}
                   disabled={pending}

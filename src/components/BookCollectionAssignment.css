@@ -38,7 +38,7 @@
   border: 0;
 }
 
-.book-collection-assignment :is(button, select) {
+.book-collection-assignment button {
   box-sizing: border-box;
   max-width: 100%;
   min-width: 0;
@@ -52,8 +52,7 @@
   font-size: 0.85rem;
 }
 
-.book-collection-assignment button,
-.book-collection-assignment select {
+.book-collection-assignment button {
   cursor: pointer;
 }
 
@@ -73,7 +72,7 @@
   background: var(--gold-light);
 }
 
-.book-collection-assignment :disabled {
+.book-collection-assignment button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -85,7 +84,7 @@
   opacity: 1;
 }
 
-.book-collection-assignment :is(button, select, a):focus-visible {
+.book-collection-assignment :is(button, a):focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 3px;
 }

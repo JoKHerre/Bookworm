@@ -7,6 +7,7 @@ import {
 import type { BookDetails } from "../../shared/books";
 import { getBookDetails, getBookAvailability } from "../api/books";
 import BookCollectionAssignment from "../components/BookCollectionAssignment";
+import "../components/Select.css";
 import BookISBNSection from "../components/BookISBNSection";
 import SimilarBooks from "../components/SimilarBooks";
 import { bookDetailsPath, type BookDetailsLocationState } from "../routes";
@@ -262,6 +263,7 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
               <label className="saved-book-status">
                 <span>In your library</span>
                 <select
+                  className="book-select"
                   value={savedBook.readingStatus}
                   aria-busy={savingBook}
                   disabled={savingBook}

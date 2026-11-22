@@ -291,13 +291,3 @@
 .saved-book-status span::before {
   content: "✓ ";
 }
-
-.saved-book-status select {
-  font: inherit;
-  font-weight: 500;
-  padding: 8px 10px;
-  color: var(--olive);
-  background: var(--cream);
-  border: 1.5px solid var(--tan);
-  border-radius: 8px;
-}
