@@ -111,19 +111,26 @@ async function searchOpenLibraryQuery(
   };
 }
 
+function genreToSubject(genre: BookSearchQuery["genre"][number]) {
+  if (genre === "Sci-fi") return "science fiction";
+  if (genre === "Non-fiction") return "nonfiction";
+  return genre.toLowerCase();
+}
+
 export function searchOpenLibrary(
   query: BookSearchQuery,
+  excludedGenres: BookSearchQuery["genre"] = [],
 ): Promise<BookSearchResponse> {
   const constraints: string[] = [];
 
   if (query.genre.length) {
-    const subjects = [...new Set(query.genre)].map((genre) => {
-      let subject = genre.toLowerCase();
-      if (genre === "Sci-fi") subject = "science fiction";
-      if (genre === "Non-fiction") subject = "nonfiction";
-      return `"${subject}"`;
-    });
+    const subjects = [...new Set(query.genre)].map(
+      (genre) => `"${genreToSubject(genre)}"`,
+    );
     constraints.push(`subject:(${subjects.join(" OR ")})`);
+  }
+  for (const genre of new Set(excludedGenres)) {
+    constraints.push(`NOT subject:"${genreToSubject(genre)}"`);
   }
   if (query.language) {
     constraints.push(`language:${languageCodes[query.language]}`);

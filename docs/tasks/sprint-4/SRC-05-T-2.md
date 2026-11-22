@@ -33,8 +33,10 @@ Serves SRC-05. Add warning and genre exclusion rules for search to use in task 3
 
 ## Tests
 
-| Test group                                              | Setup                                                         | Asserts                                               | Criterion |
-| ------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------- | --------- |
-| SRC-05-T-2 applies warning exclusions                   | Matching and nonmatching IDs; empty selection or category IDs | Any selected match excludes; otherwise keeps the book | 1         |
-| SRC-05-T-2 ignores selection order and duplicates       | Reorder and repeat selected IDs                               | Same exclusion decision                               | 1         |
-| SRC-05-T-2 keeps books with missing warning information | `not_found` and `unavailable` responses                       | Keeps the book; response and status unchanged         | 2         |
+| Test group                                              | Setup                                                                               | Asserts                                                                                        | Criterion |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | --------- |
+| SRC-05-T-2 applies warning exclusions                   | Matching and nonmatching IDs; empty selection or category IDs                       | Any selected match excludes; otherwise keeps the book                                          | 1         |
+| SRC-05-T-2 ignores selection order and duplicates       | Reorder and repeat selected IDs                                                     | Same exclusion decision                                                                        | 1         |
+| SRC-05-T-2 keeps books with missing warning information | `not_found` and `unavailable` responses                                             | Keeps the book; response and status unchanged                                                  | 2         |
+| SRC-05-T-2 applies genre exclusions                     | Multiple exclusions; included/excluded conflict; duplicate selections               | Shared subject mapping; every exclusion applies outside the inclusion group without duplicates | 3         |
+| SRC-05-T-2 preserves existing search constraints        | Exclusions with special query characters, language, year and page; empty exclusions | Escaping, filters and pagination retained; empty exclusions preserve existing behavior         | 3, 4      |

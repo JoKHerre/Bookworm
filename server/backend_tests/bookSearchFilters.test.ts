@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import type { ApiError } from "../../shared/api.ts";
 import { after, afterEach, before, test } from "node:test";
+import { bookSearchQuery } from "../../shared/books.ts";
 import type {
   BookSearchResponse,
   BookSearchResult,
 } from "../../shared/books.ts";
 import { createApp } from "../src/app.ts";
+import { searchOpenLibrary } from "../src/services/openLibrary.ts";
 import { startTestServer } from "./test-utils.ts";
 
 const resultLimit = 20;
@@ -323,5 +325,73 @@ test("SRC-04-T-2 ignores empty filters when another filter is active", async () 
   assert.equal(
     upstreamRequests[0]?.searchParams.get("q"),
     '(books) AND subject:("fantasy")',
+  );
+});
+
+test("SRC-05-T-2 excludes multiple genres using the existing subject mapping", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+
+  await searchOpenLibrary(bookSearchQuery.parse({ q: "books" }), [
+    "Horror",
+    "Sci-fi",
+    "Non-fiction",
+  ]);
+
+  assert.equal(upstreamRequests.length, 1);
+  assert.equal(
+    upstreamRequests[0]?.searchParams.get("q"),
+    '(books) AND NOT subject:"horror" AND NOT subject:"science fiction" AND NOT subject:"nonfiction"',
+  );
+});
+
+test("SRC-05-T-2 applies exclusions outside included genres without duplicates", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+
+  await searchOpenLibrary(
+    bookSearchQuery.parse({ q: "books", genre: ["Fantasy", "Sci-fi"] }),
+    ["Fantasy", "Fantasy", "Horror"],
+  );
+
+  assert.equal(
+    upstreamRequests[0]?.searchParams.get("q"),
+    '(books) AND subject:("fantasy" OR "science fiction") AND NOT subject:"fantasy" AND NOT subject:"horror"',
+  );
+});
+
+test("SRC-05-T-2 preserves escaping, other filters and pagination with exclusions", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+
+  await searchOpenLibrary(
+    bookSearchQuery.parse({
+      q: "dune) OR (harry",
+      genre: ["Sci-fi"],
+      language: "English",
+      year: "1990-1999",
+      page: 3,
+    }),
+    ["Horror"],
+  );
+
+  assert.equal(
+    upstreamRequests[0]?.searchParams.get("q"),
+    '(dune\\) OR \\(harry) AND subject:("science fiction") AND NOT subject:"horror" AND language:eng AND first_publish_year:[1990 TO 1999]',
+  );
+  assert.equal(upstreamRequests[0]?.searchParams.get("page"), "3");
+  assert.equal(
+    upstreamRequests[0]?.searchParams.get("limit"),
+    String(resultLimit),
+  );
+});
+
+test("SRC-05-T-2 empty exclusions preserve the existing search query", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+  const query = bookSearchQuery.parse({ q: "books", genre: ["Fantasy"] });
+
+  await searchOpenLibrary(query);
+  await searchOpenLibrary(query, []);
+
+  assert.deepEqual(
+    upstreamRequests.map((url) => url.searchParams.get("q")),
+    ['(books) AND subject:("fantasy")', '(books) AND subject:("fantasy")'],
   );
 });
