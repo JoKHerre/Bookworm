@@ -29,14 +29,18 @@ export default function BookCollectionAssignment({
   );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [refreshError, setRefreshError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [pending, setPending] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [attempt, setAttempt] = useState(0);
   const mounted = useRef(false);
   const busy = useRef(false);
+  const expired = useRef(false);
+  const activeLoad = useRef<AbortController | null>(null);
+  const reload = useRef<((background: boolean) => void) | null>(null);
+  const deferredRefresh = useRef<boolean | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -46,13 +50,29 @@ export default function BookCollectionAssignment({
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    async function loadAssignmentData() {
-      setLoading(true);
+    let usable = false;
+    async function loadAssignmentData(background: boolean) {
+      if (expired.current) return;
+      if (busy.current) {
+        // A required recovery refresh takes priority over a background refresh.
+        deferredRefresh.current =
+          deferredRefresh.current === false ? false : background;
+        return;
+      }
+      activeLoad.current?.abort();
+      const controller = new AbortController();
+      activeLoad.current = controller;
+      const quiet = background && usable;
+      if (!quiet) {
+        usable = false;
+        setLoading(true);
+      }
       setLoadError("");
+      setRefreshError("");
       try {
         const result = await listCollectionsForBook(bookKey, controller.signal);
         if (controller.signal.aborted) return;
+        usable = true;
         setCollections(result);
         setSelectedId((current) =>
           result.some(
@@ -64,20 +84,37 @@ export default function BookCollectionAssignment({
         );
       } catch (failure) {
         if (controller.signal.aborted) return;
-        setLoadError(
+        const message =
           failure instanceof Error
             ? failure.message
-            : "Could not load your collections.",
-        );
-        if (failure instanceof ApiRequestError && failure.status === 401)
+            : "Could not load your collections.";
+        if (quiet) setRefreshError(message);
+        else setLoadError(message);
+        if (failure instanceof ApiRequestError && failure.status === 401) {
+          expired.current = true;
           setSessionExpired(true);
+        }
       } finally {
+        if (activeLoad.current === controller) activeLoad.current = null;
         if (!controller.signal.aborted) setLoading(false);
       }
     }
-    void loadAssignmentData();
-    return () => controller.abort();
-  }, [bookKey, attempt]);
+    reload.current = (background) => {
+      void loadAssignmentData(background);
+    };
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") void loadAssignmentData(true);
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void loadAssignmentData(false);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      activeLoad.current?.abort();
+      activeLoad.current = null;
+      reload.current = null;
+      deferredRefresh.current = null;
+    };
+  }, [bookKey]);
 
   async function handleAddToCollection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -87,6 +124,12 @@ export default function BookCollectionAssignment({
     if (!collection || busy.current || loading || loadError || sessionExpired)
       return;
     busy.current = true;
+    // A response started before this mutation must not overwrite its membership.
+    if (activeLoad.current) {
+      activeLoad.current.abort();
+      activeLoad.current = null;
+      deferredRefresh.current = true;
+    }
     setPending(true);
     setError("");
     setNotice("");
@@ -111,15 +154,23 @@ export default function BookCollectionAssignment({
           : "Could not add this book to the collection.",
       );
       if (failure instanceof ApiRequestError) {
-        if (failure.status === 401) setSessionExpired(true);
+        if (failure.status === 401) {
+          expired.current = true;
+          setSessionExpired(true);
+        }
         if (failure.status === 404 || failure.status === 409) {
           setSelectedId("");
-          setAttempt((current) => current + 1);
+          reload.current?.(false);
         }
       }
     } finally {
       busy.current = false;
-      if (mounted.current) setPending(false);
+      if (mounted.current) {
+        setPending(false);
+        const background = deferredRefresh.current;
+        deferredRefresh.current = null;
+        if (background !== null) reload.current?.(background);
+      }
     }
   }
 
@@ -128,6 +179,7 @@ export default function BookCollectionAssignment({
       <h3>Add to a collection</h3>
       {loading && <p role="status">Loading collections…</p>}
       {loadError && <p role="alert">{loadError}</p>}
+      {refreshError && <p role="alert">{refreshError}</p>}
       {error && <p role="alert">{error}</p>}
       {sessionExpired ? (
         <button
@@ -143,10 +195,7 @@ export default function BookCollectionAssignment({
           Log in again
         </button>
       ) : loadError ? (
-        <button
-          type="button"
-          onClick={() => setAttempt((current) => current + 1)}
-        >
+        <button type="button" onClick={() => reload.current?.(false)}>
           Try again
         </button>
       ) : (
@@ -204,18 +253,16 @@ export default function BookCollectionAssignment({
               <Link to="/personal-library?tab=collections">
                 Manage collections in My Library
               </Link>
+            </div>
+            {refreshError && (
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => {
-                  setError("");
-                  setNotice("");
-                  setAttempt((current) => current + 1);
-                }}
+                onClick={() => reload.current?.(true)}
               >
-                Refresh collections
+                Try again
               </button>
-            </div>
+            )}
           </>
         )
       )}

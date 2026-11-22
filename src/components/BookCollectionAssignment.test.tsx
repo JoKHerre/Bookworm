@@ -61,7 +61,207 @@ async function selectCollection(id = "7") {
 const submit = () =>
   userEvent.click(screen.getByRole("button", { name: "Add to collection" }));
 
+function changeVisibility(state: DocumentVisibilityState) {
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue(state);
+  fireEvent(document, new Event("visibilitychange"));
+}
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function addedBookResponse() {
+  return jsonResponse(
+    {
+      id: 9,
+      bookKey: "/works/OL1W",
+      readingStatus: "to_be_read",
+      createdAt: "2026-01-01",
+    },
+    201,
+  );
+}
+
 describe("BookCollectionAssignment", () => {
+  it("refreshes renamed collections quietly and preserves an eligible selection", async () => {
+    const { fetchMock } = setup();
+    const select = await selectCollection();
+    const refresh = deferredResponse();
+    fetchMock.mockReturnValueOnce(refresh.promise);
+    changeVisibility("visible");
+    expect(screen.getByRole("combobox")).toBe(select);
+    expect(select).toHaveValue("7");
+    expect(select).toBeEnabled();
+    expect(screen.queryByText("Loading collections…")).not.toBeInTheDocument();
+    await act(async () =>
+      refresh.resolve(
+        jsonResponse({
+          collections: [{ ...FAVORITES, name: "Weekend reads" }, SCHOOL],
+        }),
+      ),
+    );
+    expect(screen.getByRole("option", { name: "Weekend reads" })).toBeEnabled();
+    expect(select).toHaveValue("7");
+  });
+
+  it.each(["deleted", "already added"])(
+    "clears a selection that was %s elsewhere",
+    async (change) => {
+      const { fetchMock } = setup();
+      const select = await selectCollection();
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          collections:
+            change === "deleted"
+              ? [SCHOOL]
+              : [{ ...FAVORITES, containsBook: true }, SCHOOL],
+        }),
+      );
+      changeVisibility("visible");
+      await waitFor(() => expect(select).toHaveValue(""));
+      expect(
+        screen.getByRole("button", { name: "Add to collection" }),
+      ).toBeDisabled();
+      if (change === "already added")
+        expect(
+          screen.getByRole("option", { name: "Favorites — Already added" }),
+        ).toBeDisabled();
+      else
+        expect(
+          screen.queryByRole("option", { name: "Favorites" }),
+        ).not.toBeInTheDocument();
+    },
+  );
+
+  it("keeps the picker after a background failure and retries without clearing feedback", async () => {
+    const { fetchMock } = setup();
+    await selectCollection();
+    await submit();
+    const notice = await screen.findByText(/Added “Dune” to “Favorites”/);
+    const select = await selectCollection("8");
+    // Selecting a collection clears the prior notice; another successful add restores it.
+    await submit();
+    await screen.findByText(/Added “Dune” to “School”/);
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    changeVisibility("visible");
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    expect(screen.getByRole("combobox")).toBe(select);
+    expect(screen.getByText(/Added “Dune” to “School”/)).toBeInTheDocument();
+    expect(notice).not.toBeInTheDocument();
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        collections: [
+          { ...FAVORITES, containsBook: true },
+          { ...SCHOOL, containsBook: true },
+        ],
+      }),
+    );
+    await userEvent.click(retry);
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText(/Added “Dune” to “School”/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "School — Already added" }),
+    ).toBeDisabled();
+  });
+
+  it("preserves the selection after a failed background refresh", async () => {
+    const { fetchMock } = setup();
+    const select = await selectCollection();
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    changeVisibility("visible");
+    await screen.findByRole("button", { name: "Try again" });
+    expect(select).toHaveValue("7");
+    expect(
+      screen.getByRole("button", { name: "Add to collection" }),
+    ).toBeEnabled();
+    await submit();
+    expect(await screen.findByText(/Added “Dune”/)).toBeInTheDocument();
+  });
+
+  it("defers and coalesces visibility refreshes until an addition completes", async () => {
+    const { fetchMock } = setup();
+    await selectCollection();
+    const addition = deferredResponse();
+    fetchMock.mockReturnValueOnce(addition.promise).mockResolvedValueOnce(
+      jsonResponse({
+        collections: [{ ...FAVORITES, containsBook: true }, SCHOOL],
+      }),
+    );
+    await submit();
+    changeVisibility("visible");
+    changeVisibility("hidden");
+    changeVisibility("visible");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => addition.resolve(addedBookResponse()));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(
+      await screen.findByRole("option", { name: "Favorites — Already added" }),
+    ).toBeDisabled();
+    expect(screen.getByText(/Added “Dune”/)).toBeInTheDocument();
+  });
+
+  it("aborts a background lookup when an addition begins and ignores its late response", async () => {
+    const { fetchMock } = setup();
+    await selectCollection();
+    const oldRefresh = deferredResponse();
+    fetchMock.mockReturnValueOnce(oldRefresh.promise);
+    changeVisibility("visible");
+    const signal = fetchMock.mock.calls.at(-1)?.[1]?.signal;
+    fetchMock.mockResolvedValueOnce(addedBookResponse()).mockResolvedValueOnce(
+      jsonResponse({
+        collections: [{ ...FAVORITES, containsBook: true }, SCHOOL],
+      }),
+    );
+    await submit();
+    expect(signal?.aborted).toBe(true);
+    expect(
+      await screen.findByRole("option", { name: "Favorites — Already added" }),
+    ).toBeDisabled();
+    await act(async () =>
+      oldRefresh.resolve(jsonResponse({ collections: [FAVORITES, SCHOOL] })),
+    );
+    expect(
+      screen.getByRole("option", { name: "Favorites — Already added" }),
+    ).toBeDisabled();
+    expect(screen.getByText(/Added “Dune”/)).toBeInTheDocument();
+  });
+
+  it("requires login after a background refresh reports an expired session", async () => {
+    const { fetchMock, onLogin } = setup();
+    await selectCollection();
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, 401));
+    changeVisibility("visible");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Log in again" }),
+    );
+    expect(onLogin).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    changeVisibility("visible");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes its visibility listener and aborts background requests on unmount", async () => {
+    const { fetchMock, unmount } = setup();
+    await selectCollection();
+    const refresh = deferredResponse();
+    fetchMock.mockReturnValueOnce(refresh.promise);
+    changeVisibility("visible");
+    const signal = fetchMock.mock.calls.at(-1)?.[1]?.signal;
+    unmount();
+    expect(signal?.aborted).toBe(true);
+    changeVisibility("visible");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () =>
+      refresh.resolve(jsonResponse({ collections: [SCHOOL] })),
+    );
+  });
+
   it("shows persisted membership when the panel is reopened", async () => {
     let added = false;
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -185,7 +385,7 @@ describe("BookCollectionAssignment", () => {
     expect(await screen.findByText(/Added “Dune”/)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
-  it("links an empty collection list to My Library and supports refreshing", async () => {
+  it("refreshes an empty collection list when the tab becomes visible", async () => {
     const { fetchMock } = setup([]);
     expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
     expect(
@@ -193,9 +393,12 @@ describe("BookCollectionAssignment", () => {
     ).toHaveAttribute("href", "/personal-library?tab=collections");
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     fetchMock.mockResolvedValueOnce(jsonResponse({ collections: [FAVORITES] }));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Refresh collections" }),
-    );
+    expect(
+      screen.queryByRole("button", { name: "Refresh collections" }),
+    ).not.toBeInTheDocument();
+    changeVisibility("hidden");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    changeVisibility("visible");
     expect(
       await screen.findByRole("option", { name: "Favorites" }),
     ).toBeEnabled();
@@ -322,8 +525,8 @@ describe("BookCollectionAssignment", () => {
     expect(select).toBeDisabled();
     expect(screen.getByRole("button", { name: "Adding…" })).toBeDisabled();
     expect(
-      screen.getByRole("button", { name: "Refresh collections" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Refresh collections" }),
+    ).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     await act(async () =>
       resolve(
