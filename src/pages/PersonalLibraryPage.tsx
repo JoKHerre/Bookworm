@@ -41,6 +41,7 @@ interface PersonalLibraryBook extends SavedBook {
 interface PendingRemoval {
   id: number;
   title: string;
+  bookKey: string;
 }
 
 function PersonalLibraryPage() {
@@ -83,6 +84,10 @@ function PersonalLibraryPage() {
   );
   const removalTimer = useRef<number | undefined>(undefined);
   const pendingRemovalRef = useRef<PendingRemoval | null>(null);
+  const [committingRemovals, setCommittingRemovals] = useState<
+    PendingRemoval[]
+  >([]);
+  const [collectionsRevision, setCollectionsRevision] = useState(0);
   const [updatingReadingStatusIds, setUpdatingReadingStatusIds] = useState<
     Set<number>
   >(() => new Set());
@@ -94,11 +99,13 @@ function PersonalLibraryPage() {
   const [loadAttempt, setLoadAttempt] = useState(0); // bumped by "Try again" to reload
 
   async function commitRemoval(removal: PendingRemoval) {
+    setCommittingRemovals((current) => [...current, removal]);
     try {
       await removeSavedBook(removal.id);
       setBooks((currentBooks) =>
         currentBooks.filter((book) => book.id !== removal.id),
       );
+      setCollectionsRevision((current) => current + 1);
     } catch (err) {
       setRemovalError(
         errorMessage(err, {
@@ -110,8 +117,8 @@ function PersonalLibraryPage() {
         }),
       );
     } finally {
-      setPendingRemoval((current) =>
-        current?.id === removal.id ? null : current,
+      setCommittingRemovals((current) =>
+        current.filter((book) => book.id !== removal.id),
       );
     }
   }
@@ -120,13 +127,16 @@ function PersonalLibraryPage() {
     window.clearTimeout(removalTimer.current);
     const removal = pendingRemovalRef.current;
     pendingRemovalRef.current = null;
+    setPendingRemoval(null);
     if (removal) void commitRemoval(removal);
   }
 
   function removeBook(id: number, title: string) {
+    const book = books.find((book) => book.id === id);
+    if (!book) return;
     flushRemoval(); // only one removal waits on Undo at a time
     setRemovalError("");
-    const removal = { id, title };
+    const removal = { id, title, bookKey: book.bookKey };
     pendingRemovalRef.current = removal;
     setPendingRemoval(removal);
     removalTimer.current = window.setTimeout(flushRemoval, UNDO_REMOVE_MS);
@@ -261,7 +271,12 @@ function PersonalLibraryPage() {
     void navigate(bookDetailsPath(bookKey), { state });
   }
 
-  const listedBooks = books.filter((book) => book.id !== pendingRemoval?.id);
+  const removals = pendingRemoval
+    ? [...committingRemovals, pendingRemoval]
+    : committingRemovals;
+  const listedBooks = books.filter(
+    (book) => !removals.some((removal) => removal.id === book.id),
+  );
   // selected tags that no longer exist in the library are ignored
   const availableTags = libraryTags(listedBooks);
   const activeTags = selectedTags.filter((tag) => availableTags.includes(tag));
@@ -438,7 +453,10 @@ function PersonalLibraryPage() {
           hidden={activeTab !== "collections"}
           tabIndex={0}
         >
-          <CollectionsManager />
+          <CollectionsManager
+            removedBookKeys={removals.map((book) => book.bookKey)}
+            refreshVersion={collectionsRevision}
+          />
         </div>
 
         {pendingRemoval && (

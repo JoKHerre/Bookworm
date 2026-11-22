@@ -88,12 +88,256 @@ const titles = () =>
     .map((button) => button.textContent);
 const tagBox = (name: string) => screen.getByRole("checkbox", { name });
 
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+// Keep server counts and flags tied to actual memberships, including after DELETE.
+function stubCollectionRemovals({
+  deleteResponse,
+  membershipResponse,
+}: {
+  deleteResponse?: (id: number) => Promise<Response>;
+  membershipResponse?: (key: string, data: unknown) => Promise<Response>;
+} = {}) {
+  const fetchMock = stubApi(FIXTURES);
+  const original = fetchMock.getMockImplementation()!;
+  const deleted = new Set<number>();
+  const groups = [
+    { id: 7, name: "Favorites", books: [1, 2, 3] },
+    { id: 8, name: "Space", books: [1, 3] },
+    { id: 9, name: "Classics", books: [2] },
+  ];
+  fetchMock.mockImplementation(async (input, init) => {
+    if (input.startsWith("/api/collections")) {
+      const key = new URL(input, "http://x").searchParams.get("bookKey");
+      const book = FIXTURES.find((book) => book.bookKey === key);
+      const data = {
+        collections: groups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          createdAt: "2026-01-01",
+          bookCount: group.books.filter((id) => !deleted.has(id)).length,
+          ...(key
+            ? {
+                containsBook:
+                  !!book &&
+                  group.books.includes(book.id) &&
+                  !deleted.has(book.id),
+              }
+            : {}),
+        })),
+      };
+      return key && membershipResponse
+        ? membershipResponse(key, data)
+        : jsonResponse(data);
+    }
+    if (init?.method === "DELETE") {
+      const id = Number(input.split("/").at(-1));
+      const response = deleteResponse
+        ? await deleteResponse(id)
+        : new Response(null, { status: 204 });
+      if (response.ok) deleted.add(id);
+      return response;
+    }
+    return original(input, init);
+  });
+  return fetchMock;
+}
+
+function expectCollectionCount(name: string, count: number) {
+  const card = screen.getByText(name, { selector: "a" }).closest("li")!;
+  expect(
+    within(card).getByText(`${count} ${count === 1 ? "book" : "books"}`),
+  ).toBeInTheDocument();
+}
+
 describe("PersonalLibraryPage", () => {
   beforeEach(() => {
     stubApi(FIXTURES);
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("adjusts only affected collection counts and restores them on Undo across tabs", async () => {
+    const fetchMock = stubCollectionRemovals();
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await userEvent.click(screen.getByRole("tab", { name: "Collections" }));
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    expectCollectionCount("Space", 1);
+    expectCollectionCount("Classics", 1);
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expectCollectionCount("Favorites", 3);
+    expectCollectionCount("Space", 2);
+    await userEvent.click(screen.getByRole("tab", { name: "Books" }));
+    expect(titles()).toEqual(["Dune", "Emma", "Cosmos"]);
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE"),
+    ).toHaveLength(0);
+  });
+
+  it("refreshes confirmed counts without subtracting a deleted book twice", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = stubCollectionRemovals();
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    expectCollectionCount("Space", 1);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === "/api/collections"),
+    ).toHaveLength(2);
+    expect(titles()).toEqual(["Emma", "Cosmos"]);
+  });
+
+  it("restores the book and counts when deletion fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stubCollectionRemovals({
+      deleteResponse: async () => jsonResponse({}, 500),
+    });
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not remove “Dune”",
+    );
+    expect(titles()).toEqual(["Dune", "Emma", "Cosmos"]);
+    await waitFor(() => expectCollectionCount("Favorites", 3));
+    expectCollectionCount("Space", 2);
+  });
+
+  it("keeps an earlier removal hidden while another is pending and supports Undo of the latest", async () => {
+    const deletion = deferredResponse();
+    stubCollectionRemovals({ deleteResponse: () => deletion.promise });
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Emma from my library" }),
+    );
+    expect(titles()).toEqual(["Cosmos"]);
+    await waitFor(() => expectCollectionCount("Favorites", 1));
+    expectCollectionCount("Classics", 0);
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(titles()).toEqual(["Emma", "Cosmos"]);
+    expectCollectionCount("Favorites", 2);
+    await act(async () =>
+      deletion.resolve(new Response(null, { status: 204 })),
+    );
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    expectCollectionCount("Space", 1);
+    expectCollectionCount("Classics", 1);
+  });
+
+  it("ignores membership results arriving after Undo", async () => {
+    const lookup = deferredResponse();
+    let membershipData: unknown;
+    stubCollectionRemovals({
+      membershipResponse: async (_key, data) => {
+        membershipData = data;
+        return lookup.promise;
+      },
+    });
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    await act(async () => lookup.resolve(jsonResponse(membershipData)));
+    expectCollectionCount("Favorites", 3);
+    expectCollectionCount("Space", 2);
+    expect(titles()).toEqual(["Dune", "Emma", "Cosmos"]);
+  });
+
+  it("reconciles shared collection counts when overlapping deletions finish out of order", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const first = deferredResponse();
+    const second = deferredResponse();
+    stubCollectionRemovals({
+      deleteResponse: (id) => (id === 1 ? first.promise : second.promise),
+    });
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Emma from my library" }),
+    );
+    await waitFor(() => expectCollectionCount("Favorites", 1));
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
+    expect(
+      screen.queryByRole("button", { name: "Undo" }),
+    ).not.toBeInTheDocument();
+    expect(titles()).toEqual(["Cosmos"]);
+    await act(async () => second.resolve(new Response(null, { status: 204 })));
+    await waitFor(() => expectCollectionCount("Favorites", 1));
+    expectCollectionCount("Classics", 0);
+    await act(async () => first.resolve(new Response(null, { status: 204 })));
+    await waitFor(() => expectCollectionCount("Favorites", 1));
+    expectCollectionCount("Space", 1);
+    expectCollectionCount("Classics", 0);
+    expect(titles()).toEqual(["Cosmos"]);
+  });
+
+  it("ignores an old membership response after deletion has been confirmed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const lookup = deferredResponse();
+    let membershipData: unknown;
+    stubCollectionRemovals({
+      membershipResponse: async (_key, data) => {
+        membershipData = data;
+        return lookup.promise;
+      },
+    });
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    await act(async () => lookup.resolve(jsonResponse(membershipData)));
+    expectCollectionCount("Favorites", 2);
+    expectCollectionCount("Space", 1);
+  });
+
+  it("keeps known counts when membership lookup fails, then refreshes after deletion", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    stubCollectionRemovals({
+      membershipResponse: async () => jsonResponse({}, 500),
+    });
+    await renderPage();
+    await screen.findByText("Favorites");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Dune from my library" }),
+    );
+    expectCollectionCount("Favorites", 3);
+    await act(() => vi.advanceTimersByTimeAsync(UNDO_REMOVE_MS));
+    await waitFor(() => expectCollectionCount("Favorites", 2));
+    expectCollectionCount("Space", 1);
   });
 
   it("defaults to Books and switches panels without losing tag filters", async () => {

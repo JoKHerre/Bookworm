@@ -6,6 +6,7 @@ import {
   createCollection,
   deleteCollection,
   listCollections,
+  listCollectionsForBook,
   renameCollection,
   type CollectionSummary,
 } from "../api/collections";
@@ -24,8 +25,20 @@ function validateCollectionName(name: string): string {
   return "";
 }
 
-export default function CollectionsManager() {
+interface Props {
+  removedBookKeys?: string[];
+  refreshVersion?: number;
+}
+
+export default function CollectionsManager({
+  removedBookKeys = [],
+  refreshVersion = 0,
+}: Props) {
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
+  const [memberships, setMemberships] = useState<Record<string, number[]>>({});
+  const [loadedVersion, setLoadedVersion] = useState(-1);
+  // A stable dependency keeps unrelated parent renders from restarting requests.
+  const removedKeys = JSON.stringify(removedBookKeys);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -55,8 +68,48 @@ export default function CollectionsManager() {
       setLoading(true);
       setLoadError("");
       try {
-        const result = await listCollections(controller.signal);
-        if (!controller.signal.aborted) setCollections(result);
+        const keys = JSON.parse(removedKeys) as string[];
+        const membershipResults = await Promise.all(
+          keys.map(async (key) => {
+            try {
+              return {
+                key,
+                collections: await listCollectionsForBook(
+                  key,
+                  controller.signal,
+                ),
+              };
+            } catch {
+              // A failed membership lookup must not guess which counts to reduce.
+              return null;
+            }
+          }),
+        );
+        if (controller.signal.aborted) return;
+        // Membership responses include current counts as well as membership flags.
+        const result =
+          membershipResults.find((result) => result !== null)?.collections ??
+          (await listCollections(controller.signal));
+        if (!controller.signal.aborted) {
+          setCollections(result);
+          setMemberships(
+            Object.fromEntries(
+              membershipResults.flatMap((result) =>
+                result
+                  ? [
+                      [
+                        result.key,
+                        result.collections
+                          .filter((collection) => collection.containsBook)
+                          .map((collection) => collection.id),
+                      ],
+                    ]
+                  : [],
+              ),
+            ),
+          );
+          setLoadedVersion(refreshVersion);
+        }
       } catch (failure) {
         if (!controller.signal.aborted) {
           setLoadError(
@@ -71,7 +124,20 @@ export default function CollectionsManager() {
     }
     void loadCollections();
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, removedKeys, refreshVersion]);
+
+  const displayedCollections = collections.map((collection) => ({
+    ...collection,
+    bookCount: Math.max(
+      0,
+      collection.bookCount -
+        removedBookKeys.filter((key) =>
+          memberships[key]?.includes(collection.id),
+        ).length,
+    ),
+  }));
+  // Confirmed deletions invalidate the old counts until fresh server data arrives.
+  const refreshing = loadedVersion !== refreshVersion;
 
   useEffect(() => {
     if (editor?.kind === "delete") cancelButton.current?.focus();
@@ -268,7 +334,7 @@ export default function CollectionsManager() {
         </button>
       </div>
       {notice && <p role="status">{notice}</p>}
-      {loading ? (
+      {(refreshing && !loadError) || (loading && collections.length === 0) ? (
         <p role="status">Loading collections…</p>
       ) : loadError ? (
         <div role="alert">
@@ -289,7 +355,7 @@ export default function CollectionsManager() {
             </p>
           ) : (
             <ul className="collections-list" aria-label="Your collections">
-              {collections.map((collection) => (
+              {displayedCollections.map((collection) => (
                 <li key={collection.id}>
                   <div className="collections-row">
                     <div className="collections-summary">
