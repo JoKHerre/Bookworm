@@ -43,7 +43,7 @@
   border: 1px solid var(--tan);
   border-radius: 12px;
   background: var(--cream-card);
-  box-shadow: 0 3px 12px rgba(79, 91, 42, 0.04);
+  box-shadow: 0 3px 12px var(--shadow-card-color);
 }
 
 .collections-row {

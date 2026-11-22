@@ -50,9 +50,6 @@
   background: var(--cream);
   font: inherit;
   font-size: 0.85rem;
-}
-
-.book-collection-assignment button {
   cursor: pointer;
 }
 

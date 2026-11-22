@@ -159,7 +159,7 @@
   background: var(--olive);
   color: var(--cream);
   font-size: 0.9rem;
-  box-shadow: 0 10px 28px -10px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 28px -10px var(--shadow-toast-color);
 }
 
 .personal-library-undo button {

@@ -56,7 +56,7 @@
   min-height: 0;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 8px 12px rgba(79, 91, 42, 0.15));
+  filter: drop-shadow(0 8px 12px var(--shadow-cover-color));
 }
 
 .book-cover-placeholder {
@@ -129,7 +129,6 @@
   font-weight: 700;
 }
 
-.book-save-message,
 .book-rating-group > p {
   margin-top: 10px;
   color: var(--olive-text-secondary);

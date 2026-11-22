@@ -98,7 +98,7 @@ export async function listCollections(
   signal?: AbortSignal,
 ): Promise<CollectionSummary[]> {
   const response = await request("", { signal }, "list");
-  const data = await readResponse(
+  const data = readResponse(
     response,
     collectionListResponse,
     operationErrors.list,
@@ -106,11 +106,11 @@ export async function listCollections(
   return data.collections;
 }
 
-async function readResponse<T extends z.ZodType>(
+function readResponse<T extends z.ZodType>(
   response: unknown,
   schema: T,
   message: string,
-): Promise<z.infer<T>> {
+): z.infer<T> {
   const parsed = schema.safeParse(response);
   if (!parsed.success) throw new Error(message);
   return parsed.data;
@@ -186,7 +186,7 @@ export async function listCollectionsForBook(
 ): Promise<CollectionMembershipSummary[]> {
   const query = new URLSearchParams({ bookKey });
   const response = await request(`?${query}`, { signal }, "list");
-  const data = await readResponse(
+  const data = readResponse(
     response,
     membershipListResponse,
     operationErrors.list,

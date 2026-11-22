@@ -18,6 +18,9 @@
   --olive-placeholder-mark: rgba(79, 91, 42, 0.08);
   --cream-card: rgba(255, 250, 240, 0.72);
   --tan-cover: rgba(216, 201, 168, 0.22);
+  --shadow-card-color: rgba(79, 91, 42, 0.04);
+  --shadow-cover-color: rgba(79, 91, 42, 0.15);
+  --shadow-toast-color: rgba(0, 0, 0, 0.45);
 
   --text: var(--olive);
   --text-h: var(--olive);
