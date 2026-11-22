@@ -9,6 +9,10 @@ import {
   type BookSearchResponse,
 } from "../../shared/books";
 import { availabilityResponse } from "../../shared/availability";
+import {
+  matchImportResponse,
+  type MatchImportRow,
+} from "../../shared/bookMatch";
 import { titleSearchResponse, type BookFormat } from "../../shared/titleSearch";
 import { apiRequest, userError } from "./client";
 
@@ -145,4 +149,31 @@ export async function searchLibraryByTitle(
     throw new Error("Unable to read library search results.");
   }
   return parsed.data;
+}
+
+const MATCH_ERROR = "Could not match these books.";
+
+// look up imported rows on Open Library; results are in row order
+export async function matchImportRows(
+  rows: MatchImportRow[],
+  signal?: AbortSignal,
+) {
+  let data: unknown;
+  try {
+    data = await apiRequest<unknown>("/api/books/match", {
+      method: "POST",
+      body: { rows },
+      signal,
+    });
+  } catch (err) {
+    throw userError(err, {
+      fallback: MATCH_ERROR,
+      byStatus: { 401: "Your session has expired. Please log in again." },
+    });
+  }
+  const parsed = matchImportResponse.safeParse(data);
+  if (!parsed.success || parsed.data.results.length !== rows.length) {
+    throw new Error(MATCH_ERROR);
+  }
+  return parsed.data.results;
 }

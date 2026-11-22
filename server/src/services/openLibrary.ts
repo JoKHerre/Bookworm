@@ -2,7 +2,6 @@ import type z from "zod";
 
 import {
   openLibrarySearchResponse,
-  openLibrarySimilarBook,
   openLibrarySimilarSearchResponse,
   openLibraryWork,
   openLibraryWorkRecord,
@@ -14,6 +13,7 @@ import {
   SEARCH_PAGE_SIZE,
   bookISBNs,
   openLibraryWorkKey,
+  type BookGenre,
   similarBooksResponse,
   type BookDetails,
   type BookISBNFormat,
@@ -25,9 +25,20 @@ import {
   type SimilarBooksResponse,
 } from "../../../shared/books.ts";
 import { toTags } from "../../../shared/tags.ts";
+import {
+  matchTitle,
+  type ImportMatch,
+  type MatchImportRow,
+} from "../../../shared/bookMatch.ts";
 import { PromiseCache } from "./cache.ts";
+import {
+  getSimilarityProfile,
+  rankSimilarBooks,
+  toWorkResult,
+} from "./bookSimilarity.ts";
 
 const BASE_URL = "https://openlibrary.org";
+const MAX_SIMILAR_CANDIDATES = 100;
 
 const languageCodes = {
   English: "eng",
@@ -48,11 +59,20 @@ const authorNameCache = new PromiseCache<string | undefined>(
   CACHE_TTL_MS,
   2000,
 );
+// the same for every user, so one cached list per genre
+const genreBooksCache = new PromiseCache<BookSearchResult[]>(CACHE_TTL_MS, 20);
+// search results for imported rows, keyed by request path
+const matchSearchCache = new PromiseCache<BookSearchResult[]>(
+  CACHE_TTL_MS,
+  2000,
+);
 
 // For tests that stub fetch with different responses for the same key.
 export function clearOpenLibraryCache() {
   workCache.clear();
   authorNameCache.clear();
+  genreBooksCache.clear();
+  matchSearchCache.clear();
 }
 
 export class OpenLibraryError extends Error {
@@ -111,18 +131,22 @@ async function searchOpenLibraryQuery(
   };
 }
 
+// Open Library's subject for a genre
+function genreSubject(genre: BookGenre): string {
+  if (genre === "Sci-fi") return "science fiction";
+  if (genre === "Non-fiction") return "nonfiction";
+  return genre.toLowerCase();
+}
+
 export function searchOpenLibrary(
   query: BookSearchQuery,
 ): Promise<BookSearchResponse> {
   const constraints: string[] = [];
 
   if (query.genre.length) {
-    const subjects = [...new Set(query.genre)].map((genre) => {
-      let subject = genre.toLowerCase();
-      if (genre === "Sci-fi") subject = "science fiction";
-      if (genre === "Non-fiction") subject = "nonfiction";
-      return `"${subject}"`;
-    });
+    const subjects = [...new Set(query.genre)].map(
+      (genre) => `"${genreSubject(genre)}"`,
+    );
     constraints.push(`subject:(${subjects.join(" OR ")})`);
   }
   if (query.language) {
@@ -185,77 +209,6 @@ export async function searchOpenLibrarySuggestions(
   );
 }
 
-function normalizeSimilarityText(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function selectSimilaritySubjects(title: string, subjects: string[] = []) {
-  const selected: string[] = [];
-  const normalizedTitle = normalizeSimilarityText(title);
-
-  for (const value of subjects) {
-    const subject = normalizeSimilarityText(value);
-    if (
-      !subject ||
-      subject.length > 40 ||
-      subject.includes(":") ||
-      subject === normalizedTitle ||
-      selected.includes(subject)
-    ) {
-      continue;
-    }
-
-    selected.push(subject);
-    if (selected.length === 3) break;
-  }
-
-  return selected;
-}
-
-function rankSimilarBooks(
-  workKey: string,
-  subjects: string[],
-  docs: unknown[],
-): BookSearchResult[] {
-  const seen = new Set<string>();
-  const candidates: { book: BookSearchResult; score: number }[] = [];
-
-  for (const doc of docs) {
-    const parsed = openLibrarySimilarBook.safeParse(doc);
-    if (!parsed.success) continue;
-
-    const { subject = [], ...book } = parsed.data;
-    if (book.key.startsWith("OL")) book.key = `/works/${book.key}`;
-    if (!openLibraryWorkKey.safeParse(book.key).success) continue;
-    if (book.key === workKey || seen.has(book.key)) continue;
-
-    const candidateSubjects = subject.map(normalizeSimilarityText);
-    let score = 0;
-    for (const selectedSubject of subjects) {
-      if (candidateSubjects.includes(selectedSubject)) score++;
-    }
-    if (score === 0) continue;
-
-    // Invalid and unrelated records must not reserve a duplicate's work key.
-    seen.add(book.key);
-    candidates.push({ book, score });
-  }
-
-  candidates.sort((left, right) => {
-    if (left.score !== right.score) return right.score - left.score;
-
-    const leftTitle = normalizeSimilarityText(left.book.title);
-    const rightTitle = normalizeSimilarityText(right.book.title);
-    if (leftTitle < rightTitle) return -1;
-    if (leftTitle > rightTitle) return 1;
-    if (left.book.key < right.book.key) return -1;
-    if (left.book.key > right.book.key) return 1;
-    return 0;
-  });
-
-  return candidates.slice(0, 6).map(({ book }) => book);
-}
-
 export async function getSimilarBooks(
   workKey: string,
   signal?: AbortSignal,
@@ -278,15 +231,16 @@ export async function getSimilarBooks(
       throw new OpenLibraryError("Invalid source work", 502);
     }
 
-    const subjects = selectSimilaritySubjects(work.title, work.subjects);
-    if (subjects.length === 0) return { books: [] };
+    const profile = getSimilarityProfile(work.subjects);
+    if (profile.subjects.size === 0) return { books: [] };
 
-    const terms = subjects.map(
+    const terms = profile.querySubjects.map(
       (subject) => `"${escapeOpenLibraryQueryText(subject)}"`,
     );
     const params = new URLSearchParams({
       q: `subject:(${terms.join(" OR ")})`,
       fields: "key,title,author_name,first_publish_year,cover_i,subject",
+      limit: String(MAX_SIMILAR_CANDIDATES),
     });
 
     let data;
@@ -305,11 +259,106 @@ export async function getSimilarBooks(
     }
 
     return similarBooksResponse.parse({
-      books: rankSimilarBooks(key, subjects, data.docs),
+      books: rankSimilarBooks(key, profile, data.docs),
     });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// Well-rated books for a genre, best first.
+const MATCH_CONCURRENCY = 3;
+
+function searchForMatch(params: Record<string, string>, signal: AbortSignal) {
+  const query = new URLSearchParams({
+    ...params,
+    fields: "key,title,author_name,first_publish_year,cover_i,edition_count",
+  });
+  const path = `/search.json?${query.toString()}`;
+  return matchSearchCache.get(
+    path,
+    async (loadSignal) => {
+      const data = await fetchOpenLibrary(
+        path,
+        openLibrarySearchResponse,
+        loadSignal,
+      );
+      // only works can be saved to a library
+      return data.docs.filter(
+        (doc) => openLibraryWorkKey.safeParse(doc.key).success,
+      );
+    },
+    signal,
+  );
+}
+
+async function matchImportRow(
+  row: MatchImportRow,
+  signal: AbortSignal,
+): Promise<ImportMatch> {
+  try {
+    if (row.isbn) {
+      const [book] = await searchForMatch(
+        { isbn: row.isbn, limit: "1" },
+        signal,
+      );
+      if (book) return { status: "matched", book };
+    }
+
+    const params: Record<string, string> = { title: row.title, limit: "10" };
+    if (row.author) params.author = row.author;
+    return matchTitle(row, await searchForMatch(params, signal));
+  } catch (error) {
+    if (signal.aborted) throw error;
+    console.error("Import match error:", { title: row.title, error });
+    return { status: "failed" };
+  }
+}
+
+// Results are in row order. Throws only when the signal aborts.
+export async function matchImportRows(
+  rows: readonly MatchImportRow[],
+  signal: AbortSignal,
+): Promise<ImportMatch[]> {
+  const results: ImportMatch[] = [];
+  let next = 0;
+  async function worker() {
+    while (next < rows.length) {
+      const index = next++;
+      results[index] = await matchImportRow(rows[index]!, signal);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(MATCH_CONCURRENCY, rows.length) }, worker),
+  );
+  return results;
+}
+
+export function getGenreBooks(
+  genre: BookGenre,
+  signal?: AbortSignal,
+): Promise<BookSearchResult[]> {
+  return genreBooksCache.get(
+    genre,
+    async (shared) => {
+      const params = new URLSearchParams({
+        q: `subject:"${genreSubject(genre)}"`,
+        sort: "rating",
+        limit: "20",
+        fields: "key,title,author_name,first_publish_year,cover_i",
+      });
+      const data = await fetchOpenLibrary(
+        `/search.json?${params.toString()}`,
+        openLibrarySimilarSearchResponse,
+        shared,
+      );
+      return data.docs.flatMap((doc) => {
+        const result = toWorkResult(doc);
+        return result ? [result.book] : [];
+      });
+    },
+    signal,
+  );
 }
 
 function getWork(key: string, signal?: AbortSignal) {

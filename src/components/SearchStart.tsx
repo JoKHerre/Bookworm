@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
-import type { BookDetails } from "../../shared/books";
+import {
+  BOOK_GENRES,
+  type BookDetails,
+  type BookSearchResult,
+} from "../../shared/books";
 import type { SavedBook } from "../../shared/library";
 import { getBookDetails } from "../api/books";
+import { getRecommendations } from "../api/recommendations";
+import { useAuth } from "../auth/useAuth";
+import { useInterests } from "../library/useInterests";
 import "./SearchStart.css";
 
 // a few searches that show what Bookworm can find, for a first visit
@@ -16,7 +23,49 @@ interface SearchStartProps {
   reading: SavedBook[]; // the signed-in user's currently reading books
   recentSearches: string[];
   onSearch: (query: string) => void;
-  onOpenBook: (bookKey: string) => void;
+  // searchBook, when given, lets the details page show the book right away
+  onOpenBook: (bookKey: string, searchBook?: BookSearchResult) => void;
+}
+
+interface ShelfBook {
+  key: string;
+  title: string;
+  author?: string | undefined;
+  coverId?: number | undefined;
+  onOpen: () => void;
+}
+
+function Shelf({ books }: { books: ShelfBook[] }) {
+  return (
+    <ul className="search-start-shelf">
+      {books.map((book) => (
+        <li key={book.key}>
+          <button type="button" onClick={book.onOpen}>
+            {book.coverId ? (
+              <img
+                src={`https://covers.openlibrary.org/b/id/${book.coverId}-M.jpg`}
+                alt=""
+              />
+            ) : (
+              <span className="search-start-cover" aria-hidden="true" />
+            )}
+            <span className="search-start-text">
+              <span className="search-start-title">{book.title}</span>
+              {book.author && (
+                <span className="search-start-author">{book.author}</span>
+              )}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+interface Recommendations {
+  userId: number | undefined; // the user they were loaded for
+  books: BookSearchResult[] | null;
+  error: string;
 }
 
 // What the search page shows before anything is searched.
@@ -29,6 +78,14 @@ function SearchStart({
   const shelf = reading.slice(0, SHELF_LIMIT);
   const shelfKeys = shelf.map((book) => book.bookKey).join("\n");
   const [details, setDetails] = useState<Record<string, BookDetails>>({});
+  const { user } = useAuth();
+  const userId = user?.id;
+  const interests = useInterests();
+  const [recommendations, setRecommendations] =
+    useState<Recommendations | null>(null);
+  const recommendationsKey = interests.savedGenres?.length
+    ? `${userId}:${interests.savedGenres.join(",")}`
+    : "";
 
   useEffect(() => {
     if (!shelfKeys) return;
@@ -45,10 +102,42 @@ function SearchStart({
     return () => controller.abort();
   }, [shelfKeys]);
 
-  const shelfBooks = shelf.flatMap(({ bookKey }) => {
+  useEffect(() => {
+    if (!recommendationsKey) return;
+    const controller = new AbortController();
+    getRecommendations(controller.signal)
+      .then((books) => {
+        if (!controller.signal.aborted) {
+          setRecommendations({ userId, books, error: "" });
+        }
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        setRecommendations({
+          userId,
+          books: null,
+          error: (err as Error).message,
+        });
+      });
+    return () => controller.abort();
+  }, [recommendationsKey, userId]);
+
+  const shelfBooks = shelf.flatMap(({ bookKey }): ShelfBook[] => {
     const book = details[bookKey];
-    return book ? [{ bookKey, book }] : [];
+    return book
+      ? [
+          {
+            key: bookKey,
+            title: book.title,
+            coverId: book.covers?.[0],
+            onOpen: () => onOpenBook(bookKey),
+          },
+        ]
+      : [];
   });
+  // a reload keeps showing the last books; null until the first load
+  const recommended =
+    recommendations?.userId === userId ? recommendations : null;
   const searches =
     recentSearches.length > 0 ? recentSearches : EXAMPLE_SEARCHES;
 
@@ -57,26 +146,7 @@ function SearchStart({
       {shelfBooks.length > 0 && (
         <section aria-labelledby="search-start-reading">
           <h2 id="search-start-reading">Currently reading</h2>
-          <ul className="search-start-shelf">
-            {shelfBooks.map(({ bookKey, book }) => {
-              const coverId = book.covers?.[0];
-              return (
-                <li key={bookKey}>
-                  <button type="button" onClick={() => onOpenBook(bookKey)}>
-                    {coverId ? (
-                      <img
-                        src={`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`}
-                        alt=""
-                      />
-                    ) : (
-                      <span className="search-start-cover" aria-hidden="true" />
-                    )}
-                    <span className="search-start-title">{book.title}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <Shelf books={shelfBooks} />
         </section>
       )}
 
@@ -94,6 +164,64 @@ function SearchStart({
           ))}
         </ul>
       </section>
+
+      {(interests.genres || interests.error) && (
+        <section aria-labelledby="search-start-genres">
+          <h2 id="search-start-genres">Genres you like</h2>
+          {interests.genres && (
+            <ul className="search-start-chips">
+              {BOOK_GENRES.map((genre) => (
+                <li key={genre}>
+                  <button
+                    type="button"
+                    aria-pressed={interests.genres?.includes(genre)}
+                    onClick={() => interests.toggle(genre)}
+                  >
+                    {genre}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {interests.error && (
+            <p className="search-start-error" role="alert">
+              {interests.error}
+            </p>
+          )}
+        </section>
+      )}
+
+      {recommendationsKey && (
+        <section aria-labelledby="search-start-recommended">
+          <h2 id="search-start-recommended">Recommended for you</h2>
+          {!recommended && (
+            <p className="search-start-message" role="status">
+              Loading recommendations...
+            </p>
+          )}
+          {recommended?.error && (
+            <p className="search-start-error" role="alert">
+              {recommended.error}
+            </p>
+          )}
+          {recommended?.books?.length === 0 && (
+            <p className="search-start-message">
+              No recommendations for these genres yet.
+            </p>
+          )}
+          {recommended?.books && recommended.books.length > 0 && (
+            <Shelf
+              books={recommended.books.map((book) => ({
+                key: book.key,
+                title: book.title,
+                author: book.author_name?.[0],
+                coverId: book.cover_i,
+                onOpen: () => onOpenBook(book.key, book),
+              }))}
+            />
+          )}
+        </section>
+      )}
     </div>
   );
 }
