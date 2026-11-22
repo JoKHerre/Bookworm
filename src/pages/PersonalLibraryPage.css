@@ -63,7 +63,7 @@
   outline-offset: 3px;
 }
 
-.personal-library-shelf h3 {
+.personal-library-shelf-title {
   margin: 0;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--tan);

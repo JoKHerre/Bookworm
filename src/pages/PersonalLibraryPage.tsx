@@ -426,7 +426,10 @@ function PersonalLibraryPage() {
                         key={status}
                         aria-labelledby={headingId}
                       >
-                        <h3 id={headingId}>
+                        <h3
+                          className="personal-library-shelf-title"
+                          id={headingId}
+                        >
                           {READING_STATUS_LABELS[status]}{" "}
                           <span className="personal-library-shelf-count">
                             {shelf.length}
