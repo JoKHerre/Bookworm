@@ -1,7 +1,4 @@
 .collections-manager {
-  --collection-danger: #9b3d35;
-  --collection-danger-hover: #7a2d27;
-  --collection-danger-wash: rgba(155, 61, 53, 0.08);
   margin-top: 40px;
   color: var(--olive);
 }
@@ -154,21 +151,21 @@
 }
 
 .collections-manager .collections-button--delete:hover:not(:disabled) {
-  border-color: var(--collection-danger);
-  background: var(--collection-danger-wash);
-  color: var(--collection-danger);
+  border-color: var(--danger);
+  background: var(--danger-wash);
+  color: var(--danger);
 }
 
 .collections-manager .collections-button--danger {
-  border-color: var(--collection-danger);
-  background: var(--collection-danger-wash);
-  color: var(--collection-danger);
+  border-color: var(--danger);
+  background: var(--danger-wash);
+  color: var(--danger);
   font-weight: 600;
 }
 
 .collections-manager .collections-button--danger:hover:not(:disabled) {
-  border-color: var(--collection-danger-hover);
-  background: var(--collection-danger-hover);
+  border-color: var(--danger-hover);
+  background: var(--danger-hover);
   color: var(--cream);
 }
 
