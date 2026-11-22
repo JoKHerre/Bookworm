@@ -117,8 +117,8 @@ export interface ValidateImportResult {
   errors: ImportRowError[];
 }
 
-const MAX_TITLE_LENGTH = 300;
-const MAX_AUTHOR_LENGTH = 200;
+export const MAX_TITLE_LENGTH = 300;
+export const MAX_AUTHOR_LENGTH = 200;
 
 // Strip hyphens and spaces and return the ISBN if its checksum is valid.
 function normalizeIsbn(value: string): string | null {

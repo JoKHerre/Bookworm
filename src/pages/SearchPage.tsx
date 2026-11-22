@@ -555,9 +555,10 @@ function SearchPage() {
           )}
           recentSearches={recentSearches}
           onSearch={runSearch}
-          onOpenBook={(bookKey) => {
+          onOpenBook={(bookKey, searchBook) => {
             const state: BookDetailsLocationState = {
               backLabel: "Back to Search",
+              searchBook,
             };
             void navigate(bookDetailsPath(bookKey), { state });
           }}

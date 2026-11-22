@@ -20,6 +20,8 @@ export const BOOK_GENRES = [
   "Poetry",
 ] as const;
 
+export type BookGenre = (typeof BOOK_GENRES)[number];
+
 export const BOOK_LANGUAGES = ["English", "Spanish", "French"] as const;
 
 export const PUBLICATION_YEAR_RANGES = [
@@ -112,6 +114,8 @@ export const bookSearchResult = z.object({
   author_name: z.array(z.string()).optional(),
   first_publish_year: z.number().optional(),
   cover_i: z.number().optional(),
+  // only requested when matching imported books
+  edition_count: z.number().optional(),
 });
 
 export type BookSearchResult = z.infer<typeof bookSearchResult>;
@@ -125,6 +129,8 @@ export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
 
 // GET /api/books/similar?key=/works/OL...W
 
+export const SIMILAR_BOOKS_LIMIT = 6;
+
 export const similarBooksQuery = z.object({
   key: openLibraryWorkKey,
 });
@@ -135,10 +141,20 @@ export const similarBookResult = bookSearchResult.extend({
 });
 
 export const similarBooksResponse = z.object({
-  books: z.array(similarBookResult).max(6),
+  books: z.array(similarBookResult).max(SIMILAR_BOOKS_LIMIT),
 });
 
 export type SimilarBooksResponse = z.infer<typeof similarBooksResponse>;
+
+// GET /api/recommendations
+
+export const MAX_RECOMMENDATIONS = 12;
+
+export const recommendationsResponse = z.object({
+  books: z.array(similarBookResult).max(MAX_RECOMMENDATIONS),
+});
+
+export type RecommendationsResponse = z.infer<typeof recommendationsResponse>;
 
 // GET /api/books/details?key=/works/OL...W
 
