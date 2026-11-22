@@ -30,3 +30,11 @@ Serves SRC-05. Add warning and genre exclusion rules for search to use in task 3
 2. Missing or unavailable warning information keeps the book with its status unchanged.
 3. Genre exclusions use valid Open Library syntax, apply together, and take precedence over included genres without changing other search constraints or pagination.
 4. Existing searches behave as before; no warning requests or new public parameters are introduced.
+
+## Tests
+
+| Test group                                              | Setup                                                         | Asserts                                               | Criterion |
+| ------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------- | --------- |
+| SRC-05-T-2 applies warning exclusions                   | Matching and nonmatching IDs; empty selection or category IDs | Any selected match excludes; otherwise keeps the book | 1         |
+| SRC-05-T-2 ignores selection order and duplicates       | Reorder and repeat selected IDs                               | Same exclusion decision                               | 1         |
+| SRC-05-T-2 keeps books with missing warning information | `not_found` and `unavailable` responses                       | Keeps the book; response and status unchanged         | 2         |
