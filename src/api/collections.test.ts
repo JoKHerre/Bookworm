@@ -10,6 +10,7 @@ import {
   removeBookFromCollection,
 } from "./collections";
 import { jsonResponse } from "../test/renderWithProviders";
+import { ApiRequestError } from "./client";
 
 const collection = {
   id: 7,
@@ -227,6 +228,29 @@ describe("collectionsApi", () => {
       listCollectionsForBook("/works/OL1W", controller.signal),
     ).rejects.toBe(cancellation);
   });
+  it.each([401, 404, 409])(
+    "preserves HTTP %s and the original error when translating messages",
+    async (status) => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(jsonResponse({ error: "Server error" }, status)),
+      );
+      const error = await addBookToCollection(7, "/works/OL1W").catch(
+        (failure: unknown) => failure,
+      );
+      expect(error).toBeInstanceOf(ApiRequestError);
+      expect(error).toMatchObject({
+        status,
+        cause: expect.any(ApiRequestError),
+      });
+      expect((error as ApiRequestError).cause).toMatchObject({
+        status,
+        serverMessage: "Server error",
+      });
+    },
+  );
   it("lists summaries and forwards cancellation", async () => {
     const fetchMock = vi
       .fn()

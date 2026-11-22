@@ -7,7 +7,7 @@ import type {
   CollectionDetailResponse,
 } from "../../shared/collections";
 import type { SavedBook } from "../../shared/library";
-import { apiRequest, ApiRequestError } from "./client";
+import { apiRequest, ApiRequestError, errorMessage } from "./client";
 export type { CollectionSummary } from "../../shared/collections";
 
 // for checking a book's membership in a collection
@@ -62,11 +62,7 @@ async function request(
   operation: Operation,
 ): Promise<unknown> {
   try {
-    return await apiRequest<unknown>(`/api/collections${path}`, {
-      method: init?.method,
-      body: init?.body,
-      signal: init?.signal ?? undefined,
-    });
+    return await apiRequest<unknown>(`/api/collections${path}`, init);
   } catch (error) {
     if (!(error instanceof ApiRequestError)) throw error;
     if (error.status === 0)
@@ -89,7 +85,11 @@ async function request(
       messages[404] = "This book is no longer in this collection.";
     throw new ApiRequestError(
       error.status,
-      messages[error.status] ?? operationErrors[operation],
+      errorMessage(error, {
+        fallback: operationErrors[operation],
+        byStatus: messages,
+      }),
+      { cause: error },
     );
   }
 }
