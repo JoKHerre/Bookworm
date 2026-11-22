@@ -96,6 +96,46 @@ describe("PersonalLibraryPage", () => {
     vi.useRealTimers();
   });
 
+  it("defaults to Books and switches panels without losing tag filters", async () => {
+    await renderPage();
+    const books = screen.getByRole("tab", { name: "Books" });
+    const collections = screen.getByRole("tab", { name: "Collections" });
+    expect(books).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Books" })).toBeVisible();
+    await userEvent.click(tagBox("romance"));
+    expect(titles()).toEqual(["Emma"]);
+    await userEvent.click(collections);
+    expect(collections).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Collections" })).toBeVisible();
+    expect(
+      screen.queryByRole("region", { name: "Books" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(books);
+    expect(tagBox("romance")).toBeChecked();
+    expect(titles()).toEqual(["Emma"]);
+  });
+
+  it("opens Collections directly and supports keyboard tab navigation", async () => {
+    renderWithProviders(<PersonalLibraryPage />, {
+      route: "/personal-library?tab=collections",
+    });
+    const books = screen.getByRole("tab", { name: "Books" });
+    const collections = screen.getByRole("tab", { name: "Collections" });
+    expect(collections).toHaveAttribute("aria-selected", "true");
+    expect(books).toHaveAttribute("tabindex", "-1");
+    collections.focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(books).toHaveFocus();
+    expect(books).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{End}");
+    expect(collections).toHaveFocus();
+    expect(collections).toHaveAttribute("aria-selected", "true");
+    await userEvent.keyboard("{Home}");
+    expect(books).toHaveFocus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(collections).toHaveFocus();
+  });
+
   it("COL-05-T-2 keeps books usable when collections fail to load", async () => {
     const fetchMock = stubApi(FIXTURES);
     const original = fetchMock.getMockImplementation()!;
@@ -105,8 +145,10 @@ describe("PersonalLibraryPage", () => {
         : original(input, init),
     );
     renderWithProviders(<PersonalLibraryPage />);
+    await userEvent.click(screen.getByRole("tab", { name: "Collections" }));
     const collections = screen.getByRole("region", { name: "Collections" });
     expect(await within(collections).findByRole("alert")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Books" }));
     expect(await screen.findByText("Dune")).toBeInTheDocument();
     await userEvent.selectOptions(
       screen.getByRole("combobox", { name: "Reading status for Dune" }),
@@ -123,6 +165,7 @@ describe("PersonalLibraryPage", () => {
     expect(
       await screen.findByText("We couldn’t load your books"),
     ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Collections" }));
     await userEvent.click(
       screen.getByRole("button", { name: "New collection" }),
     );
@@ -140,7 +183,8 @@ describe("PersonalLibraryPage", () => {
       screen.getByRole("button", { name: "Create collection" }),
     );
     expect(await screen.findByText("School")).toBeInTheDocument();
-    expect(screen.getByText("We couldn’t load your books")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Books" }));
+    expect(screen.getByText("We couldn’t load your books")).toBeVisible();
   });
 
   it("TST-01-T-1 library shows saved books", async () => {

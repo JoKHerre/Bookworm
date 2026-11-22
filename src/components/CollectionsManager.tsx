@@ -253,12 +253,8 @@ export default function CollectionsManager() {
   );
 
   return (
-    <section
-      className="collections-manager"
-      aria-labelledby="collections-title"
-    >
+    <section className="collections-manager" aria-label="Collections">
       <div className="collections-heading">
-        <h2 id="collections-title">Collections</h2>
         <button
           ref={newButton}
           className="collections-button--primary"

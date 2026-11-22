@@ -141,6 +141,7 @@ beforeEach(() => {
 describe("CollectionDetailsPage", () => {
   it("opens collection contents from the My Library collection link", async () => {
     renderPage("/personal-library");
+    await userEvent.click(screen.getByRole("tab", { name: "Collections" }));
     await userEvent.click(
       await screen.findByRole("link", { name: "Summer Reading" }),
     );
@@ -186,7 +187,7 @@ describe("CollectionDetailsPage", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Back to My Library/ }),
-    ).toHaveAttribute("href", "/personal-library");
+    ).toHaveAttribute("href", "/personal-library?tab=collections");
   });
   it("opens an empty collection without requesting book metadata", async () => {
     stubApi([]);
@@ -450,7 +451,12 @@ describe("CollectionDetailsPage", () => {
       name: "Your collections",
     });
     expect(within(collections).getByText("1 book")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Collections" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     // Membership removal did not remove the saved book from the library list.
+    await userEvent.click(screen.getByRole("tab", { name: "Books" }));
     expect(
       await within(screen.getByRole("region", { name: "Books" })).findByText(
         "Dune",

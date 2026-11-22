@@ -190,7 +190,7 @@ describe("BookCollectionAssignment", () => {
     expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Manage collections in My Library" }),
-    ).toHaveAttribute("href", "/personal-library");
+    ).toHaveAttribute("href", "/personal-library?tab=collections");
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     fetchMock.mockResolvedValueOnce(jsonResponse({ collections: [FAVORITES] }));
     await userEvent.click(

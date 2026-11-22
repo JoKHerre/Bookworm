@@ -201,7 +201,7 @@ export default function BookCollectionAssignment({
               </form>
             )}
             <div className="book-collection-links">
-              <Link to="/personal-library">
+              <Link to="/personal-library?tab=collections">
                 Manage collections in My Library
               </Link>
               <button

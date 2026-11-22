@@ -43,7 +43,10 @@ function CollectionShell({ children }: { children: ReactNode }) {
   return (
     <div className="collection-details-shell">
       <main className="collection-details-page">
-        <Link className="collection-back-link" to="/personal-library">
+        <Link
+          className="collection-back-link"
+          to="/personal-library?tab=collections"
+        >
           Back to My Library
         </Link>
         {children}

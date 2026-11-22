@@ -34,6 +34,35 @@
   margin-top: 28px;
 }
 
+.personal-library-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--tan);
+}
+
+.personal-library-tabs button {
+  min-height: 44px;
+  padding: 12px 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--olive-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.personal-library-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--olive);
+  color: var(--olive);
+  font-weight: 700;
+}
+
+.personal-library-tabs button:focus-visible,
+.personal-library-page [role="tabpanel"]:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
 .personal-library-shelf h3 {
   margin: 0;
   padding-bottom: 10px;
@@ -238,23 +267,4 @@
 
 .personal-library-books {
   margin-top: 4px;
-}
-
-.personal-library-books-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 0;
-  padding: 10px 0 16px;
-  border-bottom: 1px solid var(--tan);
-}
-
-.personal-library-books-heading h2 {
-  margin: 0;
-  color: var(--olive);
-  font-family: var(--heading);
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
 }
