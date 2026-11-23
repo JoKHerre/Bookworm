@@ -31,7 +31,8 @@ export interface ReadingStatusResponse {
 }
 
 // POST /api/library/import
+// keys in request order, each once
 export interface ImportBooksResponse {
-  added: number;
-  alreadySaved: number;
+  added: string[];
+  alreadySaved: string[];
 }

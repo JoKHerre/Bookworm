@@ -162,11 +162,12 @@ libraryRouter.post(
         bookKeys.map((bookKey) => ({ userId: res.locals.user!.id, bookKey })),
       )
       .onConflictDoNothing({ target: [savedBooks.userId, savedBooks.bookKey] })
-      .returning({ id: savedBooks.id });
+      .returning({ bookKey: savedBooks.bookKey });
 
+    const added = new Set(inserted.map((row) => row.bookKey));
     res.json({
-      added: inserted.length,
-      alreadySaved: bookKeys.length - inserted.length,
+      added: bookKeys.filter((key) => added.has(key)),
+      alreadySaved: bookKeys.filter((key) => !added.has(key)),
     });
   },
 );
