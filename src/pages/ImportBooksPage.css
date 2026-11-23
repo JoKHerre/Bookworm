@@ -368,3 +368,12 @@
 .import-search p {
   margin: 0;
 }
+
+.import-list a {
+  color: var(--olive);
+}
+
+.import-list a:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}

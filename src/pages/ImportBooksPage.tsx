@@ -22,6 +22,7 @@ import type { ImportBooksResponse } from "../../shared/library";
 import { matchImportRows, searchBooks } from "../api/books";
 import { ApiRequestError } from "../api/client";
 import { importBooks } from "../api/library";
+import { bookDetailsPath } from "../routes";
 import "./ImportBooksPage.css";
 
 const IMPORT_SEARCH_RESULTS = 5;
@@ -419,6 +420,38 @@ function ImportBooksPage() {
     focusKey.current = book.key;
   }
 
+  // the book the page matched, picked or chose for each key
+  const bookByKey = new Map<string, BookSearchResult>();
+  for (const match of matches) {
+    const found =
+      match.status === "matched"
+        ? [match.book]
+        : match.status === "ambiguous"
+          ? match.candidates
+          : [];
+    for (const book of found) {
+      if (!bookByKey.has(book.key)) bookByKey.set(book.key, book);
+    }
+  }
+
+  function resultList(id: string, title: string, keys: string[]) {
+    if (keys.length === 0) return null;
+    return (
+      <section aria-labelledby={id}>
+        <h2 id={id}>{title}</h2>
+        <ul className="import-list" aria-labelledby={id}>
+          {keys.map((key) => (
+            <li key={key}>
+              <Link to={bookDetailsPath(key)}>
+                {bookLabel(bookByKey.get(key) ?? { key, title: key })}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
   async function handleImport() {
     setImporting(true);
     setError("");
@@ -471,8 +504,14 @@ function ImportBooksPage() {
         {result ? (
           <>
             <p className="import-status" role="status">
-              {`Imported ${books(result.added)}. ${result.alreadySaved} already in your library.`}
+              {`Imported ${books(result.added.length)}. ${result.alreadySaved.length} already in your library.`}
             </p>
+            {resultList("import-added-title", "Added", result.added)}
+            {resultList(
+              "import-saved-title",
+              "Already in your library",
+              result.alreadySaved,
+            )}
             <Link className="import-link" to="/personal-library">
               Go to My Library
             </Link>
