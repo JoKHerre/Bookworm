@@ -492,4 +492,63 @@ describe("ImportBooksPage", () => {
     expect(signal?.aborted).toBe(true);
     expect(screen.queryByText(/Matching books/)).not.toBeInTheDocument();
   });
+  describe("preview", () => {
+    const ready = () => screen.findByRole("list", { name: "Ready to import" });
+    const items = async () =>
+      within(await ready())
+        .getAllByRole("listitem")
+        .map((item) => item.textContent);
+
+    beforeEach(() => {
+      matchMock.mockImplementation((rows) =>
+        Promise.resolve(
+          rows.map(({ title }): ImportMatch => {
+            if (title === "Dune") {
+              return {
+                status: "matched",
+                book: book(1, "Dune", "Frank Herbert", 1965),
+              };
+            }
+            if (title === "Emma") {
+              return {
+                status: "matched",
+                book: book(2, "Persuasion", "Jane Austen", 1817),
+              };
+            }
+            return { status: "none" };
+          }),
+        ),
+      );
+    });
+
+    it("IMP-03-T-1 lists matched books before import", async () => {
+      setup();
+      await uploadCsv("title,author\nDune,Frank Herbert\nnope,\n");
+      expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+    });
+
+    it("IMP-03-T-1 flags doubtful matches first", async () => {
+      setup();
+      await uploadCsv("title,author\nDune,Frank Herbert\nEmma,Jane Austen\n");
+      expect(await items()).toEqual([
+        "Persuasion by Jane Austen (1817)Check this matchIn your file: Emma by Jane Austen",
+        "Dune by Frank Herbert (1965)",
+      ]);
+    });
+
+    it("IMP-03-T-1 lists keyed books without a flag", async () => {
+      setup();
+      await uploadCsv("title,author,book_key\nMy Dune,Herbert,/works/OL9W\n");
+      expect(await items()).toEqual(["My Dune by Herbert"]);
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+    });
+
+    it("IMP-03-T-1 lists a book matched twice once", async () => {
+      setup();
+      await uploadCsv("title,book_key\nDune,\nOther,/works/OL1W\n");
+      expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
+      expect(await importButton("1 book")).toBeInTheDocument();
+    });
+  });
 });
