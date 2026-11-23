@@ -7,6 +7,7 @@ import {
 } from "../../shared/bookImport";
 import {
   IMPORT_MATCH_BATCH_SIZE,
+  matchNeedsCheck,
   normalizeTitle,
   type ImportMatch,
 } from "../../shared/bookMatch";
@@ -43,6 +44,13 @@ function candidateLabel(book: BookSearchResult, rowTitle: string) {
     normalizeTitle(book.title) === normalizeTitle(rowTitle)
       ? author
       : `${book.title} by ${author}`;
+  if (book.first_publish_year) label += ` (${book.first_publish_year})`;
+  return label;
+}
+
+function bookLabel(book: BookSearchResult) {
+  let label = book.title;
+  if (book.author_name?.length) label += ` by ${book.author_name.join(", ")}`;
   if (book.first_publish_year) label += ` (${book.first_publish_year})`;
   return label;
 }
@@ -189,7 +197,14 @@ function ImportBooksPage() {
     setMatches(
       valid.map((row) =>
         row.book_key
-          ? { status: "matched", book: { key: row.book_key, title: row.title } }
+          ? {
+              status: "matched",
+              book: {
+                key: row.book_key,
+                title: row.title,
+                ...(row.author && { author_name: [row.author] }),
+              },
+            }
           : { status: "pending" },
       ),
     );
@@ -205,6 +220,18 @@ function ImportBooksPage() {
   const failed = indexesWith("failed");
   const missing = indexesWith("none");
   const ambiguous = indexesWith("ambiguous");
+
+  // each matched book once, flagged ones first
+  const seen = new Set<string>();
+  const preview = matches
+    .flatMap((match, i) => {
+      if (match.status !== "matched" || seen.has(match.book.key)) return [];
+      seen.add(match.book.key);
+      const row = valid[i]!;
+      const check = !row.book_key && matchNeedsCheck(row, match.book);
+      return [{ row, book: match.book, check }];
+    })
+    .sort((a, b) => Number(b.check) - Number(a.check));
 
   const bookKeys = [
     ...new Set(
@@ -293,6 +320,30 @@ function ImportBooksPage() {
 
         {parsed && !result && !matching && (
           <>
+            {preview.length > 0 && (
+              <section aria-labelledby="import-ready-title">
+                <h2 id="import-ready-title">Ready to import</h2>
+                <ul
+                  className="import-preview"
+                  aria-labelledby="import-ready-title"
+                >
+                  {preview.map(({ row, book, check }) => (
+                    <li key={book.key}>
+                      <span>{bookLabel(book)}</span>
+                      {check && (
+                        <>
+                          <span className="import-flag">Check this match</span>
+                          <span className="import-source">
+                            In your file: {rowLabel(row)}
+                          </span>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {ambiguous.length > 0 && (
               <section aria-labelledby="import-pick-title">
                 <h2 id="import-pick-title">Pick the right book</h2>

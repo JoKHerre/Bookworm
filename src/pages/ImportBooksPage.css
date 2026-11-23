@@ -195,3 +195,35 @@
 .import-card section > .import-secondary {
   margin-top: 12px;
 }
+
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-preview li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.import-flag {
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--olive);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+}
+
+.import-source {
+  flex-basis: 100%;
+  font-size: 0.9rem;
+  color: var(--olive-text-secondary);
+}
