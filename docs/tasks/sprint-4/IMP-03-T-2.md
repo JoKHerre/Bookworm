@@ -15,7 +15,7 @@ Serves IMP-03 (review imported books to make sure they were imported correctly).
 ## Specs
 
 - In `src/pages/ImportBooksPage.tsx`, each "Ready to import" item has a checkbox labeled with the book, checked by default. Unchecking it leaves the book out of the import. Choosing or uploading a file resets the checkboxes.
-- Each "No match found" row has a "Search" button. It opens a search form for that row, and only one is open at a time. The form has a "Search Open Library" input, filled with the row's title and author, and a "Search" button.
+- Each "No match found" row has a "Search" button. It opens a search form for that row and reads "Close" while it's open. Only one form is open at a time. The form has a "Search Open Library" input, filled with the row's title and author, and a "Search" button.
 - Searching calls `searchBooks` from `src/api/books.ts` and lists the first `IMPORT_SEARCH_RESULTS` (5) results, labeled like the preview, each with a "Choose" button. While it runs the button reads "Searching…". With no results it says "No books found.", and a failed request shows its error in a `role="alert"` element inside the form. Closing the form or searching again aborts the request still running.
 - Choosing a result moves the row from "No match found" to "Ready to import" as an included book. It isn't flagged, since the user picked it.
 - The "Import <n> books" button counts the unique keys of included preview books and picked ambiguous books.
@@ -36,10 +36,11 @@ Serves IMP-03 (review imported books to make sure they were imported correctly).
 
 Tested in `src/pages/ImportBooksPage.test.tsx` with Testing Library, mocking `src/api/books.ts` and `src/api/library.ts`.
 
-| Test name                                                 | Setup / Asserts                                                                     | Criterion |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------- |
-| `IMP-03-T-2 leaves out an unchecked book`                 | Unchecking a book lowers the count and drops its key; checking it again restores it | 1         |
-| `IMP-03-T-2 searches for a row with no match`             | "Search" opens a form filled with the title and author; results list up to 5 books  | 2         |
-| `IMP-03-T-2 imports a chosen search result`               | Choosing a result moves the row to the preview, unflagged, and its key is imported  | 3         |
-| `IMP-03-T-2 shows search progress, no results and errors` | "Searching…" while pending, "No books found." for none, the error for a rejection   | 4         |
-| `IMP-03-T-2 aborts a search when the form closes`         | Opening another row's form aborts the pending request's signal                      | 4         |
+| Test name                                                 | Setup / Asserts                                                                    | Criterion |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------- |
+| `IMP-03-T-2 leaves out an unchecked book`                 | Unchecking a book lowers the count and drops its key from the import               | 1         |
+| `IMP-03-T-2 puts an unchecked book back`                  | Checking it again restores the count                                               | 1         |
+| `IMP-03-T-2 searches for a row with no match`             | "Search" opens a form filled with the title and author; results list up to 5 books | 2         |
+| `IMP-03-T-2 imports a chosen search result`               | Choosing a result moves the row to the preview, unflagged, and its key is imported | 3         |
+| `IMP-03-T-2 shows search progress, no results and errors` | "Searching…" while pending, "No books found." for none, the error for a rejection  | 4         |
+| `IMP-03-T-2 aborts a search when the form closes`         | Opening another row's form aborts the pending request's signal                     | 4         |
