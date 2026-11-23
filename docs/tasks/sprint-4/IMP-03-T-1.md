@@ -36,11 +36,11 @@ Serves IMP-03 (review imported books to make sure they were imported correctly).
 
 `matchNeedsCheck` is tested in `shared/bookMatch.test.ts`. The page is tested in `src/pages/ImportBooksPage.test.tsx` with Testing Library, mocking `src/api/books.ts` and `src/api/library.ts`.
 
-| Test name                                             | Setup / Asserts                                                                  | Criterion |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------- | --------- |
-| `IMP-03-T-1 flags a match with another title`         | A different title or a title matched only before `:` is flagged; equal is not    | 2         |
-| `IMP-03-T-1 flags a match with another author`        | A row author that doesn't match the book is flagged; no row author is not        | 2         |
-| `IMP-03-T-1 lists matched books before import`        | Matched rows show title, author and year under "Ready to import"                 | 1         |
-| `IMP-03-T-1 flags doubtful matches first`             | A flagged match is listed first with the tag and the file's title and author     | 2         |
-| `IMP-03-T-1 lists keyed books without a flag`         | A `book_key` row shows the file's title and author and has no tag                | 3         |
-| `IMP-03-T-1 lists a book matched twice once`          | Two rows matching the same key give one item                                    | 4         |
+| Test name                                      | Setup / Asserts                                                               | Criterion |
+| ---------------------------------------------- | ----------------------------------------------------------------------------- | --------- |
+| `IMP-03-T-1 flags a match with another title`  | A different title or a title matched only before `:` is flagged; equal is not | 2         |
+| `IMP-03-T-1 flags a match with another author` | A row author that doesn't match the book is flagged; no row author is not     | 2         |
+| `IMP-03-T-1 lists matched books before import` | Matched rows show title, author and year under "Ready to import"              | 1         |
+| `IMP-03-T-1 flags doubtful matches first`      | A flagged match is listed first with the tag and the file's title and author  | 2         |
+| `IMP-03-T-1 lists keyed books without a flag`  | A `book_key` row shows the file's title and author and has no tag             | 3         |
+| `IMP-03-T-1 lists a book matched twice once`   | Two rows matching the same key give one item                                  | 4         |
