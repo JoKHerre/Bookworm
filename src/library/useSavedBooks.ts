@@ -181,5 +181,10 @@ export function useSavedBooks() {
     }
   }
 
-  return { saved, busyKeys, errors, save, setReadingStatus };
+  function rememberSavedBook(book: SavedBook) {
+    setSaved((current) => new Map(current).set(book.bookKey, book));
+    setError(book.bookKey, "");
+  }
+
+  return { saved, busyKeys, errors, save, setReadingStatus, rememberSavedBook };
 }

@@ -1,0 +1,441 @@
+import { ApiRequestError } from "../api/client";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router";
+import { collectionDetailsPath } from "../routes";
+import {
+  createCollection,
+  deleteCollection,
+  listCollections,
+  listCollectionsForBook,
+  renameCollection,
+  type CollectionSummary,
+} from "../api/collections";
+import "./CollectionsManager.css";
+
+type Editor =
+  | { kind: "create" }
+  | { kind: "rename" | "delete"; collection: CollectionSummary };
+
+// check collection name validity
+function validateCollectionName(name: string): string {
+  const length = [...name.trim()].length;
+  if (length < 1) return "Enter a collection name.";
+  if (length > 100) return "Collection names can be up to 100 characters.";
+  if (name.includes("\0")) return "This name contains unsupported characters.";
+  return "";
+}
+
+interface Props {
+  removedBookKeys?: string[];
+  refreshVersion?: number;
+}
+
+export default function CollectionsManager({
+  removedBookKeys = [],
+  refreshVersion = 0,
+}: Props) {
+  const [collections, setCollections] = useState<CollectionSummary[]>([]);
+  const [memberships, setMemberships] = useState<Record<string, number[]>>({});
+  const [loadedVersion, setLoadedVersion] = useState(-1);
+  // A stable dependency keeps unrelated parent renders from restarting requests.
+  const removedKeys = JSON.stringify(removedBookKeys);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const [notice, setNotice] = useState("");
+  const mounted = useRef(false);
+  const busy = useRef(false);
+  const activeLoad = useRef<AbortController | null>(null);
+  const deferredRefresh = useRef(false);
+  const newButton = useRef<HTMLButtonElement>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (busy.current) {
+      deferredRefresh.current = true;
+      return;
+    }
+    const controller = new AbortController();
+    activeLoad.current = controller;
+    async function loadCollections() {
+      setLoading(true);
+      setLoadError("");
+      try {
+        const keys = JSON.parse(removedKeys) as string[];
+        const membershipResults = await Promise.all(
+          keys.map(async (key) => {
+            try {
+              return {
+                key,
+                collections: await listCollectionsForBook(
+                  key,
+                  controller.signal,
+                ),
+              };
+            } catch {
+              // A failed membership lookup must not guess which counts to reduce.
+              return null;
+            }
+          }),
+        );
+        if (controller.signal.aborted) return;
+        // Membership responses include current counts as well as membership flags.
+        const result =
+          membershipResults.find((result) => result !== null)?.collections ??
+          (await listCollections(controller.signal));
+        if (!controller.signal.aborted) {
+          setCollections(result);
+          setMemberships(
+            Object.fromEntries(
+              membershipResults.flatMap((result) =>
+                result
+                  ? [
+                      [
+                        result.key,
+                        result.collections
+                          .filter((collection) => collection.containsBook)
+                          .map((collection) => collection.id),
+                      ],
+                    ]
+                  : [],
+              ),
+            ),
+          );
+          setLoadedVersion(refreshVersion);
+        }
+      } catch (failure) {
+        if (!controller.signal.aborted) {
+          setLoadError(
+            failure instanceof Error
+              ? failure.message
+              : "Could not load your collections.",
+          );
+        }
+      } finally {
+        if (activeLoad.current === controller) activeLoad.current = null;
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+    void loadCollections();
+    return () => {
+      controller.abort();
+      if (activeLoad.current === controller) activeLoad.current = null;
+    };
+  }, [attempt, removedKeys, refreshVersion]);
+
+  const displayedCollections = collections.map((collection) => ({
+    ...collection,
+    bookCount: Math.max(
+      0,
+      collection.bookCount -
+        removedBookKeys.filter((key) =>
+          memberships[key]?.includes(collection.id),
+        ).length,
+    ),
+  }));
+  // Confirmed deletions invalidate the old counts until fresh server data arrives.
+  const refreshing = loadedVersion !== refreshVersion;
+
+  useEffect(() => {
+    if (editor?.kind === "delete") cancelButton.current?.focus();
+    else if (editor) input.current?.focus();
+    else if (!pending && restoreFocus.current) {
+      trigger.current?.focus();
+      restoreFocus.current = false;
+    }
+  }, [editor, pending]);
+
+  function openEditor(next: Editor, button: HTMLButtonElement) {
+    trigger.current = button;
+    setName(next.kind === "rename" ? next.collection.name : "");
+    setError("");
+    setNotice("");
+    setEditor(next);
+  }
+
+  function closeEditor(deleted = false) {
+    if (deleted) trigger.current = newButton.current;
+    restoreFocus.current = true;
+    setEditor(null);
+    setError("");
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editor || busy.current) return;
+    if (editor.kind !== "delete") {
+      const validation = validateCollectionName(name);
+      if (validation) {
+        setError(validation);
+        input.current?.focus();
+        return;
+      }
+      if (editor.kind === "rename" && name.trim() === editor.collection.name)
+        return;
+    }
+    busy.current = true;
+    // Abort also invalidates the response if the request finishes despite cancellation.
+    if (activeLoad.current) {
+      activeLoad.current.abort();
+      activeLoad.current = null;
+      deferredRefresh.current = true;
+      setLoading(false);
+    }
+    setPending(true);
+    setError("");
+    try {
+      if (editor.kind === "delete") {
+        await deleteCollection(editor.collection.id);
+        if (!mounted.current) return;
+        setCollections((current) =>
+          current.filter(({ id }) => id !== editor.collection.id),
+        );
+        setNotice(
+          `Deleted “${editor.collection.name}”. Its books are still in My Library.`,
+        );
+      } else {
+        const result =
+          editor.kind === "create"
+            ? await createCollection(name)
+            : await renameCollection(editor.collection.id, name);
+        if (!mounted.current) return;
+        setCollections((current) =>
+          editor.kind === "create"
+            ? [...current, result]
+            : current.map((collection) =>
+                collection.id === result.id ? result : collection,
+              ),
+        );
+        setNotice(
+          editor.kind === "create"
+            ? `Created “${result.name}”.`
+            : `Renamed collection to “${result.name}”.`,
+        );
+      }
+      closeEditor(editor.kind === "delete");
+    } catch (failure) {
+      if (!mounted.current) return;
+      const message =
+        failure instanceof Error
+          ? failure.message
+          : editor.kind === "create"
+            ? "Could not create this collection."
+            : editor.kind === "rename"
+              ? "Could not rename this collection."
+              : "Could not delete this collection.";
+      if (failure instanceof ApiRequestError && failure.status === 404) {
+        closeEditor(true);
+        setNotice("This collection is no longer available.");
+        deferredRefresh.current = true;
+      } else setError(message);
+    } finally {
+      busy.current = false;
+      if (mounted.current) {
+        setPending(false);
+        if (deferredRefresh.current) {
+          deferredRefresh.current = false;
+          setAttempt((current) => current + 1);
+        }
+      }
+    }
+  }
+
+  const form = editor && (
+    <form
+      className="collections-form"
+      aria-label={
+        editor.kind === "create"
+          ? "Create collection"
+          : editor.kind === "rename"
+            ? `Rename ${editor.collection.name}`
+            : `Delete ${editor.collection.name}`
+      }
+      onSubmit={(event) => void submit(event)}
+      aria-busy={pending}
+    >
+      {editor.kind === "delete" ? (
+        <p>
+          Delete “{editor.collection.name}”? Its books will stay in My Library.
+        </p>
+      ) : (
+        <>
+          <label htmlFor="collection-name">Collection name</label>
+          <input
+            ref={input}
+            id="collection-name"
+            value={name}
+            disabled={pending}
+            aria-invalid={!!error}
+            aria-describedby={
+              error ? "collection-error" : "collection-name-hint"
+            }
+            onChange={(event) => {
+              setName(event.target.value);
+              setError("");
+            }}
+          />
+          <p id="collection-name-hint">Up to 100 characters.</p>
+        </>
+      )}
+      {error && (
+        <p id="collection-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="collections-actions">
+        <button
+          type="submit"
+          className={
+            editor.kind === "delete"
+              ? "collections-button--danger"
+              : "collections-button--primary"
+          }
+          disabled={
+            pending ||
+            (editor.kind === "rename" && name.trim() === editor.collection.name)
+          }
+        >
+          {pending
+            ? editor.kind === "create"
+              ? "Creating…"
+              : editor.kind === "rename"
+                ? "Saving…"
+                : "Deleting…"
+            : editor.kind === "create"
+              ? "Create collection"
+              : editor.kind === "rename"
+                ? "Save changes"
+                : "Delete collection"}
+        </button>
+        <button
+          ref={cancelButton}
+          type="button"
+          disabled={pending}
+          onClick={() => closeEditor()}
+        >
+          Cancel
+        </button>
+      </div>
+      {pending && (
+        <p className="visually-hidden" role="status">
+          {editor.kind === "delete"
+            ? "Deleting collection…"
+            : editor.kind === "create"
+              ? "Creating collection…"
+              : "Saving collection…"}
+        </p>
+      )}
+    </form>
+  );
+
+  return (
+    <section className="collections-manager" aria-label="Collections">
+      <div className="collections-heading">
+        <button
+          ref={newButton}
+          className="collections-button--primary"
+          type="button"
+          disabled={pending || loading || !!loadError}
+          onClick={(event) =>
+            openEditor({ kind: "create" }, event.currentTarget)
+          }
+        >
+          New collection
+        </button>
+      </div>
+      {notice && <p role="status">{notice}</p>}
+      {(refreshing && !loadError) || (loading && collections.length === 0) ? (
+        <p role="status">Loading collections…</p>
+      ) : loadError ? (
+        <div role="alert">
+          <p>{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((current) => current + 1)}
+          >
+            Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          {editor?.kind === "create" && form}
+          {collections.length === 0 ? (
+            <p>
+              No collections yet. Create one to start organizing your books.
+            </p>
+          ) : (
+            <ul className="collections-list" aria-label="Your collections">
+              {displayedCollections.map((collection) => (
+                <li key={collection.id}>
+                  <div className="collections-row">
+                    <div className="collections-summary">
+                      <strong>
+                        <Link
+                          className="collections-title-link"
+                          to={collectionDetailsPath(collection.id)}
+                        >
+                          {collection.name}
+                        </Link>
+                      </strong>
+                      <span>
+                        {collection.bookCount}{" "}
+                        {collection.bookCount === 1 ? "book" : "books"}
+                      </span>
+                    </div>
+                    <div className="collections-actions">
+                      <button
+                        type="button"
+                        disabled={pending}
+                        aria-label={`Rename ${collection.name}`}
+                        onClick={(event) =>
+                          openEditor(
+                            { kind: "rename", collection },
+                            event.currentTarget,
+                          )
+                        }
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        className="collections-button--delete"
+                        disabled={pending}
+                        aria-label={`Delete ${collection.name}`}
+                        onClick={(event) =>
+                          openEditor(
+                            { kind: "delete", collection },
+                            event.currentTarget,
+                          )
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {editor &&
+                    editor.kind !== "create" &&
+                    editor.collection.id === collection.id &&
+                    form}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  );
+}

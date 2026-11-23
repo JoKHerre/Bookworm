@@ -1,0 +1,210 @@
+.collections-manager {
+  margin-top: 4px;
+  color: var(--olive);
+}
+
+.collections-heading,
+.collections-row,
+.collections-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.collections-heading {
+  justify-content: flex-end;
+  gap: 18px;
+  margin-bottom: 0;
+  padding-top: 16px;
+}
+
+.collections-manager p,
+.collections-summary span {
+  color: var(--olive-text-secondary);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.collections-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  align-items: start;
+  gap: 16px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collections-list > li {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--tan);
+  border-radius: 12px;
+  background: var(--cream-card);
+  box-shadow: 0 3px 12px var(--shadow-card-color);
+}
+
+.collections-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.collections-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+.collections-summary strong {
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.collections-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.collections-title-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.collections-title-link:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.collections-summary span {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--gold-wash);
+  color: var(--olive);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.collections-actions {
+  justify-content: flex-start;
+}
+
+.collections-row > .collections-actions {
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.collections-manager button {
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 1px solid var(--tan);
+  border-radius: 5px;
+  background: var(--cream);
+  color: var(--olive);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.collections-manager button:hover:not(:disabled) {
+  background: var(--gold-wash);
+}
+
+.collections-row > .collections-actions button {
+  min-height: 32px;
+  padding: 4px 8px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.78rem;
+}
+
+.collections-manager .collections-button--primary {
+  border-color: var(--olive);
+  background: var(--olive);
+  color: var(--cream);
+  font-weight: 600;
+}
+
+.collections-manager .collections-button--primary:hover:not(:disabled) {
+  border-color: var(--olive-hover);
+  background: var(--olive-hover);
+}
+
+.collections-manager .collections-button--delete:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+
+.collections-manager .collections-button--danger {
+  border-color: var(--danger);
+  background: var(--danger-wash);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.collections-manager .collections-button--danger:hover:not(:disabled) {
+  border-color: var(--danger-hover);
+  background: var(--danger-hover);
+  color: var(--cream);
+}
+
+.collections-manager button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.collections-manager .collections-button--primary:disabled {
+  border-color: var(--tan);
+  background: var(--tan);
+  color: var(--olive);
+  opacity: 1;
+}
+
+.collections-manager :is(button, input):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.collections-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--tan);
+  border-radius: 5px;
+  background: var(--cream-card);
+}
+
+.collections-form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px;
+  border: 1px solid var(--olive);
+  border-radius: 4px;
+  background: var(--cream);
+  color: var(--olive);
+  font: inherit;
+}
+
+.collections-form p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .collections-list > li {
+    padding: 16px;
+  }
+}
