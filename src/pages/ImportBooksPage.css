@@ -268,11 +268,10 @@
 
 .import-missing > li,
 .import-results > li {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
+  gap: 8px 12px;
 }
 
 .import-secondary.import-small {
@@ -284,7 +283,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   padding: 16px;
   font-size: 0.95rem;
   background: var(--cream);
@@ -304,7 +303,7 @@
 }
 
 .import-search-bar input {
-  flex: 1 1 14rem;
+  flex: 1 1 8rem;
   min-width: 0;
   padding: 8px 10px;
   font: inherit;
