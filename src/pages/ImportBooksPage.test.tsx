@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IMPORT_MAX_FILE_BYTES } from "../../shared/bookImport";
 import type { ImportMatch, MatchImportRow } from "../../shared/bookMatch";
 import type { BookSearchResult } from "../../shared/books";
-import { matchImportRows } from "../api/books";
+import { matchImportRows, searchBooks } from "../api/books";
 import { ApiRequestError } from "../api/client";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import ImportBooksPage from "./ImportBooksPage";
 
 vi.mock("../api/books");
 const matchMock = vi.mocked(matchImportRows);
+const searchMock = vi.mocked(searchBooks);
 
 const choose = (file: File) =>
   userEvent.upload(screen.getByLabelText("Choose a CSV file"), file, {
@@ -412,7 +413,7 @@ describe("ImportBooksPage", () => {
     expect(
       within(list)
         .getAllByRole("listitem")
-        .map((li) => li.textContent),
+        .map((li) => li.firstChild?.textContent),
     ).toEqual(["Unknown Book by Someone"]);
     expect(await importButton("1 book")).toBeEnabled();
   });
@@ -567,6 +568,173 @@ describe("ImportBooksPage", () => {
       expect(await items()).toEqual([
         "Dune by Frank Herbert (1965)Check this matchIn your file: Emma by Jane Austen",
       ]);
+    });
+  });
+  describe("review", () => {
+    const missingList = () =>
+      screen.findByRole("list", { name: "No match found" });
+    const searchFor = (name: string) =>
+      screen.getByRole("form", { name: `Search for ${name}` });
+    const results = (books: BookSearchResult[]) =>
+      Promise.resolve({ books, total: books.length });
+
+    beforeEach(() => {
+      searchMock.mockReset();
+    });
+
+    it("IMP-03-T-2 leaves out an unchecked book", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
+      vi.stubGlobal("fetch", fetchMock);
+      setup();
+      await uploadCsv("title\nmatch:1\nmatch:2\n");
+
+      const box = await screen.findByRole("checkbox", { name: "match:1" });
+      expect(box).toBeChecked();
+      await userEvent.click(box);
+      expect(box).not.toBeChecked();
+      await userEvent.click(await importButton("1 book"));
+      await screen.findByText("Imported 1 book. 0 already in your library.");
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({
+        bookKeys: ["/works/OL2W"],
+      });
+    });
+
+    it("IMP-03-T-2 puts an unchecked book back", async () => {
+      setup();
+      await uploadCsv("title\nmatch:1\nmatch:2\n");
+      const box = await screen.findByRole("checkbox", { name: "match:1" });
+      await userEvent.click(box);
+      expect(await importButton("1 book")).toBeInTheDocument();
+      await userEvent.click(box);
+      expect(await importButton("2 books")).toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 searches for a row with no match", async () => {
+      searchMock.mockImplementation(() =>
+        results(Array.from({ length: 7 }, (_, n) => book(n + 1, `Lost ${n}`))),
+      );
+      setup();
+      await uploadCsv("title,author\nLost Book,Someone\n");
+
+      const list = await missingList();
+      await userEvent.click(
+        within(list).getByRole("button", { name: "Search" }),
+      );
+      const form = searchFor("Lost Book by Someone");
+      expect(within(form).getByLabelText("Search Open Library")).toHaveValue(
+        "Lost Book Someone",
+      );
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      expect(searchMock).toHaveBeenCalledWith(
+        "Lost Book Someone",
+        expect.any(AbortSignal),
+      );
+      expect(
+        await within(form).findAllByRole("button", { name: "Choose" }),
+      ).toHaveLength(5);
+    });
+
+    it("IMP-03-T-2 imports a chosen search result", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
+      vi.stubGlobal("fetch", fetchMock);
+      searchMock.mockImplementation(() =>
+        results([book(7, "The Lost Book", "Ann Writer", 1999)]),
+      );
+      setup();
+      await uploadCsv("title\nLost Book\n");
+
+      await userEvent.click(
+        within(await missingList()).getByRole("button", { name: "Search" }),
+      );
+      const form = searchFor("Lost Book");
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      await userEvent.click(
+        await within(form).findByRole("button", { name: "Choose" }),
+      );
+
+      expect(
+        screen.queryByRole("list", { name: "No match found" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", {
+          name: "The Lost Book by Ann Writer (1999)",
+        }),
+      ).toBeChecked();
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+      await userEvent.click(await importButton("1 book"));
+      await screen.findByText("Imported 1 book. 0 already in your library.");
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({
+        bookKeys: ["/works/OL7W"],
+      });
+    });
+
+    it("IMP-03-T-2 shows search progress, no results and errors", async () => {
+      let finish: (
+        value: Awaited<ReturnType<typeof searchBooks>>,
+      ) => void = () => {};
+      searchMock
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        )
+        .mockRejectedValueOnce(new Error("Unable to connect."));
+      setup();
+      await uploadCsv("title\nLost Book\n");
+      await userEvent.click(
+        within(await missingList()).getByRole("button", { name: "Search" }),
+      );
+      const form = searchFor("Lost Book");
+
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      expect(
+        within(form).getByRole("button", { name: "Searching…" }),
+      ).toBeDisabled();
+      finish({ books: [], total: 0 });
+      expect(
+        await within(form).findByText("No books found."),
+      ).toBeInTheDocument();
+
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      expect(await within(form).findByRole("alert")).toHaveTextContent(
+        "Unable to connect.",
+      );
+    });
+
+    it("IMP-03-T-2 aborts a search when the form closes", async () => {
+      searchMock.mockImplementation(() => new Promise(() => {}));
+      setup();
+      await uploadCsv("title\nLost Book\nOther Book\n");
+      const list = await missingList();
+      const [first, second] = within(list).getAllByRole("button", {
+        name: "Search",
+      });
+      await userEvent.click(first!);
+      await userEvent.click(
+        within(searchFor("Lost Book")).getByRole("button", { name: "Search" }),
+      );
+      const [, signal] = searchMock.mock.calls[0]!;
+      await userEvent.click(second!);
+      expect(signal!.aborted).toBe(true);
+      expect(
+        screen.queryByRole("form", { name: "Search for Lost Book" }),
+      ).not.toBeInTheDocument();
+      expect(searchFor("Other Book")).toBeInTheDocument();
     });
   });
 });
