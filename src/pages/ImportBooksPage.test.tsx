@@ -550,5 +550,17 @@ describe("ImportBooksPage", () => {
       expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
       expect(await importButton("1 book")).toBeInTheDocument();
     });
+
+    it("IMP-03-T-1 flags a book when a later row needs a check", async () => {
+      matchMock.mockResolvedValue([
+        { status: "matched", book: book(1, "Dune", "Frank Herbert", 1965) },
+        { status: "matched", book: book(1, "Dune", "Frank Herbert", 1965) },
+      ]);
+      setup();
+      await uploadCsv("title,author\nDune,Frank Herbert\nEmma,Jane Austen\n");
+      expect(await items()).toEqual([
+        "Dune by Frank Herbert (1965)Check this matchIn your file: Emma by Jane Austen",
+      ]);
+    });
   });
 });
