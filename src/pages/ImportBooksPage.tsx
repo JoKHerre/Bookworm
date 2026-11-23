@@ -221,17 +221,23 @@ function ImportBooksPage() {
   const missing = indexesWith("none");
   const ambiguous = indexesWith("ambiguous");
 
-  // each matched book once, flagged ones first
-  const seen = new Set<string>();
-  const preview = matches
-    .flatMap((match, i) => {
-      if (match.status !== "matched" || seen.has(match.book.key)) return [];
-      seen.add(match.book.key);
-      const row = valid[i]!;
-      const check = !row.book_key && matchNeedsCheck(row, match.book);
-      return [{ row, book: match.book, check }];
-    })
-    .sort((a, b) => Number(b.check) - Number(a.check));
+  // each matched book once, flagged when any of its rows needs a check
+  const previewByKey = new Map<
+    string,
+    { row: ImportRow; book: BookSearchResult; check: boolean }
+  >();
+  matches.forEach((match, i) => {
+    if (match.status !== "matched") return;
+    const row = valid[i]!;
+    const check = !row.book_key && matchNeedsCheck(row, match.book);
+    const item = previewByKey.get(match.book.key);
+    if (!item || (check && !item.check)) {
+      previewByKey.set(match.book.key, { row, book: match.book, check });
+    }
+  });
+  const preview = [...previewByKey.values()].sort(
+    (a, b) => Number(b.check) - Number(a.check),
+  );
 
   const bookKeys = [
     ...new Set(
