@@ -251,7 +251,9 @@ describe("ImportBooksPage", () => {
   it("IMP-01-T-5 page imports and shows the result", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 1 }));
+      .mockResolvedValue(
+        jsonResponse({ added: ["/works/OL1W"], alreadySaved: ["/works/OL2W"] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await choose(
@@ -283,7 +285,9 @@ describe("ImportBooksPage", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({}, 500))
-      .mockResolvedValueOnce(jsonResponse({ added: 1, alreadySaved: 0 }));
+      .mockResolvedValueOnce(
+        jsonResponse({ added: ["/works/OL1W"], alreadySaved: [] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await choose(csv("books.csv", "title,book_key\nDune,/works/OL1W\n"));
@@ -346,9 +350,12 @@ describe("ImportBooksPage", () => {
   });
 
   it("IMP-02-T-3 imports matched rows", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ added: 2, alreadySaved: 0 }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        added: ["/works/OL9W", "/works/OL1W"],
+        alreadySaved: [],
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await uploadCsv("title,book_key\nDune,/works/OL9W\nmatch:1,\nnope,\n");
@@ -366,7 +373,9 @@ describe("ImportBooksPage", () => {
   it("IMP-02-T-3 imports a picked ambiguous book", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
+      .mockResolvedValue(
+        jsonResponse({ added: ["/works/OL6W"], alreadySaved: [] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await uploadCsv("title,author\npick:5,Jane Austen\npick:10,\n");
@@ -603,7 +612,9 @@ describe("ImportBooksPage", () => {
     it("IMP-03-T-2 leaves out an unchecked book", async () => {
       const fetchMock = vi
         .fn()
-        .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
+        .mockResolvedValue(
+          jsonResponse({ added: ["/works/OL2W"], alreadySaved: [] }),
+        );
       vi.stubGlobal("fetch", fetchMock);
       setup();
       await uploadCsv("title\nmatch:1\nmatch:2\n");
@@ -658,7 +669,9 @@ describe("ImportBooksPage", () => {
     it("IMP-03-T-2 imports a chosen search result", async () => {
       const fetchMock = vi
         .fn()
-        .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
+        .mockResolvedValue(
+          jsonResponse({ added: ["/works/OL7W"], alreadySaved: [] }),
+        );
       vi.stubGlobal("fetch", fetchMock);
       searchMock.mockImplementation(() =>
         results([book(7, "The Lost Book", "Ann Writer", 1999)]),
@@ -872,6 +885,72 @@ describe("ImportBooksPage", () => {
       expect(screen.getByRole("checkbox", { name: "Picked" })).toBeChecked();
       expect(screen.getByRole("checkbox", { name: "Found" })).toBeChecked();
       expect(await importButton("2 books")).toBeInTheDocument();
+    });
+  });
+
+  describe("results", () => {
+    const linksIn = (name: string) =>
+      within(screen.getByRole("list", { name }))
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]);
+
+    beforeEach(() => {
+      matchMock.mockImplementation((rows) =>
+        Promise.resolve(
+          rows.map(({ title }): ImportMatch => ({
+            status: "matched",
+            book: book(title === "Dune" ? 1 : 2, title, "An Author", 1965),
+          })),
+        ),
+      );
+    });
+
+    it("IMP-03-T-3 lists the imported books", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            added: ["/works/OL1W", "/works/OL3W"],
+            alreadySaved: ["/works/OL2W"],
+          }),
+        ),
+      );
+      setup();
+      await uploadCsv(
+        "title,author,book_key\nDune,,\nEmma,,\nOwn Copy,Me,/works/OL3W\n",
+      );
+      await userEvent.click(await importButton("3 books"));
+
+      expect(
+        await screen.findByText("Imported 2 books. 1 already in your library."),
+      ).toBeInTheDocument();
+      expect(linksIn("Added")).toEqual([
+        ["Dune by An Author (1965)", "/books/works/OL1W"],
+        ["Own Copy by Me", "/books/works/OL3W"],
+      ]);
+      expect(linksIn("Already in your library")).toEqual([
+        ["Emma by An Author (1965)", "/books/works/OL2W"],
+      ]);
+    });
+
+    it("IMP-03-T-3 hides an empty result list", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponse({ added: ["/works/OL1W"], alreadySaved: [] }),
+          ),
+      );
+      setup();
+      await uploadCsv("title\nDune\n");
+      await userEvent.click(await importButton("1 book"));
+
+      await screen.findByText("Imported 1 book. 0 already in your library.");
+      expect(linksIn("Added")).toHaveLength(1);
+      expect(
+        screen.queryByRole("heading", { name: "Already in your library" }),
+      ).not.toBeInTheDocument();
     });
   });
 });
