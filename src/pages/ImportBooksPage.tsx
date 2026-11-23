@@ -19,10 +19,12 @@ import {
   type ValidateImportResult,
 } from "../../shared/csvImport";
 import type { ImportBooksResponse } from "../../shared/library";
-import { matchImportRows } from "../api/books";
+import { matchImportRows, searchBooks } from "../api/books";
 import { ApiRequestError } from "../api/client";
 import { importBooks } from "../api/library";
 import "./ImportBooksPage.css";
+
+const IMPORT_SEARCH_RESULTS = 5;
 
 function formatSize(bytes: number) {
   return bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`;
@@ -63,6 +65,94 @@ function isExpiredSession(err: unknown) {
   );
 }
 
+// search Open Library by hand for a row that had no match
+function RowSearch({
+  row,
+  onChoose,
+}: {
+  row: ImportRow;
+  onChoose: (book: BookSearchResult) => void;
+}) {
+  const [query, setQuery] = useState(
+    row.author ? `${row.title} ${row.author}` : row.title,
+  );
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<BookSearchResult[] | null>(null);
+  const [error, setError] = useState("");
+  const controller = useRef<AbortController | null>(null);
+
+  useEffect(() => () => controller.current?.abort(), []);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    controller.current?.abort();
+    const current = new AbortController();
+    controller.current = current;
+    setSearching(true);
+    setResults(null);
+    setError("");
+    try {
+      const data = await searchBooks(query, current.signal);
+      if (current.signal.aborted) return;
+      setResults(data.books.slice(0, IMPORT_SEARCH_RESULTS));
+    } catch (err) {
+      if (current.signal.aborted) return;
+      setError(err instanceof Error ? err.message : "Could not search.");
+    }
+    setSearching(false);
+  }
+
+  const inputId = `import-search-${row.row}`;
+  return (
+    <form
+      className="import-search"
+      aria-label={`Search for ${rowLabel(row)}`}
+      onSubmit={(event) => void handleSubmit(event)}
+    >
+      <label htmlFor={inputId}>Search Open Library</label>
+      <div className="import-search-bar">
+        <input
+          id={inputId}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <button
+          className="import-secondary"
+          type="submit"
+          disabled={searching || !query.trim()}
+        >
+          {searching ? "Searching…" : "Search"}
+        </button>
+      </div>
+      {error && (
+        <p className="import-error" role="alert">
+          {error}
+        </p>
+      )}
+      {results &&
+        (results.length === 0 ? (
+          <p>No books found.</p>
+        ) : (
+          <ul className="import-results">
+            {results.map((book) => (
+              <li key={book.key}>
+                <span>{bookLabel(book)}</span>
+                <button
+                  className="import-secondary import-small"
+                  type="button"
+                  onClick={() => onChoose(book)}
+                >
+                  Choose
+                </button>
+              </li>
+            ))}
+          </ul>
+        ))}
+    </form>
+  );
+}
+
 // a valid row's match, or "pending" while it hasn't been looked up
 type RowMatch = ImportMatch | { status: "pending" };
 
@@ -75,6 +165,9 @@ function ImportBooksPage() {
   const [matches, setMatches] = useState<RowMatch[]>([]); // one per valid row
   const [progress, setProgress] = useState<{ done: number; total: number }>(); // set while rows are being matched
   const [picks, setPicks] = useState<Record<number, string>>({}); // row number → book key chosen for an ambiguous row
+  const [excluded, setExcluded] = useState<Set<string>>(new Set()); // book keys unchecked in the preview
+  const [searchRow, setSearchRow] = useState<number | null>(null); // row number whose search form is open
+  const [chosen, setChosen] = useState<Set<number>>(new Set()); // row numbers matched by a search the user ran
   const [expired, setExpired] = useState(false); // the session expired while matching, so retrying can't work
   const [importing, setImporting] = useState(false); // whether the books are being saved to the library
   const [result, setResult] = useState<ImportBooksResponse | null>(null); // counts returned after importing
@@ -96,6 +189,9 @@ function ImportBooksPage() {
     setReadyName("");
     setMatches([]);
     setPicks({});
+    setExcluded(new Set());
+    setSearchRow(null);
+    setChosen(new Set());
     setExpired(false);
     setResult(null);
     setError("");
@@ -173,6 +269,9 @@ function ImportBooksPage() {
     setReadyName("");
     setMatches([]);
     setPicks({});
+    setExcluded(new Set());
+    setSearchRow(null);
+    setChosen(new Set());
     setExpired(false);
     setResult(null);
     let valid: ImportRow[] = [];
@@ -229,7 +328,8 @@ function ImportBooksPage() {
   matches.forEach((match, i) => {
     if (match.status !== "matched") return;
     const row = valid[i]!;
-    const check = !row.book_key && matchNeedsCheck(row, match.book);
+    const check =
+      !row.book_key && !chosen.has(row.row) && matchNeedsCheck(row, match.book);
     const item = previewByKey.get(match.book.key);
     // a book_key row only has the file's title, so keep Open Library's book
     const book =
@@ -248,12 +348,38 @@ function ImportBooksPage() {
   const bookKeys = [
     ...new Set(
       matches.flatMap((match, i) => {
-        if (match.status === "matched") return [match.book.key];
+        if (match.status === "matched") {
+          return excluded.has(match.book.key) ? [] : [match.book.key];
+        }
         const pick = picks[valid[i]?.row ?? -1];
         return match.status === "ambiguous" && pick ? [pick] : [];
       }),
     ),
   ];
+
+  function toggleBook(key: string) {
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
+
+  function chooseBook(index: number, book: BookSearchResult) {
+    const row = valid[index]!;
+    setMatches((prev) => {
+      const next = [...prev];
+      next[index] = { status: "matched", book };
+      return next;
+    });
+    setChosen((prev) => new Set(prev).add(row.row));
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      next.delete(book.key);
+      return next;
+    });
+    setSearchRow(null);
+  }
 
   async function handleImport() {
     setImporting(true);
@@ -341,7 +467,14 @@ function ImportBooksPage() {
                 >
                   {preview.map(({ row, book, check }) => (
                     <li key={book.key}>
-                      <span>{bookLabel(book)}</span>
+                      <label className="import-include">
+                        <input
+                          type="checkbox"
+                          checked={!excluded.has(book.key)}
+                          onChange={() => toggleBook(book.key)}
+                        />
+                        <span>{bookLabel(book)}</span>
+                      </label>
                       {check && (
                         <div className="import-source">
                           <span className="import-flag">Check this match</span>
@@ -395,10 +528,33 @@ function ImportBooksPage() {
             {missing.length > 0 && (
               <section aria-labelledby="import-list-title">
                 <h2 id="import-list-title">No match found</h2>
-                <ul className="import-list" aria-labelledby="import-list-title">
-                  {missing.map((i) => (
-                    <li key={valid[i]!.row}>{rowLabel(valid[i]!)}</li>
-                  ))}
+                <ul
+                  className="import-missing"
+                  aria-labelledby="import-list-title"
+                >
+                  {missing.map((i) => {
+                    const row = valid[i]!;
+                    const open = searchRow === row.row;
+                    return (
+                      <li key={row.row}>
+                        <span>{rowLabel(row)}</span>
+                        <button
+                          className="import-secondary import-small"
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => setSearchRow(open ? null : row.row)}
+                        >
+                          {open ? "Close" : "Search"}
+                        </button>
+                        {open && (
+                          <RowSearch
+                            row={row}
+                            onChoose={(book) => chooseBook(i, book)}
+                          />
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             )}

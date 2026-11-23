@@ -231,3 +231,95 @@
   font-size: 0.9rem;
   color: var(--olive);
 }
+
+.import-include {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.import-include input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--olive);
+  transform: translateY(2px);
+}
+
+.import-include input:not(:checked) + span {
+  color: var(--olive-text-faint);
+}
+
+.import-preview .import-source {
+  padding-left: 26px;
+}
+
+.import-missing,
+.import-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-missing > li,
+.import-results > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.import-secondary.import-small {
+  padding: 4px 12px;
+  font-size: 0.9rem;
+}
+
+.import-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-basis: 100%;
+  padding: 16px;
+  font-size: 0.95rem;
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  border-radius: 12px;
+}
+
+.import-search > label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.import-search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-search-bar input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--olive);
+  background: var(--cream-card);
+  border: 1.5px solid var(--tan);
+  border-radius: 8px;
+}
+
+.import-search-bar input:focus-visible,
+.import-include input:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}
+
+.import-search p {
+  margin: 0;
+}
