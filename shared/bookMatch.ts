@@ -168,3 +168,16 @@ export function matchTitle(
     candidates: [...byAuthor.values()].slice(0, MATCH_MAX_CANDIDATES),
   };
 }
+
+// a match the user should look at: Open Library's title or author differs
+// from the file's, as with an ISBN for another book or a subtitle-only match
+export function matchNeedsCheck(
+  row: { title: string; author: string },
+  book: BookSearchResult,
+): boolean {
+  return (
+    normalizeTitle(row.title) !== normalizeTitle(book.title) ||
+    (row.author.trim() !== "" &&
+      !authorsMatch(row.author, book.author_name ?? []))
+  );
+}
