@@ -933,6 +933,72 @@ describe("ImportBooksPage", () => {
       ]);
     });
 
+    it("IMP-03-T-3 labels picked and chosen books", async () => {
+      matchMock.mockImplementation(async (rows) =>
+        rows.map(({ title }): ImportMatch =>
+          title === "pick:1" ? byTitle(rows)[0]! : { status: "none" },
+        ),
+      );
+      searchMock.mockResolvedValue({
+        books: [book(9, "Found", "Ann Writer", 2001)],
+        total: 1,
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            added: ["/works/OL2W", "/works/OL9W"],
+            alreadySaved: [],
+          }),
+        ),
+      );
+      setup();
+      await uploadCsv("title\npick:1\nLost Book\n");
+      await userEvent.selectOptions(
+        await screen.findByLabelText("pick:1"),
+        "/works/OL2W",
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "Search for Lost Book" }),
+      );
+      const form = screen.getByRole("form", { name: "Search for Lost Book" });
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      await userEvent.click(
+        await within(form).findByRole("button", { name: "Choose" }),
+      );
+      await userEvent.click(await importButton("2 books"));
+
+      await screen.findByText("Imported 2 books. 0 already in your library.");
+      expect(linksIn("Added")).toEqual([
+        ["pick:1 by Emma Tennant", "/books/works/OL2W"],
+        ["Found by Ann Writer (2001)", "/books/works/OL9W"],
+      ]);
+    });
+
+    it("IMP-03-T-3 shows a long result list in part", async () => {
+      const keys = Array.from({ length: 12 }, (_, n) => `/works/OL${n + 1}W`);
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(jsonResponse({ added: keys, alreadySaved: [] })),
+      );
+      setup();
+      await uploadCsv("title\nDune\n");
+      await userEvent.click(await importButton("1 book"));
+
+      await screen.findByText("Imported 12 books. 0 already in your library.");
+      expect(linksIn("Added")).toHaveLength(10);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Show all 12" }),
+      );
+      expect(linksIn("Added")).toHaveLength(12);
+      await userEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+      expect(linksIn("Added")).toHaveLength(10);
+    });
+
     it("IMP-03-T-3 hides an empty result list", async () => {
       vi.stubGlobal(
         "fetch",
