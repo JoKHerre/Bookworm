@@ -1,0 +1,105 @@
+.book-collection-assignment {
+  margin-top: 24px;
+  text-align: left;
+  min-width: 0;
+}
+
+.book-collection-assignment h3 {
+  margin: 0 0 10px;
+  color: var(--olive);
+  font-family: var(--heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.book-collection-assignment p,
+.book-collection-links {
+  color: var(--olive-text-secondary);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.book-collection-assignment form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.book-collection-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.book-collection-assignment button {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--olive);
+  border-radius: 5px;
+  color: var(--olive);
+  background: var(--cream);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.book-collection-assignment button:hover:not(:disabled) {
+  background: var(--gold-wash);
+}
+
+.book-collection-assignment button[type="submit"] {
+  border-color: var(--gold-light);
+  background: var(--gold-light);
+  color: var(--olive);
+  font-weight: 600;
+}
+
+.book-collection-assignment button[type="submit"]:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: var(--gold-light);
+}
+
+.book-collection-assignment button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.book-collection-assignment button[type="submit"]:disabled {
+  border-color: var(--tan);
+  background: var(--gold-wash);
+  color: var(--olive);
+  opacity: 1;
+}
+
+.book-collection-assignment :is(button, a):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.book-collection-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.book-collection-links a {
+  color: var(--olive);
+}
+
+@media (max-width: 480px) {
+  .book-collection-assignment form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

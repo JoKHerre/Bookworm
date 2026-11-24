@@ -8,8 +8,27 @@ vi.mock("./pages/PersonalLibraryPage", () => ({
   default: () => <h1>My Library</h1>,
 }));
 vi.mock("./pages/SearchPage", () => ({ default: () => <h1>Search</h1> }));
+vi.mock("./pages/CollectionDetailsPage", () => ({
+  default: () => <h1>Collection details</h1>,
+}));
 
 describe("App routes", () => {
+  it("COL-05-T-4 protects collection detail routes", () => {
+    renderWithProviders(<App />, { route: "/personal-library/collections/7" });
+    expect(screen.getByRole("heading", { name: "Log in" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Collection details" }),
+    ).not.toBeInTheDocument();
+  });
+  it("COL-05-T-4 allows signed-in users to open a direct collection URL", () => {
+    renderWithProviders(<App />, {
+      route: "/personal-library/collections/7",
+      user: { id: 1, email: "reader@example.test" },
+    });
+    expect(
+      screen.getByRole("heading", { name: "Collection details" }),
+    ).toBeInTheDocument();
+  });
   it("TST-01-T-1 signed-out library redirects", () => {
     renderWithProviders(<App />, { route: "/personal-library" });
     expect(screen.getByRole("heading", { name: "Log in" })).toBeInTheDocument();

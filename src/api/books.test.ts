@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { getBookDetails, getSimilarBooks, searchBooks } from "./books";
+import {
+  getBookDetails,
+  getSimilarBooks,
+  matchImportRows,
+  searchBooks,
+} from "./books";
 import { jsonResponse } from "../test/renderWithProviders";
 
 const signal = new AbortController().signal;
@@ -148,5 +153,58 @@ describe("api/books", () => {
     await expect(
       getSimilarBooks("/works/OL1W", controller.signal),
     ).rejects.toBe(cancelled);
+  });
+  const matchRows = [
+    { title: "Dune", author: "Frank Herbert", isbn: "" },
+    { title: "Emma", author: "", isbn: "" },
+  ];
+
+  it("IMP-02-T-2 matchImportRows posts rows", async () => {
+    const results = [
+      {
+        status: "matched",
+        book: {
+          key: "/works/OL1W",
+          title: "Dune",
+          author_name: ["Frank Herbert"],
+        },
+      },
+      { status: "none" },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ results }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(matchImportRows(matchRows, signal)).resolves.toEqual(results);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/books/match");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ rows: matchRows });
+    expect(init.signal).toBe(signal);
+  });
+
+  it("IMP-02-T-2 matchImportRows maps failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ error: "Not logged in" }, 401)),
+    );
+    await expect(matchImportRows(matchRows)).rejects.toThrow(
+      "Your session has expired. Please log in again.",
+    );
+
+    for (const fetchMock of [
+      vi.fn().mockResolvedValue(jsonResponse({ error: "Oops" }, 500)),
+      vi.fn().mockRejectedValue(new TypeError("down")),
+      vi.fn().mockResolvedValue(jsonResponse({ results: [{ status: "?" }] })),
+      // one result for two rows
+      vi
+        .fn()
+        .mockResolvedValue(jsonResponse({ results: [{ status: "none" }] })),
+    ]) {
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(matchImportRows(matchRows)).rejects.toThrow(
+        "Could not match these books.",
+      );
+    }
   });
 });

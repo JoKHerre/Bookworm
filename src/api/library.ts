@@ -1,3 +1,5 @@
+import z from "zod";
+import { READING_STATUSES } from "../../shared/readingStatus";
 import type {
   ImportBooksResponse,
   LibraryResponse,
@@ -24,11 +26,23 @@ export async function removeSavedBook(id: number) {
   await apiRequest<null>(`/api/library/${id}`, { method: "DELETE" });
 }
 
-export function updateReadingStatus(id: number, readingStatus: ReadingStatus) {
-  return apiRequest<ReadingStatusResponse>(
+const readingStatusResponse = z.object({
+  id: z.number().int().positive(),
+  readingStatus: z.enum(READING_STATUSES),
+});
+
+export async function updateReadingStatus(
+  id: number,
+  readingStatus: ReadingStatus,
+) {
+  const response = await apiRequest<ReadingStatusResponse>(
     `/api/library/${id}/reading-status`,
     { method: "PATCH", body: { readingStatus } },
   );
+  const parsed = readingStatusResponse.safeParse(response);
+  if (!parsed.success || parsed.data.id !== id)
+    throw new Error("Could not update this book's reading status.");
+  return parsed.data;
 }
 
 const IMPORT_ERROR = "Could not import these books.";

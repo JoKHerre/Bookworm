@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import type { BookDetails } from "../../shared/books";
 import {
   READING_STATUS_LABELS,
-  READING_STATUS_OPTIONS,
   type ReadingStatus,
 } from "../../shared/readingStatus";
 import { filterByTags, libraryTags } from "../../shared/tags";
-import StarDisplay from "../components/StarDisplay";
+import SavedBookCard from "../components/SavedBookCard";
+import CollectionsManager from "../components/CollectionsManager";
 import type { SavedBook } from "../../shared/library";
 import { getBookDetails } from "../api/books";
 import { errorMessage } from "../api/client";
@@ -41,10 +41,39 @@ interface PersonalLibraryBook extends SavedBook {
 interface PendingRemoval {
   id: number;
   title: string;
+  bookKey: string;
 }
 
 function PersonalLibraryPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab =
+    searchParams.get("tab") === "collections" ? "collections" : "books";
+  const tabButtons = useRef<(HTMLButtonElement | null)[]>([]);
+
+  function selectTab(tab: "books" | "collections") {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (tab === "books") next.delete("tab");
+      else next.set("tab", tab);
+      return next;
+    });
+  }
+
+  function handleTabKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) {
+    let nextIndex: number;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight")
+      nextIndex = 1 - index;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = 1;
+    else return;
+    event.preventDefault();
+    selectTab(nextIndex === 0 ? "books" : "collections");
+    tabButtons.current[nextIndex]?.focus();
+  }
   const [books, setBooks] = useState<PersonalLibraryBook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,6 +84,10 @@ function PersonalLibraryPage() {
   );
   const removalTimer = useRef<number | undefined>(undefined);
   const pendingRemovalRef = useRef<PendingRemoval | null>(null);
+  const [committingRemovals, setCommittingRemovals] = useState<
+    PendingRemoval[]
+  >([]);
+  const [collectionsRevision, setCollectionsRevision] = useState(0);
   const [updatingReadingStatusIds, setUpdatingReadingStatusIds] = useState<
     Set<number>
   >(() => new Set());
@@ -66,11 +99,13 @@ function PersonalLibraryPage() {
   const [loadAttempt, setLoadAttempt] = useState(0); // bumped by "Try again" to reload
 
   async function commitRemoval(removal: PendingRemoval) {
+    setCommittingRemovals((current) => [...current, removal]);
     try {
       await removeSavedBook(removal.id);
       setBooks((currentBooks) =>
         currentBooks.filter((book) => book.id !== removal.id),
       );
+      setCollectionsRevision((current) => current + 1);
     } catch (err) {
       setRemovalError(
         errorMessage(err, {
@@ -82,8 +117,8 @@ function PersonalLibraryPage() {
         }),
       );
     } finally {
-      setPendingRemoval((current) =>
-        current?.id === removal.id ? null : current,
+      setCommittingRemovals((current) =>
+        current.filter((book) => book.id !== removal.id),
       );
     }
   }
@@ -92,13 +127,16 @@ function PersonalLibraryPage() {
     window.clearTimeout(removalTimer.current);
     const removal = pendingRemovalRef.current;
     pendingRemovalRef.current = null;
+    setPendingRemoval(null);
     if (removal) void commitRemoval(removal);
   }
 
   function removeBook(id: number, title: string) {
+    const book = books.find((book) => book.id === id);
+    if (!book) return;
     flushRemoval(); // only one removal waits on Undo at a time
     setRemovalError("");
-    const removal = { id, title };
+    const removal = { id, title, bookKey: book.bookKey };
     pendingRemovalRef.current = removal;
     setPendingRemoval(removal);
     removalTimer.current = window.setTimeout(flushRemoval, UNDO_REMOVE_MS);
@@ -233,7 +271,12 @@ function PersonalLibraryPage() {
     void navigate(bookDetailsPath(bookKey), { state });
   }
 
-  const listedBooks = books.filter((book) => book.id !== pendingRemoval?.id);
+  const removals = pendingRemoval
+    ? [...committingRemovals, pendingRemoval]
+    : committingRemovals;
+  const listedBooks = books.filter(
+    (book) => !removals.some((removal) => removal.id === book.id),
+  );
   // selected tags that no longer exist in the library are ignored
   const availableTags = libraryTags(listedBooks);
   const activeTags = selectedTags.filter((tag) => availableTags.includes(tag));
@@ -247,107 +290,22 @@ function PersonalLibraryPage() {
     );
   }
 
-  function renderBook({
-    id,
-    bookKey,
-    details,
-    readingStatus,
-  }: PersonalLibraryBook) {
-    const title =
-      details === undefined
-        ? "Loading…"
-        : (details?.title ?? "Book details unavailable");
-    const coverId = details?.covers?.[0];
-    const isUpdatingReadingStatus = updatingReadingStatusIds.has(id);
-    const readingStatusError = readingStatusErrors[id];
-    const rating = ratings.get(bookKey);
-
+  function renderBook(book: PersonalLibraryBook) {
+    const title = book.details?.title ?? "Book details unavailable";
     return (
-      <li
-        className="personal-library-book-card"
-        key={id}
-        aria-busy={details === undefined}
-      >
-        {coverId ? (
-          <img
-            className="personal-library-book-cover"
-            src={`https://covers.openlibrary.org/b/id/${coverId}-M.jpg`}
-            alt={`Cover of ${title}`}
-          />
-        ) : (
-          <div
-            className={`personal-library-book-cover personal-library-book-cover--${
-              details === undefined ? "loading" : "placeholder"
-            }`}
-            aria-hidden="true"
-          />
-        )}
-        <div className="personal-library-book-details">
-          <h3>
-            <button
-              className="personal-library-book-title"
-              type="button"
-              aria-label={`View details for ${title}`}
-              onClick={() => viewBook(bookKey)}
-            >
-              {title}
-            </button>
-          </h3>
-          {details !== undefined && (
-            <p>{details?.authors.join(", ") || "Author unavailable"}</p>
-          )}
-          {rating !== undefined && <StarDisplay rating={rating} />}
-          {details === null && (
-            <p className="personal-library-book-key">{bookKey}</p>
-          )}
-        </div>
-        <div className="personal-library-book-status">
-          <select
-            aria-label={`Reading status for ${title}`}
-            aria-busy={isUpdatingReadingStatus}
-            aria-describedby={
-              readingStatusError ? `reading-status-error-${id}` : undefined
-            }
-            disabled={isUpdatingReadingStatus}
-            value={readingStatus}
-            onChange={(event) =>
-              void updateReadingStatus(
-                id,
-                title,
-                event.target.value as ReadingStatus,
-              )
-            }
-          >
-            {READING_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {isUpdatingReadingStatus && (
-            <p className="personal-library-book-status-message" role="status">
-              Saving status…
-            </p>
-          )}
-          {readingStatusError && (
-            <p
-              className="personal-library-book-status-error"
-              id={`reading-status-error-${id}`}
-              role="alert"
-            >
-              {readingStatusError}
-            </p>
-          )}
-        </div>
-        <button
-          className="personal-library-book-remove"
-          type="button"
-          aria-label={`Remove ${title} from my library`}
-          onClick={() => removeBook(id, title)}
-        >
-          Remove
-        </button>
-      </li>
+      <SavedBookCard
+        key={book.id}
+        book={book}
+        rating={ratings.get(book.bookKey)}
+        removeFrom="library"
+        onViewBook={() => viewBook(book.bookKey)}
+        onReadingStatusChange={(status) =>
+          void updateReadingStatus(book.id, title, status)
+        }
+        onRemove={() => removeBook(book.id, title)}
+        isUpdatingReadingStatus={updatingReadingStatusIds.has(book.id)}
+        readingStatusError={readingStatusErrors[book.id]}
+      />
     );
   }
 
@@ -364,95 +322,145 @@ function PersonalLibraryPage() {
           </Link>
         </section>
 
-        {removalError && (
-          <p className="personal-library-removal-error" role="alert">
-            {removalError}
-          </p>
-        )}
-
-        {loading ? (
-          <p className="personal-library-message" role="status">
-            Loading…
-          </p>
-        ) : error ? (
-          <div className="personal-library-empty-state" role="alert">
-            <h2>We couldn’t load your books</h2>
-            {error !== LOAD_ERROR && <p>{error}</p>}
+        <div
+          className="personal-library-tabs"
+          role="tablist"
+          aria-label="Library sections"
+        >
+          {(["books", "collections"] as const).map((tab, index) => (
             <button
+              key={tab}
+              ref={(button) => {
+                tabButtons.current[index] = button;
+              }}
               type="button"
-              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              role="tab"
+              id={`personal-library-${tab}-tab`}
+              aria-controls={`personal-library-${tab}-panel`}
+              aria-selected={activeTab === tab}
+              tabIndex={activeTab === tab ? 0 : -1}
+              onClick={() => selectTab(tab)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
-              Try again
+              {tab === "books" ? "Books" : "Collections"}
             </button>
-          </div>
-        ) : listedBooks.length === 0 ? (
-          <div className="personal-library-empty-state">
-            <h2>Your library is ready for its first book</h2>
-            <button type="button" onClick={() => void navigate("/search")}>
-              Discover books
-            </button>
-          </div>
-        ) : (
-          <>
-            {availableTags.length > 0 && (
-              <fieldset className="personal-library-tag-filter">
-                <legend>Filter by tags</legend>
-                <div className="personal-library-tag-options">
-                  {availableTags.map((tag) => (
-                    <label key={tag}>
-                      <input
-                        type="checkbox"
-                        checked={activeTags.includes(tag)}
-                        onChange={() => toggleTag(tag)}
-                      />
-                      {tag}
-                    </label>
-                  ))}
-                </div>
+          ))}
+        </div>
+
+        <div
+          id="personal-library-books-panel"
+          role="tabpanel"
+          aria-labelledby="personal-library-books-tab"
+          hidden={activeTab !== "books"}
+          tabIndex={0}
+        >
+          <section className="personal-library-books" aria-label="Books">
+            {removalError && (
+              <p className="personal-library-removal-error" role="alert">
+                {removalError}
+              </p>
+            )}
+
+            {loading ? (
+              <p className="personal-library-message" role="status">
+                Loading…
+              </p>
+            ) : error ? (
+              <div className="personal-library-empty-state" role="alert">
+                <h2>We couldn’t load your books</h2>
+                {error !== LOAD_ERROR && <p>{error}</p>}
                 <button
                   type="button"
-                  disabled={activeTags.length === 0}
-                  onClick={() => setSelectedTags([])}
+                  onClick={() => setLoadAttempt((attempt) => attempt + 1)}
                 >
-                  Clear tags
+                  Try again
                 </button>
-              </fieldset>
-            )}
-            {visibleBooks.length === 0 ? (
-              <p className="personal-library-message" role="status">
-                No books match these tags.
-              </p>
+              </div>
+            ) : listedBooks.length === 0 ? (
+              <div className="personal-library-empty-state">
+                <h2>Your library is ready for its first book</h2>
+                <button type="button" onClick={() => void navigate("/search")}>
+                  Discover books
+                </button>
+              </div>
             ) : (
-              SHELVES.map((status) => {
-                const shelf = visibleBooks.filter(
-                  (book) => book.readingStatus === status,
-                );
-                if (shelf.length === 0) return null;
-                const headingId = `shelf-${status}`;
-                return (
-                  <section
-                    className="personal-library-shelf"
-                    key={status}
-                    aria-labelledby={headingId}
-                  >
-                    <h2 id={headingId}>
-                      {READING_STATUS_LABELS[status]}{" "}
-                      <span className="personal-library-shelf-count">
-                        {shelf.length}
-                      </span>
-                    </h2>
-                    <ul
-                      className="personal-library-book-grid"
-                      aria-labelledby={headingId}
+              <>
+                {availableTags.length > 0 && (
+                  <fieldset className="personal-library-tag-filter">
+                    <legend>Filter by tags</legend>
+                    <div className="personal-library-tag-options">
+                      {availableTags.map((tag) => (
+                        <label key={tag}>
+                          <input
+                            type="checkbox"
+                            checked={activeTags.includes(tag)}
+                            onChange={() => toggleTag(tag)}
+                          />
+                          {tag}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={activeTags.length === 0}
+                      onClick={() => setSelectedTags([])}
                     >
-                      {shelf.map(renderBook)}
-                    </ul>
-                  </section>
-                );
-              })
+                      Clear tags
+                    </button>
+                  </fieldset>
+                )}
+                {visibleBooks.length === 0 ? (
+                  <p className="personal-library-message" role="status">
+                    No books match these tags.
+                  </p>
+                ) : (
+                  SHELVES.map((status) => {
+                    const shelf = visibleBooks.filter(
+                      (book) => book.readingStatus === status,
+                    );
+                    if (shelf.length === 0) return null;
+                    const headingId = `shelf-${status}`;
+                    return (
+                      <section
+                        className="personal-library-shelf"
+                        key={status}
+                        aria-labelledby={headingId}
+                      >
+                        <h3
+                          className="personal-library-shelf-title"
+                          id={headingId}
+                        >
+                          {READING_STATUS_LABELS[status]}{" "}
+                          <span className="personal-library-shelf-count">
+                            {shelf.length}
+                          </span>
+                        </h3>
+                        <ul
+                          className="saved-book-grid"
+                          aria-labelledby={headingId}
+                        >
+                          {shelf.map(renderBook)}
+                        </ul>
+                      </section>
+                    );
+                  })
+                )}
+              </>
             )}
-          </>
-        )}
+          </section>
+        </div>
+        <div
+          id="personal-library-collections-panel"
+          role="tabpanel"
+          aria-labelledby="personal-library-collections-tab"
+          hidden={activeTab !== "collections"}
+          tabIndex={0}
+        >
+          <CollectionsManager
+            removedBookKeys={removals.map((book) => book.bookKey)}
+            refreshVersion={collectionsRevision}
+          />
+        </div>
 
         {pendingRemoval && (
           <div className="personal-library-undo" role="status">
