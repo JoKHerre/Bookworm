@@ -343,12 +343,10 @@ function ImportBooksPage() {
                     <li key={book.key}>
                       <span>{bookLabel(book)}</span>
                       {check && (
-                        <>
+                        <div className="import-source">
                           <span className="import-flag">Check this match</span>
-                          <span className="import-source">
-                            In your file: {rowLabel(row)}
-                          </span>
-                        </>
+                          <span>In your file: {rowLabel(row)}</span>
+                        </div>
                       )}
                     </li>
                   ))}

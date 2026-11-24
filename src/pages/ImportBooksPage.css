@@ -223,7 +223,11 @@
 }
 
 .import-source {
+  display: flex;
   flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
   font-size: 0.9rem;
   color: var(--olive-text-secondary);
 }
