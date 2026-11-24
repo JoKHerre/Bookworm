@@ -283,17 +283,37 @@ collectionsRouter.post(
     try {
       // save book to an existing collection in a transaction
       const result = await db.transaction(async (tx) => {
-        const [book] = await tx
-          .select(savedBookFields)
+        const [collection] = await tx
+          .select({ id: collections.id })
           .from(collections)
-          .innerJoin(
-            savedBooks,
-            and(
-              eq(savedBooks.userId, collections.userId),
-              eq(savedBooks.bookKey, parsed.data.bookKey),
-            ),
-          )
           .where(ownedCollection(collectionId, userId));
+        if (!collection) return null;
+
+        const savedBookOwnerAndKey = and(
+          eq(savedBooks.userId, userId),
+          eq(savedBooks.bookKey, parsed.data.bookKey),
+        );
+        let [book] = await tx
+          .select(savedBookFields)
+          .from(savedBooks)
+          .where(savedBookOwnerAndKey);
+        if (!book) {
+          [book] = await tx
+            .insert(savedBooks)
+            .values({ userId, bookKey: parsed.data.bookKey })
+            .onConflictDoNothing({
+              target: [savedBooks.userId, savedBooks.bookKey],
+            })
+            .returning(savedBookFields);
+          // Another request may have saved this work while our insert waited.
+          // Read its committed row without resetting its status or creation date.
+          if (!book) {
+            [book] = await tx
+              .select(savedBookFields)
+              .from(savedBooks)
+              .where(savedBookOwnerAndKey);
+          }
+        }
         if (!book) return null;
         const [membership] = await tx
           .insert(collectionBooks)

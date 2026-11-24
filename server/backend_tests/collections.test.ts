@@ -537,6 +537,86 @@ test("COL-05-T-5 renames a collection without changing membership", async () => 
   });
 });
 
+test("COL-05-T-5 saves an unsaved book when adding it to a collection", async () => {
+  const user = await createSignedInUser();
+  const collection = await createCollection(user.id);
+  const bookKey = createTestBookKey();
+  const response = await request(
+    "POST",
+    `${collectionsPath}/${collection.id}/books`,
+    user.token,
+    { bookKey },
+  );
+  assert.equal(response.status, 201);
+  const stored = await storedRows(user.id);
+  assert.equal(stored.books.length, 1);
+  const [book] = stored.books;
+  assert.ok(book);
+  assert.equal(book.bookKey, bookKey);
+  assert.equal(book.readingStatus, "to_be_read");
+  assert.deepEqual(await response.json(), bookResponse(book));
+  assert.deepEqual(stored.collections, [collection]);
+  assert.equal(stored.memberships.length, 1);
+  assert.equal(stored.memberships[0]?.collectionId, collection.id);
+  assert.equal(stored.memberships[0]?.savedBookId, book.id);
+  assert.equal(stored.memberships[0]?.userId, user.id);
+
+  // Both the library and collection reads expose the committed saved book.
+  const library = await request("GET", "/api/library", user.token);
+  assert.equal(library.status, 200);
+  assert.deepEqual(await library.json(), { books: [bookResponse(book)] });
+  const detail = await request(
+    "GET",
+    `${collectionsPath}/${collection.id}`,
+    user.token,
+  );
+  assert.equal(detail.status, 200);
+  assert.deepEqual(await detail.json(), {
+    collection: collectionSummary(collection, 1),
+    books: [bookResponse(book)],
+  });
+
+  await assertError(
+    await request(
+      "POST",
+      `${collectionsPath}/${collection.id}/books`,
+      user.token,
+      { bookKey },
+    ),
+    409,
+    "Book is already in this collection",
+  );
+  assert.deepEqual(await storedRows(user.id), stored);
+});
+
+test("COL-05-T-5 saves a user's own copy when another user saved the same work", async () => {
+  const user = await createSignedInUser();
+  const foreign = await createTwoMemberships();
+  const collection = await createCollection(user.id);
+  const foreignBefore = await storedRows(foreign.user.id);
+  const response = await request(
+    "POST",
+    `${collectionsPath}/${collection.id}/books`,
+    user.token,
+    {
+      bookKey: foreign.book.bookKey,
+    },
+  );
+  assert.equal(response.status, 201);
+  const stored = await storedRows(user.id);
+  assert.equal(stored.books.length, 1);
+  const [book] = stored.books;
+  assert.ok(book);
+  assert.notEqual(book.id, foreign.book.id);
+  assert.equal(book.userId, user.id);
+  assert.equal(book.bookKey, foreign.book.bookKey);
+  assert.equal(book.readingStatus, "to_be_read");
+  assert.deepEqual(await response.json(), bookResponse(book));
+  assert.equal(stored.memberships.length, 1);
+  assert.equal(stored.memberships[0]?.savedBookId, book.id);
+  assert.deepEqual(await storedRows(foreign.user.id), foreignBefore);
+});
+
 // test that same book can be saved to different collections
 test("COL-05-T-5 adds one saved book to multiple collections", async () => {
   // create user, two collections, and three saved books
@@ -572,6 +652,137 @@ test("COL-05-T-5 adds one saved book to multiple collections", async () => {
       [second.id, book.id],
     ],
   );
+});
+
+test("COL-05-T-5 preserves every existing reading status when assigning a book", async () => {
+  const user = await createSignedInUser();
+  const collection = await createCollection(user.id);
+  for (const status of [
+    "to_be_read",
+    "currently_reading",
+    "finished",
+  ] as const) {
+    const book = await saveBook(user.id, createTestBookKey(), status);
+    const before = await storedRows(user.id);
+    const response = await request(
+      "POST",
+      `${collectionsPath}/${collection.id}/books`,
+      user.token,
+      {
+        bookKey: book.bookKey,
+      },
+    );
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), bookResponse(book));
+    assert.deepEqual((await storedRows(user.id)).books, before.books);
+  }
+});
+
+test("COL-05-T-5 concurrently assigns an unsaved work without duplicating saved books", async () => {
+  for (const sameCollection of [true, false]) {
+    const user = await createSignedInUser();
+    const first = await createCollection(user.id);
+    const second = sameCollection
+      ? first
+      : await createCollection(user.id, "Second");
+    const bookKey = createTestBookKey();
+    const responses = await Promise.all(
+      [first, second].map((collection) =>
+        request(
+          "POST",
+          `${collectionsPath}/${collection.id}/books`,
+          user.token,
+          { bookKey },
+        ),
+      ),
+    );
+    assert.deepEqual(
+      responses.map(({ status }) => status).sort(),
+      sameCollection ? [201, 409] : [201, 201],
+    );
+    const stored = await storedRows(user.id);
+    assert.equal(stored.books.length, 1);
+    const [book] = stored.books;
+    assert.ok(book);
+    assert.equal(book.readingStatus, "to_be_read");
+    assert.equal(stored.memberships.length, sameCollection ? 1 : 2);
+    assert.deepEqual(
+      stored.memberships.map(({ collectionId }) => collectionId),
+      sameCollection ? [first.id] : [first.id, second.id],
+    );
+    for (const membership of stored.memberships) {
+      assert.equal(membership.savedBookId, book.id);
+      assert.equal(membership.userId, user.id);
+    }
+    for (const response of responses) {
+      if (response.status === 201)
+        assert.deepEqual(await response.json(), bookResponse(book));
+      else
+        await assertError(response, 409, "Book is already in this collection");
+    }
+  }
+});
+
+test("COL-05-T-5 reuses a concurrent save without resetting its reading status", async () => {
+  const user = await createSignedInUser();
+  const collection = await createCollection(user.id);
+  const bookKey = createTestBookKey();
+  const client = await pool.connect();
+  let pendingAdd: Promise<Response> | undefined;
+  try {
+    await client.query("BEGIN");
+    const {
+      rows: [backend],
+    } = await client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+    assert.ok(backend);
+    // The endpoint cannot see this row until commit, so its save insert must wait.
+    await client.query(
+      "INSERT INTO saved_books (user_id, book_key, reading_status) VALUES ($1, $2, 'finished')",
+      [user.id, bookKey],
+    );
+    pendingAdd = request(
+      "POST",
+      `${collectionsPath}/${collection.id}/books`,
+      user.token,
+      { bookKey },
+    );
+    const deadline = Date.now() + 5_000;
+    while (true) {
+      const {
+        rows: [activity],
+      } = await pool.query<{ waiting: boolean }>(
+        `SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE $1 = ANY(pg_blocking_pids(pid)) AND query LIKE 'insert into "saved_books"%'
+        ) AS waiting`,
+        [backend.pid],
+      );
+      if (activity?.waiting) break;
+      assert.ok(
+        Date.now() < deadline,
+        "Saved-book insert did not wait on the concurrent save",
+      );
+      await delay(20);
+    }
+    await client.query("COMMIT");
+    const response = await pendingAdd;
+    assert.equal(response.status, 201);
+    const stored = await storedRows(user.id);
+    assert.equal(stored.books.length, 1);
+    const [book] = stored.books;
+    assert.ok(book);
+    assert.equal(book.readingStatus, "finished");
+    assert.deepEqual(await response.json(), bookResponse(book));
+    assert.equal(stored.memberships.length, 1);
+    assert.equal(stored.memberships[0]?.savedBookId, book.id);
+  } finally {
+    try {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+      await pendingAdd?.catch(() => undefined);
+    }
+  }
 });
 
 // test that a book cannot be added to the same collection twice
@@ -702,7 +913,7 @@ test("COL-05-T-5 deletes a collection without deleting saved books", async () =>
 // test that user cannot access collections or memberships that do not belong to them
 test("COL-05-T-5 hides missing and foreign resources", async () => {
   // create for our user and a foreign user
-  const { user, first, book } = await createTwoMemberships();
+  const { user, first } = await createTwoMemberships();
   const foreign = await createTwoMemberships();
 
   // snapshot both users' records
@@ -725,10 +936,10 @@ test("COL-05-T-5 hides missing and foreign resources", async () => {
         "Collection not found",
       );
     }
-    // try adding and removing a book from each collection
+    // An inaccessible collection must not cause an unsaved work to be saved.
     await assertError(
       await request("POST", `${path}/books`, user.token, {
-        bookKey: book.bookKey,
+        bookKey: createTestBookKey(),
       }),
       404,
       "Collection or saved book not found",
@@ -737,19 +948,6 @@ test("COL-05-T-5 hides missing and foreign resources", async () => {
       await request("DELETE", `${path}/books/${foreign.book.id}`, user.token),
       404,
       "Collection membership not found",
-    );
-  }
-  // try adding a non-saved book and a foreign book to user's collection
-  for (const bookKey of [createTestBookKey(), foreign.book.bookKey]) {
-    await assertError(
-      await request(
-        "POST",
-        `${collectionsPath}/${first.id}/books`,
-        user.token,
-        { bookKey },
-      ),
-      404,
-      "Collection or saved book not found",
     );
   }
   // try deleting a foreign book from user's collection
@@ -869,11 +1067,18 @@ test("COL-05-T-5 handles simultaneous duplicate writes", async () => {
 });
 
 test("COL-05-T-5 handles deletion during a membership add", async () => {
-  for (const table of ["collections", "saved_books"] as const) {
+  for (const scenario of [
+    "collections",
+    "saved_books",
+    "unsaved_book",
+  ] as const) {
     const user = await createSignedInUser();
     const collection = await createCollection(user.id);
-    const book = await saveBook(user.id);
-    const id = table === "collections" ? collection.id : book.id;
+    const book =
+      scenario === "unsaved_book" ? undefined : await saveBook(user.id);
+    const bookKey = book?.bookKey ?? createTestBookKey();
+    const table = scenario === "saved_books" ? "saved_books" : "collections";
+    const id = table === "collections" ? collection.id : book!.id;
     const client = await pool.connect();
     let pendingAdd: Promise<Response> | undefined;
     try {
@@ -890,7 +1095,7 @@ test("COL-05-T-5 handles deletion during a membership add", async () => {
         "POST",
         `${collectionsPath}/${collection.id}/books`,
         user.token,
-        { bookKey: book.bookKey },
+        { bookKey },
       );
       const deadline = Date.now() + 5_000;
       while (true) {
@@ -917,7 +1122,10 @@ test("COL-05-T-5 handles deletion during a membership add", async () => {
         404,
         "Collection or saved book not found",
       );
-      assert.deepEqual((await storedRows(user.id)).memberships, []);
+      const stored = await storedRows(user.id);
+      assert.deepEqual(stored.memberships, []);
+      // A new saved book must roll back with the failed membership insertion.
+      assert.deepEqual(stored.books, scenario === "collections" ? [book] : []);
     } finally {
       try {
         await client.query("ROLLBACK");

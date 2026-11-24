@@ -1,0 +1,96 @@
+.collection-details-shell {
+  min-height: calc(100svh - 76px);
+  background: var(--cream);
+  color: var(--olive);
+  text-align: left;
+}
+
+.collection-details-page {
+  padding: var(--page-top) var(--page-inline) var(--page-bottom);
+}
+
+.collection-back-link {
+  display: inline-block;
+  margin-bottom: 24px;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 20px;
+  color: var(--olive);
+  background: transparent;
+  border: 1.5px solid var(--olive);
+  border-radius: 10px;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.collection-back-link:hover {
+  background: var(--olive);
+  color: var(--cream);
+}
+
+.collection-details-page .collection-back-link:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.collection-details-heading {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--tan);
+}
+
+.collection-details-heading h1,
+.collection-details-page > h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.collection-details-heading p,
+.collection-notice {
+  color: var(--olive-text-secondary);
+  font-size: 0.9rem;
+}
+
+.collection-empty-state {
+  padding: 48px 0;
+}
+
+.collection-empty-state h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.collection-empty-state p {
+  margin: 12px 0;
+}
+
+.collection-details-page a {
+  color: var(--olive);
+}
+
+.collection-details-page > [role="alert"],
+.collection-details-page > [role="status"],
+.collection-notice {
+  margin-top: 20px;
+}
+
+.collection-details-page > [role="alert"] button {
+  margin-top: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--olive);
+  border-radius: 5px;
+  background: var(--olive);
+  color: var(--cream);
+  font: inherit;
+  cursor: pointer;
+}
+
+.collection-details-page :is(a, button):focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}

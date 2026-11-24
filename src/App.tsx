@@ -6,6 +6,7 @@ import Header from "./components/Header";
 import PersonalLibraryPage from "./pages/PersonalLibraryPage";
 import BookDetailsPage from "./pages/BookDetailsPage";
 import ImportBooksPage from "./pages/ImportBooksPage";
+import CollectionDetailsPage from "./pages/CollectionDetailsPage";
 import type { AuthLocationState } from "./routes";
 
 function MainLayout() {
@@ -60,6 +61,10 @@ function App() {
 
         <Route element={<RequireAuth />}>
           <Route path="/personal-library" element={<PersonalLibraryPage />} />
+          <Route
+            path="/personal-library/collections/:collectionId"
+            element={<CollectionDetailsPage />}
+          />
           <Route path="/import" element={<ImportBooksPage />} />
         </Route>
 
