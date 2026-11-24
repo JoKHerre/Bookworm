@@ -261,6 +261,10 @@
   width: 100%;
 }
 
+.import-pick-bar > .import-secondary {
+  margin-left: auto;
+}
+
 .import-pick .import-search {
   align-self: stretch;
 }
