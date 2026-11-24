@@ -8,6 +8,7 @@ export const LIBRARY_CATALOG_CTX = "1.1033.0.0.1";
 export function libraryCatalogRecordUrl(bibid: string): string {
   const url = new URL("title.aspx", LIBRARY_CATALOG_SEARCH_URL);
   url.searchParams.set("ctx", LIBRARY_CATALOG_CTX);
+  url.searchParams.set("pos", "1");
   url.searchParams.set("cn", bibid);
   return url.toString();
 }
