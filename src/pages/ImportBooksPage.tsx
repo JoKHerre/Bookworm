@@ -65,7 +65,11 @@ function isExpiredSession(err: unknown) {
   );
 }
 
-// search Open Library by hand for a row that had no match
+function searchFormId(row: ImportRow) {
+  return `import-search-form-${row.row}`;
+}
+
+// search Open Library by hand for a row's book
 function RowSearch({
   row,
   onChoose,
@@ -105,6 +109,7 @@ function RowSearch({
   const inputId = `import-search-${row.row}`;
   return (
     <form
+      id={searchFormId(row)}
       className="import-search"
       aria-label={`Search for ${rowLabel(row)}`}
       onSubmit={(event) => void handleSubmit(event)}
@@ -172,6 +177,7 @@ function ImportBooksPage() {
   const [importing, setImporting] = useState(false); // whether the books are being saved to the library
   const [result, setResult] = useState<ImportBooksResponse | null>(null); // counts returned after importing
   const matchController = useRef<AbortController | null>(null);
+  const focusKey = useRef<string | null>(null); // preview book to focus once a search result is chosen
 
   useEffect(() => () => matchController.current?.abort(), []);
 
@@ -323,7 +329,7 @@ function ImportBooksPage() {
   // each matched book once, flagged when any of its rows needs a check
   const previewByKey = new Map<
     string,
-    { row: ImportRow; book: BookSearchResult; check: boolean }
+    { index: number; row: ImportRow; book: BookSearchResult; check: boolean }
   >();
   matches.forEach((match, i) => {
     if (match.status !== "matched") return;
@@ -337,7 +343,7 @@ function ImportBooksPage() {
     previewByKey.set(
       match.book.key,
       !item || (check && !item.check)
-        ? { row, book, check }
+        ? { index: i, row, book, check }
         : { ...item, book },
     );
   });
@@ -345,24 +351,59 @@ function ImportBooksPage() {
     (a, b) => Number(b.check) - Number(a.check),
   );
 
+  // a book left out in the preview stays out when a picker also picks it
   const bookKeys = [
     ...new Set(
       matches.flatMap((match, i) => {
-        if (match.status === "matched") {
-          return excluded.has(match.book.key) ? [] : [match.book.key];
-        }
-        const pick = picks[valid[i]?.row ?? -1];
-        return match.status === "ambiguous" && pick ? [pick] : [];
+        const key =
+          match.status === "matched"
+            ? match.book.key
+            : match.status === "ambiguous"
+              ? picks[valid[i]?.row ?? -1]
+              : undefined;
+        return key && !excluded.has(key) ? [key] : [];
       }),
     ),
   ];
+  const previewKeys = preview.map((item) => item.book.key);
+  const allIncluded = previewKeys.every((key) => !excluded.has(key));
 
-  function toggleBook(key: string) {
+  function setIncluded(keys: string[], included: boolean) {
     setExcluded((prev) => {
       const next = new Set(prev);
-      if (!next.delete(key)) next.add(key);
+      for (const key of keys) {
+        if (included) next.delete(key);
+        else next.add(key);
+      }
       return next;
     });
+  }
+
+  function searchToggle(row: ImportRow) {
+    const open = searchRow === row.row;
+    return (
+      <button
+        className="import-secondary import-small"
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? searchFormId(row) : undefined}
+        onClick={() => setSearchRow(open ? null : row.row)}
+      >
+        <span aria-hidden="true">{open ? "Close" : "Search"}</span>
+        <span className="import-hidden">
+          {open ? "Close search for" : "Search for"} {rowLabel(row)}
+        </span>
+      </button>
+    );
+  }
+
+  function rowSearch(index: number) {
+    const row = valid[index]!;
+    return (
+      searchRow === row.row && (
+        <RowSearch row={row} onChoose={(book) => chooseBook(index, book)} />
+      )
+    );
   }
 
   function chooseBook(index: number, book: BookSearchResult) {
@@ -373,12 +414,9 @@ function ImportBooksPage() {
       return next;
     });
     setChosen((prev) => new Set(prev).add(row.row));
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      next.delete(book.key);
-      return next;
-    });
+    setIncluded([book.key], true);
     setSearchRow(null);
+    focusKey.current = book.key;
   }
 
   async function handleImport() {
@@ -460,26 +498,51 @@ function ImportBooksPage() {
           <>
             {preview.length > 0 && (
               <section aria-labelledby="import-ready-title">
-                <h2 id="import-ready-title">Ready to import</h2>
+                <div className="import-section-head">
+                  <h2 id="import-ready-title">Ready to import</h2>
+                  {preview.length > 1 && (
+                    <button
+                      className="import-secondary import-small"
+                      type="button"
+                      onClick={() => setIncluded(previewKeys, !allIncluded)}
+                    >
+                      {allIncluded ? "Leave out all" : "Include all"}
+                    </button>
+                  )}
+                </div>
                 <ul
                   className="import-preview"
                   aria-labelledby="import-ready-title"
                 >
-                  {preview.map(({ row, book, check }) => (
+                  {preview.map(({ index, row, book, check }) => (
                     <li key={book.key}>
                       <label className="import-include">
                         <input
+                          ref={(input) => {
+                            if (input && focusKey.current === book.key) {
+                              focusKey.current = null;
+                              input.focus();
+                            }
+                          }}
                           type="checkbox"
                           checked={!excluded.has(book.key)}
-                          onChange={() => toggleBook(book.key)}
+                          onChange={(event) =>
+                            setIncluded([book.key], event.target.checked)
+                          }
                         />
                         <span>{bookLabel(book)}</span>
                       </label>
                       {check && (
-                        <div className="import-source">
-                          <span className="import-flag">Check this match</span>
-                          <span>In your file: {rowLabel(row)}</span>
-                        </div>
+                        <>
+                          <div className="import-source">
+                            <span className="import-flag">
+                              Check this match
+                            </span>
+                            <span>In your file: {rowLabel(row)}</span>
+                            {searchToggle(row)}
+                          </div>
+                          {rowSearch(index)}
+                        </>
                       )}
                     </li>
                   ))}
@@ -501,23 +564,26 @@ function ImportBooksPage() {
                     return (
                       <li key={row.row} className="import-pick">
                         <label htmlFor={id}>{rowLabel(row)}</label>
-                        <select
-                          id={id}
-                          value={picks[row.row] ?? ""}
-                          onChange={(event) =>
-                            setPicks((prev) => ({
-                              ...prev,
-                              [row.row]: event.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">Skip this book</option>
-                          {match.candidates.map((book) => (
-                            <option key={book.key} value={book.key}>
-                              {candidateLabel(book, row.title)}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="import-pick-bar">
+                          <select
+                            id={id}
+                            value={picks[row.row] ?? ""}
+                            onChange={(event) => {
+                              const key = event.target.value;
+                              setPicks((prev) => ({ ...prev, [row.row]: key }));
+                              if (key) setIncluded([key], true);
+                            }}
+                          >
+                            <option value="">Skip this book</option>
+                            {match.candidates.map((book) => (
+                              <option key={book.key} value={book.key}>
+                                {candidateLabel(book, row.title)}
+                              </option>
+                            ))}
+                          </select>
+                          {searchToggle(row)}
+                        </div>
+                        {rowSearch(i)}
                       </li>
                     );
                   })}
@@ -532,29 +598,13 @@ function ImportBooksPage() {
                   className="import-missing"
                   aria-labelledby="import-list-title"
                 >
-                  {missing.map((i) => {
-                    const row = valid[i]!;
-                    const open = searchRow === row.row;
-                    return (
-                      <li key={row.row}>
-                        <span>{rowLabel(row)}</span>
-                        <button
-                          className="import-secondary import-small"
-                          type="button"
-                          aria-expanded={open}
-                          onClick={() => setSearchRow(open ? null : row.row)}
-                        >
-                          {open ? "Close" : "Search"}
-                        </button>
-                        {open && (
-                          <RowSearch
-                            row={row}
-                            onChoose={(book) => chooseBook(i, book)}
-                          />
-                        )}
-                      </li>
-                    );
-                  })}
+                  {missing.map((i) => (
+                    <li key={valid[i]!.row}>
+                      <span>{rowLabel(valid[i]!)}</span>
+                      {searchToggle(valid[i]!)}
+                      {rowSearch(i)}
+                    </li>
+                  ))}
                 </ul>
               </section>
             )}
@@ -565,11 +615,15 @@ function ImportBooksPage() {
                   Could not look up {books(failed.length)}
                 </h2>
                 <ul
-                  className="import-list"
+                  className="import-missing"
                   aria-labelledby="import-failed-title"
                 >
                   {failed.map((i) => (
-                    <li key={valid[i]!.row}>{rowLabel(valid[i]!)}</li>
+                    <li key={valid[i]!.row}>
+                      <span>{rowLabel(valid[i]!)}</span>
+                      {searchToggle(valid[i]!)}
+                      {rowSearch(i)}
+                    </li>
                   ))}
                 </ul>
                 {!expired && (
