@@ -26,6 +26,7 @@ import { bookDetailsPath } from "../routes";
 import "./ImportBooksPage.css";
 
 const IMPORT_SEARCH_RESULTS = 5;
+const IMPORT_RESULTS_SHOWN = 10;
 
 function formatSize(bytes: number) {
   return bytes < 1024 ? `${bytes} B` : `${Math.round(bytes / 1024)} KB`;
@@ -156,6 +157,46 @@ function RowSearch({
           </ul>
         ))}
     </form>
+  );
+}
+
+// imported books, linked to their pages; a long list shows its first few
+// until expanded
+function ResultList({
+  id,
+  title,
+  books,
+}: {
+  id: string;
+  title: string;
+  books: BookSearchResult[];
+}) {
+  const [showAll, setShowAll] = useState(false);
+  if (books.length === 0) return null;
+  const long = books.length > IMPORT_RESULTS_SHOWN;
+  return (
+    <section aria-labelledby={id}>
+      <h2 id={id}>{title}</h2>
+      <ul className="import-list" aria-labelledby={id}>
+        {(showAll ? books : books.slice(0, IMPORT_RESULTS_SHOWN)).map(
+          (book) => (
+            <li key={book.key}>
+              <Link to={bookDetailsPath(book.key)}>{bookLabel(book)}</Link>
+            </li>
+          ),
+        )}
+      </ul>
+      {long && (
+        <button
+          className="import-secondary import-small"
+          type="button"
+          aria-expanded={showAll}
+          onClick={() => setShowAll(!showAll)}
+        >
+          {showAll ? "Show fewer" : `Show all ${books.length}`}
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -420,37 +461,17 @@ function ImportBooksPage() {
     focusKey.current = book.key;
   }
 
-  // the book the page matched, picked or chose for each key
-  const bookByKey = new Map<string, BookSearchResult>();
+  // the book the page matched, picked or chose for each key, preferring
+  // Open Library's book to a book_key row's
+  const bookByKey = new Map(preview.map(({ book }) => [book.key, book]));
   for (const match of matches) {
-    const found =
-      match.status === "matched"
-        ? [match.book]
-        : match.status === "ambiguous"
-          ? match.candidates
-          : [];
-    for (const book of found) {
+    if (match.status !== "ambiguous") continue;
+    for (const book of match.candidates) {
       if (!bookByKey.has(book.key)) bookByKey.set(book.key, book);
     }
   }
-
-  function resultList(id: string, title: string, keys: string[]) {
-    if (keys.length === 0) return null;
-    return (
-      <section aria-labelledby={id}>
-        <h2 id={id}>{title}</h2>
-        <ul className="import-list" aria-labelledby={id}>
-          {keys.map((key) => (
-            <li key={key}>
-              <Link to={bookDetailsPath(key)}>
-                {bookLabel(bookByKey.get(key) ?? { key, title: key })}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
-    );
-  }
+  const resultBooks = (keys: string[]) =>
+    keys.map((key) => bookByKey.get(key) ?? { key, title: key });
 
   async function handleImport() {
     setImporting(true);
@@ -506,12 +527,16 @@ function ImportBooksPage() {
             <p className="import-status" role="status">
               {`Imported ${books(result.added.length)}. ${result.alreadySaved.length} already in your library.`}
             </p>
-            {resultList("import-added-title", "Added", result.added)}
-            {resultList(
-              "import-saved-title",
-              "Already in your library",
-              result.alreadySaved,
-            )}
+            <ResultList
+              id="import-added-title"
+              title="Added"
+              books={resultBooks(result.added)}
+            />
+            <ResultList
+              id="import-saved-title"
+              title="Already in your library"
+              books={resultBooks(result.alreadySaved)}
+            />
             <Link className="import-link" to="/personal-library">
               Go to My Library
             </Link>
