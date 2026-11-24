@@ -232,6 +232,10 @@
   color: var(--olive);
 }
 
+.import-source > .import-secondary {
+  margin-left: auto;
+}
+
 .import-preview .import-search {
   flex-basis: 100%;
 }
