@@ -381,11 +381,14 @@ function getWork(key: string, signal?: AbortSignal) {
   );
 }
 
-function getAuthorName(key: string) {
-  return authorNameCache.get(key, (shared) =>
-    fetchOpenLibrary(`${key}.json`, openLibraryAuthor, shared).then(
-      ({ name }) => name,
-    ),
+function getAuthorName(key: string, signal?: AbortSignal) {
+  return authorNameCache.get(
+    key,
+    (shared) =>
+      fetchOpenLibrary(`${key}.json`, openLibraryAuthor, shared).then(
+        ({ name }) => name,
+      ),
+    signal,
   );
 }
 
@@ -503,16 +506,18 @@ export async function getISBNsForWork(
 export async function getBookDetails(
   workKey: string,
   includeAuthors = true,
+  signal?: AbortSignal,
 ): Promise<BookDetails> {
   const key = openLibraryWorkKey.parse(workKey);
-  const work = await getWork(key);
+  const work = await getWork(key, signal);
 
   const authors = includeAuthors
     ? await Promise.all(
         (work.authors ?? []).slice(0, 5).map(async ({ author }) => {
           try {
-            return await getAuthorName(author.key);
+            return await getAuthorName(author.key, signal);
           } catch (error) {
+            signal?.throwIfAborted();
             console.error(`Failed to retrieve author ${author.key}:`, error);
             return undefined;
           }
