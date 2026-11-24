@@ -17,7 +17,7 @@ Serves IMP-03 (review imported books to make sure they were imported correctly).
 - Add `matchNeedsCheck(row, book)` to `shared/bookMatch.ts`. It returns true when the normalized titles differ (`normalizeTitle`), or when the row has an author and `authorsMatch` fails for the book's authors. This catches ISBN matches for another book and matches to a book with another subtitle. A row title whose part before `:` equals the book's whole title isn't flagged, since Open Library often leaves subtitles out.
 - In `src/pages/ImportBooksPage.tsx`, once matching is done, show a "Ready to import" section above "Pick the right book". It lists each matched book once by key, in file order, with flagged books first. A book matched by several rows is flagged when any of them needs a check, and shows that row's file entry, so an ISBN for another book isn't hidden behind a correct row.
 - Each item shows the matched book's title, then its authors and first publish year when known, in the same form as the picker. Rows matched by `book_key` show the file's title and author, and are never flagged. When another row matched the same key, its Open Library book is shown instead.
-- A flagged item has a "Check this match" tag and a line "In your file: <title> by <author>" (just the title when there is no author).
+- A flagged item has a line under the book with a "Check this match" tag and "In your file: <title> by <author>" (just the title when there is no author).
 - Ambiguous picks stay in "Pick the right book" and aren't repeated in the preview.
 
 ## Requirements
