@@ -355,7 +355,7 @@
   font: inherit;
   color: var(--olive);
   background: var(--cream-card);
-  border: 1.5px solid var(--tan);
+  border: 1px solid var(--olive);
   border-radius: 8px;
 }
 
