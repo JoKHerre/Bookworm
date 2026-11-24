@@ -170,13 +170,18 @@ export function matchTitle(
 }
 
 // a match the user should look at: Open Library's title or author differs
-// from the file's, as with an ISBN for another book or a subtitle-only match
+// from the file's, as with an ISBN for another book. A subtitle in the file
+// that Open Library's title leaves out doesn't count.
 export function matchNeedsCheck(
   row: { title: string; author: string },
   book: BookSearchResult,
 ): boolean {
+  const bookTitle = normalizeTitle(book.title);
+  const sameTitle =
+    normalizeTitle(row.title) === bookTitle ||
+    normalizeTitle(row.title.split(":")[0]!) === bookTitle;
   return (
-    normalizeTitle(row.title) !== normalizeTitle(book.title) ||
+    !sameTitle ||
     (row.author.trim() !== "" &&
       !authorsMatch(row.author, book.author_name ?? []))
   );
