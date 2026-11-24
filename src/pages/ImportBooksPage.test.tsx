@@ -551,6 +551,12 @@ describe("ImportBooksPage", () => {
       expect(await importButton("1 book")).toBeInTheDocument();
     });
 
+    it("IMP-03-T-1 prefers Open Library's book to a keyed row", async () => {
+      setup();
+      await uploadCsv("title,book_key\nOther,/works/OL1W\nDune,\n");
+      expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
+    });
+
     it("IMP-03-T-1 flags a book when a later row needs a check", async () => {
       matchMock.mockResolvedValue([
         { status: "matched", book: book(1, "Dune", "Frank Herbert", 1965) },

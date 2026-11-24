@@ -231,9 +231,15 @@ function ImportBooksPage() {
     const row = valid[i]!;
     const check = !row.book_key && matchNeedsCheck(row, match.book);
     const item = previewByKey.get(match.book.key);
-    if (!item || (check && !item.check)) {
-      previewByKey.set(match.book.key, { row, book: match.book, check });
-    }
+    // a book_key row only has the file's title, so keep Open Library's book
+    const book =
+      item && (row.book_key || !item.row.book_key) ? item.book : match.book;
+    previewByKey.set(
+      match.book.key,
+      !item || (check && !item.check)
+        ? { row, book, check }
+        : { ...item, book },
+    );
   });
   const preview = [...previewByKey.values()].sort(
     (a, b) => Number(b.check) - Number(a.check),
