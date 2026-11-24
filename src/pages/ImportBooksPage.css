@@ -111,8 +111,16 @@
 
 .import-link {
   align-self: flex-start;
-  color: var(--olive);
+  padding: 10px 22px;
   font-weight: 600;
+  color: var(--cream);
+  text-decoration: none;
+  background: var(--olive);
+  border-radius: 10px;
+}
+
+.import-link:hover {
+  background: var(--olive-hover);
 }
 
 .import-link:focus-visible {
@@ -167,8 +175,12 @@
 }
 
 .import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
 }
 
 .import-secondary {
@@ -371,6 +383,12 @@
 
 .import-list a {
   color: var(--olive);
+  text-decoration-color: var(--tan);
+  text-underline-offset: 3px;
+}
+
+.import-list a:hover {
+  text-decoration-color: var(--gold);
 }
 
 .import-list a:focus-visible {
