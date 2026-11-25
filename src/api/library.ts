@@ -64,10 +64,9 @@ export async function importBooks(
       byStatus: { 401: "Your session has expired. Please log in again." },
     });
   }
-  if (
-    typeof data?.added !== "number" ||
-    typeof data.alreadySaved !== "number"
-  ) {
+  const isKeys = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((key) => typeof key === "string");
+  if (!isKeys(data?.added) || !isKeys(data.alreadySaved)) {
     throw new Error(IMPORT_ERROR);
   }
   return { added: data.added, alreadySaved: data.alreadySaved };

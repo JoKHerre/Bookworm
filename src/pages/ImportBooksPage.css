@@ -111,8 +111,16 @@
 
 .import-link {
   align-self: flex-start;
-  color: var(--olive);
+  padding: 10px 22px;
   font-weight: 600;
+  color: var(--cream);
+  text-decoration: none;
+  background: var(--olive);
+  border-radius: 10px;
+}
+
+.import-link:hover {
+  background: var(--olive-hover);
 }
 
 .import-link:focus-visible {
@@ -167,8 +175,12 @@
 }
 
 .import-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
 }
 
 .import-secondary {
@@ -194,4 +206,192 @@
 
 .import-card section > .import-secondary {
   margin-top: 12px;
+}
+
+.import-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-preview li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.import-flag {
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--olive);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+}
+
+.import-source {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 0.9rem;
+  color: var(--olive);
+}
+
+.import-source > .import-secondary {
+  margin-left: auto;
+}
+
+.import-preview .import-search {
+  flex-basis: 100%;
+}
+
+.import-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.import-card .import-section-head h2 {
+  margin: 0;
+}
+
+.import-pick-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+}
+
+.import-pick-bar > .import-secondary {
+  margin-left: auto;
+}
+
+.import-pick .import-search {
+  align-self: stretch;
+}
+
+.import-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.import-include {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.import-include input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--olive);
+  transform: translateY(2px);
+}
+
+.import-include input:not(:checked) + span {
+  text-decoration: line-through;
+}
+
+.import-preview .import-source {
+  padding-left: 26px;
+}
+
+.import-missing,
+.import-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.import-missing > li,
+.import-results > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.import-secondary.import-small {
+  padding: 4px 12px;
+  font-size: 0.9rem;
+}
+
+.import-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 16px;
+  font-size: 0.95rem;
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  border-radius: 12px;
+}
+
+.import-search > label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.import-search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-search-bar input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--olive);
+  background: var(--cream-card);
+  border: 1px solid var(--olive);
+  border-radius: 8px;
+}
+
+.import-search-bar input:focus-visible,
+.import-include input:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
+}
+
+.import-search p {
+  margin: 0;
+}
+
+.import-list a {
+  color: var(--olive);
+  text-decoration-color: var(--tan);
+  text-underline-offset: 3px;
+}
+
+.import-list a:hover {
+  text-decoration-color: var(--gold);
+}
+
+.import-list a:focus-visible {
+  outline: 3px solid var(--olive);
+  outline-offset: 2px;
 }
