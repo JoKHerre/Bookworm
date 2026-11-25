@@ -148,6 +148,42 @@ export const bookRatings = pgTable(
   ],
 );
 
+// Private notes belong to a user and work, independently of My Library.
+export const bookNotes = pgTable(
+  "book_notes",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bookKey: text("book_key").notNull(),
+    content: text("content").notNull(),
+    reference: text("reference"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    // The notes endpoint will explicitly set this timestamp when editing.
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("book_notes_user_book_idx").on(table.userId, table.bookKey),
+    check(
+      "book_notes_book_key_valid",
+      sql`${table.bookKey} ~ '^/works/OL[0-9]+W$'`,
+    ),
+    check(
+      "book_notes_content_valid",
+      sql`char_length(${table.content}) BETWEEN 1 AND 10000 AND ${table.content} !~ '^[[:space:]]*$'`,
+    ),
+    check(
+      "book_notes_reference_valid",
+      sql`${table.reference} IS NULL OR (char_length(${table.reference}) BETWEEN 1 AND 100 AND ${table.reference} !~ '^[[:space:]]*$')`,
+    ),
+  ],
+);
+
 export const bookGenreEnum = pgEnum("book_genre", BOOK_GENRES);
 
 // the genres a user likes, which drive their recommendations
@@ -166,5 +202,6 @@ export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type SavedBook = typeof savedBooks.$inferSelect;
 export type BookRating = typeof bookRatings.$inferSelect;
+export type BookNote = typeof bookNotes.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type CollectionBook = typeof collectionBooks.$inferSelect;

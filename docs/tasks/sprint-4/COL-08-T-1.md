@@ -22,15 +22,15 @@ CRUD endpoints and request authentication (COL-08-T-2), writing/editing/deleting
 
 Define and export `bookNotes` for PostgreSQL table `book_notes` in `server/src/db/schema.ts`, together with the inferred `BookNote` select type.
 
-| Column | Drizzle property | Stored behavior |
-| --- | --- | --- |
-| `id` | `id` | Automatically generated integer identity primary key; identifies one note for later editing/deletion |
-| `user_id` | `userId` | Required integer referencing `users.id`, with `ON DELETE CASCADE` |
-| `book_key` | `bookKey` | Required text containing an Open Library work key in the form `/works/OL` + one or more digits + `W`, such as `/works/OL45804W` |
-| `content` | `content` | Required plain text, 1–10,000 PostgreSQL characters, containing at least one non-whitespace character |
-| `reference` | `reference` | Optional text for a page/chapter reference, such as `Page 42` or `Chapter 3`; defaults to `NULL`; when present, 1–100 PostgreSQL characters containing at least one non-whitespace character |
-| `created_at` | `createdAt` | Required timestamp with time zone, defaulting to insertion time |
-| `updated_at` | `updatedAt` | Required timestamp with time zone, defaulting to insertion time |
+| Column       | Drizzle property | Stored behavior                                                                                                                                                                              |
+| ------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | `id`             | Automatically generated integer identity primary key; identifies one note for later editing/deletion                                                                                         |
+| `user_id`    | `userId`         | Required integer referencing `users.id`, with `ON DELETE CASCADE`                                                                                                                            |
+| `book_key`   | `bookKey`        | Required text containing an Open Library work key in the form `/works/OL` + one or more digits + `W`, such as `/works/OL45804W`                                                              |
+| `content`    | `content`        | Required plain text, 1–10,000 PostgreSQL characters, containing at least one non-whitespace character                                                                                        |
+| `reference`  | `reference`      | Optional text for a page/chapter reference, such as `Page 42` or `Chapter 3`; defaults to `NULL`; when present, 1–100 PostgreSQL characters containing at least one non-whitespace character |
+| `created_at` | `createdAt`      | Required timestamp with time zone, defaulting to insertion time                                                                                                                              |
+| `updated_at` | `updatedAt`      | Required timestamp with time zone, defaulting to insertion time                                                                                                                              |
 
 ### Behavior and edge cases
 
@@ -73,3 +73,24 @@ Define and export `bookNotes` for PostgreSQL table `book_notes` in `server/src/d
 8. Missing, null, and nonexistent owner IDs are rejected; deleting an existing owner removes their notes and preserves another owner's notes.
 9. Deleting one note preserves its owner and other notes; deleting a saved-book row or collection preserves notes for that book.
 10. Applying and reapplying the schema through the existing push workflow preserves existing data, and the new database cases, existing backend tests, and project type checks pass.
+
+## Tests
+
+All new cases live in `server/backend_tests/schema.test.ts` and use the guarded `bookworm_test` PostgreSQL database. The criterion numbers below refer to the acceptance criteria above.
+
+| Test name (prefixed with `COL-08-T-1`)                                  | Criteria |
+| ----------------------------------------------------------------------- | -------- |
+| `creates the book-notes table with constraints and index`               | 1        |
+| `generates note identity and timestamps with a null reference`          | 2, 6     |
+| `allows multiple notes and owners without saved books`                  | 3, 4     |
+| `rejects missing and malformed book keys`                               | 4        |
+| `preserves valid content and references at length boundaries`           | 5, 6     |
+| `rejects invalid text on inserts and updates without changing the note` | 5, 6, 7  |
+| `edits text with an explicit timestamp and preserves note identity`     | 7        |
+| `rejects missing and nonexistent owners`                                | 8        |
+| `cascades notes only for the deleted owner`                             | 8        |
+| `deletes one note without deleting its owner or other notes`            | 9        |
+| `preserves notes when saved books or collections are deleted`           | 9        |
+| `preserves existing data across repeated schema pushes`                 | 10       |
+
+The repeated-push test seeds users, sessions, saved books, collections, memberships, ratings, genre preferences, and notes. It runs the existing `db:push` workflow twice against the guarded test database and verifies that those records remain unchanged after each push. Apply the schema before running the suite. Full backend regression tests and root type checking complete criterion 10's validation.
