@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { apiRequest } from "../api/client";
 import { AuthProvider } from "./AuthContext";
 import { jsonResponse } from "../test/renderWithProviders";
 import { useAuth, type AuthContextValue } from "./useAuth";
@@ -109,6 +110,31 @@ describe("AuthProvider", () => {
       act(() => auth().login({ email: "a@b.co", password: "wrongpass1" })),
     ).rejects.toThrow("Invalid email or password");
     expect(screen.getByText("signed out")).toBeInTheDocument();
+  });
+
+  it("signs out when another request finds the session expired", async () => {
+    stubFetch((url) =>
+      url === "/api/auth/me"
+        ? jsonResponse(USER)
+        : jsonResponse({ error: "Not logged in" }, 401),
+    );
+    await renderProvider();
+    expect(screen.getByText("a@b.co")).toBeInTheDocument();
+
+    await act(() => apiRequest("/api/library").catch(() => null));
+    expect(screen.getByText("signed out")).toBeInTheDocument();
+  });
+
+  it("stays signed in when another request fails for another reason", async () => {
+    stubFetch((url) =>
+      url === "/api/auth/me"
+        ? jsonResponse(USER)
+        : jsonResponse({ error: "Oops" }, 500),
+    );
+    await renderProvider();
+
+    await act(() => apiRequest("/api/library").catch(() => null));
+    expect(screen.getByText("a@b.co")).toBeInTheDocument();
   });
 
   it("TST-01-T-1 useAuth requires a provider", () => {

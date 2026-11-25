@@ -95,7 +95,7 @@ test("IMP-01-T-5 imports books for the signed-in user", async () => {
   const response = await postImport({ bookKeys: keys }, user.token);
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { added: 2, alreadySaved: 0 });
+  assert.deepEqual(await response.json(), { added: keys, alreadySaved: [] });
   const rows = await rowsForUser(user.id);
   assert.deepEqual(rows.map((r) => r.bookKey).sort(), [...keys].sort());
   for (const row of rows) assert.equal(row.readingStatus, "to_be_read");
@@ -116,7 +116,10 @@ test("IMP-01-T-5 skips books already in the library", async () => {
   );
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { added: 1, alreadySaved: 1 });
+  assert.deepEqual(await response.json(), {
+    added: [fresh],
+    alreadySaved: [existing],
+  });
   const rows = await rowsForUser(user.id);
   assert.equal(rows.length, 2);
   // the book the user already had keeps its reading status
@@ -133,7 +136,7 @@ test("IMP-01-T-5 counts repeated keys once", async () => {
   const response = await postImport({ bookKeys: [key, key, key] }, user.token);
 
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { added: 1, alreadySaved: 0 });
+  assert.deepEqual(await response.json(), { added: [key], alreadySaved: [] });
   assert.equal((await rowsForBook(key)).length, 1);
 });
 
@@ -150,7 +153,7 @@ test("IMP-01-T-5 allows different users to import the same book", async () => {
   );
   const response = await postImport({ bookKeys: [key] }, second.token);
 
-  assert.deepEqual(await response.json(), { added: 1, alreadySaved: 0 });
+  assert.deepEqual(await response.json(), { added: [key], alreadySaved: [] });
   const owners = (await rowsForBook(key)).map((r) => r.userId).sort();
   assert.deepEqual(owners, [first.id, second.id].sort());
 });
@@ -195,4 +198,25 @@ test("IMP-01-T-5 does not accept a client-supplied user ID", async () => {
   assert.equal(response.status, 400);
   assert.deepEqual(await rowsForUser(user.id), []);
   assert.deepEqual(await rowsForUser(other.id), []);
+});
+
+test("IMP-03-T-3 returns added and already saved keys", async () => {
+  const user = await createSignedInUser();
+  const [first, saved, last] = [
+    createTestBookKey(),
+    createTestBookKey(),
+    createTestBookKey(),
+  ];
+  await db.insert(savedBooks).values({ userId: user.id, bookKey: saved });
+
+  const response = await postImport(
+    { bookKeys: [first, saved, last, first] },
+    user.token,
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    added: [first, last],
+    alreadySaved: [saved],
+  });
 });

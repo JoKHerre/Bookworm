@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IMPORT_MAX_FILE_BYTES } from "../../shared/bookImport";
 import type { ImportMatch, MatchImportRow } from "../../shared/bookMatch";
 import type { BookSearchResult } from "../../shared/books";
-import { matchImportRows } from "../api/books";
+import { matchImportRows, searchBooks } from "../api/books";
 import { ApiRequestError } from "../api/client";
 import { jsonResponse, renderWithProviders } from "../test/renderWithProviders";
 import ImportBooksPage from "./ImportBooksPage";
 
 vi.mock("../api/books");
 const matchMock = vi.mocked(matchImportRows);
+const searchMock = vi.mocked(searchBooks);
 
 const choose = (file: File) =>
   userEvent.upload(screen.getByLabelText("Choose a CSV file"), file, {
@@ -250,7 +251,9 @@ describe("ImportBooksPage", () => {
   it("IMP-01-T-5 page imports and shows the result", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 1 }));
+      .mockResolvedValue(
+        jsonResponse({ added: ["/works/OL1W"], alreadySaved: ["/works/OL2W"] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await choose(
@@ -282,7 +285,9 @@ describe("ImportBooksPage", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({}, 500))
-      .mockResolvedValueOnce(jsonResponse({ added: 1, alreadySaved: 0 }));
+      .mockResolvedValueOnce(
+        jsonResponse({ added: ["/works/OL1W"], alreadySaved: [] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await choose(csv("books.csv", "title,book_key\nDune,/works/OL1W\n"));
@@ -345,9 +350,12 @@ describe("ImportBooksPage", () => {
   });
 
   it("IMP-02-T-3 imports matched rows", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ added: 2, alreadySaved: 0 }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        added: ["/works/OL9W", "/works/OL1W"],
+        alreadySaved: [],
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await uploadCsv("title,book_key\nDune,/works/OL9W\nmatch:1,\nnope,\n");
@@ -365,7 +373,9 @@ describe("ImportBooksPage", () => {
   it("IMP-02-T-3 imports a picked ambiguous book", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ added: 1, alreadySaved: 0 }));
+      .mockResolvedValue(
+        jsonResponse({ added: ["/works/OL6W"], alreadySaved: [] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
     setup();
     await uploadCsv("title,author\npick:5,Jane Austen\npick:10,\n");
@@ -412,7 +422,7 @@ describe("ImportBooksPage", () => {
     expect(
       within(list)
         .getAllByRole("listitem")
-        .map((li) => li.textContent),
+        .map((li) => li.firstChild?.textContent),
     ).toEqual(["Unknown Book by Someone"]);
     expect(await importButton("1 book")).toBeEnabled();
   });
@@ -491,5 +501,522 @@ describe("ImportBooksPage", () => {
     await choose(csv("other.csv"));
     expect(signal?.aborted).toBe(true);
     expect(screen.queryByText(/Matching books/)).not.toBeInTheDocument();
+  });
+  describe("preview", () => {
+    const ready = () => screen.findByRole("list", { name: "Ready to import" });
+    const items = async () =>
+      within(await ready())
+        .getAllByRole("listitem")
+        .map((item) => {
+          const text = item.cloneNode(true) as HTMLElement;
+          text.querySelectorAll("button").forEach((button) => button.remove());
+          return text.textContent;
+        });
+
+    beforeEach(() => {
+      matchMock.mockImplementation((rows) =>
+        Promise.resolve(
+          rows.map(({ title }): ImportMatch => {
+            if (title === "Dune") {
+              return {
+                status: "matched",
+                book: book(1, "Dune", "Frank Herbert", 1965),
+              };
+            }
+            if (title === "Emma") {
+              return {
+                status: "matched",
+                book: book(2, "Persuasion", "Jane Austen", 1817),
+              };
+            }
+            return { status: "none" };
+          }),
+        ),
+      );
+    });
+
+    it("IMP-03-T-1 lists matched books before import", async () => {
+      setup();
+      await uploadCsv("title,author\nDune,Frank Herbert\nnope,\n");
+      expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+    });
+
+    it("IMP-03-T-1 flags doubtful matches first", async () => {
+      setup();
+      await uploadCsv("title,author\nDune,Frank Herbert\nEmma,Jane Austen\n");
+      expect(await items()).toEqual([
+        "Persuasion by Jane Austen (1817)Check this matchIn your file: Emma by Jane Austen",
+        "Dune by Frank Herbert (1965)",
+      ]);
+    });
+
+    it("IMP-03-T-1 lists keyed books without a flag", async () => {
+      setup();
+      await uploadCsv("title,author,book_key\nMy Dune,Herbert,/works/OL9W\n");
+      expect(await items()).toEqual(["My Dune by Herbert"]);
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+    });
+
+    it("IMP-03-T-1 lists a book matched twice once", async () => {
+      setup();
+      await uploadCsv("title,book_key\nDune,\nOther,/works/OL1W\n");
+      expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
+      expect(await importButton("1 book")).toBeInTheDocument();
+    });
+
+    it("IMP-03-T-1 prefers Open Library's book to a keyed row", async () => {
+      setup();
+      await uploadCsv("title,book_key\nOther,/works/OL1W\nDune,\n");
+      expect(await items()).toEqual(["Dune by Frank Herbert (1965)"]);
+    });
+
+    it("IMP-03-T-1 flags a book when a later row needs a check", async () => {
+      matchMock.mockResolvedValue([
+        { status: "matched", book: book(1, "Dune", "Frank Herbert", 1965) },
+        { status: "matched", book: book(1, "Dune", "Frank Herbert", 1965) },
+      ]);
+      setup();
+      await uploadCsv("title,author\nDune,Frank Herbert\nEmma,Jane Austen\n");
+      expect(await items()).toEqual([
+        "Dune by Frank Herbert (1965)Check this matchIn your file: Emma by Jane Austen",
+      ]);
+    });
+  });
+  describe("review", () => {
+    const missingList = () =>
+      screen.findByRole("list", { name: "No match found" });
+    const searchFor = (name: string) =>
+      screen.getByRole("form", { name: `Search for ${name}` });
+    const openSearch = (name: string) =>
+      screen.getByRole("button", { name: `Search for ${name}` });
+    // opens the row's search, searches, and chooses the only result
+    async function chooseResult(name: string, result: BookSearchResult) {
+      searchMock.mockImplementationOnce(() => results([result]));
+      await userEvent.click(openSearch(name));
+      const form = searchFor(name);
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      await userEvent.click(
+        await within(form).findByRole("button", { name: "Choose" }),
+      );
+    }
+    const results = (books: BookSearchResult[]) =>
+      Promise.resolve({ books, total: books.length });
+
+    beforeEach(() => {
+      searchMock.mockReset();
+    });
+
+    it("IMP-03-T-2 leaves out an unchecked book", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ added: ["/works/OL2W"], alreadySaved: [] }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      setup();
+      await uploadCsv("title\nmatch:1\nmatch:2\n");
+
+      const box = await screen.findByRole("checkbox", { name: "match:1" });
+      expect(box).toBeChecked();
+      await userEvent.click(box);
+      expect(box).not.toBeChecked();
+      await userEvent.click(await importButton("1 book"));
+      await screen.findByText("Imported 1 book. 0 already in your library.");
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({
+        bookKeys: ["/works/OL2W"],
+      });
+    });
+
+    it("IMP-03-T-2 puts an unchecked book back", async () => {
+      setup();
+      await uploadCsv("title\nmatch:1\nmatch:2\n");
+      const box = await screen.findByRole("checkbox", { name: "match:1" });
+      await userEvent.click(box);
+      expect(await importButton("1 book")).toBeInTheDocument();
+      await userEvent.click(box);
+      expect(await importButton("2 books")).toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 searches for a row with no match", async () => {
+      searchMock.mockImplementation(() =>
+        results(Array.from({ length: 7 }, (_, n) => book(n + 1, `Lost ${n}`))),
+      );
+      setup();
+      await uploadCsv("title,author\nLost Book,Someone\n");
+
+      await missingList();
+      await userEvent.click(openSearch("Lost Book by Someone"));
+      const form = searchFor("Lost Book by Someone");
+      expect(within(form).getByLabelText("Search Open Library")).toHaveValue(
+        "Lost Book Someone",
+      );
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      expect(searchMock).toHaveBeenCalledWith(
+        "Lost Book Someone",
+        expect.any(AbortSignal),
+      );
+      expect(
+        await within(form).findAllByRole("button", { name: "Choose" }),
+      ).toHaveLength(5);
+    });
+
+    it("IMP-03-T-2 imports a chosen search result", async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ added: ["/works/OL7W"], alreadySaved: [] }),
+        );
+      vi.stubGlobal("fetch", fetchMock);
+      searchMock.mockImplementation(() =>
+        results([book(7, "The Lost Book", "Ann Writer", 1999)]),
+      );
+      setup();
+      await uploadCsv("title\nLost Book\n");
+
+      await missingList();
+      await userEvent.click(openSearch("Lost Book"));
+      const form = searchFor("Lost Book");
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      await userEvent.click(
+        await within(form).findByRole("button", { name: "Choose" }),
+      );
+
+      expect(
+        screen.queryByRole("list", { name: "No match found" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", {
+          name: "The Lost Book by Ann Writer (1999)",
+        }),
+      ).toBeChecked();
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+      await userEvent.click(await importButton("1 book"));
+      await screen.findByText("Imported 1 book. 0 already in your library.");
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({
+        bookKeys: ["/works/OL7W"],
+      });
+    });
+
+    it("IMP-03-T-2 shows search progress, no results and errors", async () => {
+      let finish: (
+        value: Awaited<ReturnType<typeof searchBooks>>,
+      ) => void = () => {};
+      searchMock
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            }),
+        )
+        .mockRejectedValueOnce(new Error("Unable to connect."));
+      setup();
+      await uploadCsv("title\nLost Book\n");
+      await missingList();
+      await userEvent.click(openSearch("Lost Book"));
+      const form = searchFor("Lost Book");
+
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      expect(
+        within(form).getByRole("button", { name: "Searching…" }),
+      ).toBeDisabled();
+      finish({ books: [], total: 0 });
+      expect(
+        await within(form).findByText("No books found."),
+      ).toBeInTheDocument();
+
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      expect(await within(form).findByRole("alert")).toHaveTextContent(
+        "Unable to connect.",
+      );
+    });
+
+    it("IMP-03-T-2 aborts a search when the form closes", async () => {
+      searchMock.mockImplementation(() => new Promise(() => {}));
+      setup();
+      await uploadCsv("title\nLost Book\nOther Book\n");
+      await missingList();
+      await userEvent.click(openSearch("Lost Book"));
+      await userEvent.click(
+        within(searchFor("Lost Book")).getByRole("button", { name: "Search" }),
+      );
+      const [, signal] = searchMock.mock.calls[0]!;
+      await userEvent.click(openSearch("Other Book"));
+      expect(signal!.aborted).toBe(true);
+      expect(
+        screen.queryByRole("form", { name: "Search for Lost Book" }),
+      ).not.toBeInTheDocument();
+      expect(searchFor("Other Book")).toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 aborts a search on Close", async () => {
+      searchMock.mockImplementation(() => new Promise(() => {}));
+      setup();
+      await uploadCsv("title\nLost Book\n");
+      await missingList();
+      await userEvent.click(openSearch("Lost Book"));
+      const form = searchFor("Lost Book");
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      const [, signal] = searchMock.mock.calls[0]!;
+      await userEvent.click(
+        screen.getByRole("button", { name: "Close search for Lost Book" }),
+      );
+      expect(signal!.aborted).toBe(true);
+    });
+
+    it("IMP-03-T-2 resets unchecked books for a new upload", async () => {
+      setup();
+      await uploadCsv("title\nmatch:1\nmatch:2\n");
+      await userEvent.click(
+        await screen.findByRole("checkbox", { name: "match:1" }),
+      );
+      await userEvent.click(upload());
+      expect(
+        await screen.findByRole("checkbox", { name: "match:1" }),
+      ).toBeChecked();
+      expect(await importButton("2 books")).toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 leaves out and includes all books", async () => {
+      setup();
+      await uploadCsv("title\nmatch:1\nmatch:2\n");
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Leave out all" }),
+      );
+      for (const box of screen.getAllByRole("checkbox")) {
+        expect(box).not.toBeChecked();
+      }
+      expect(
+        screen.queryByRole("button", { name: /^Import/ }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Include all" }),
+      );
+      expect(await importButton("2 books")).toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 shares a book's checkbox with its picks", async () => {
+      matchMock.mockImplementation(async (rows) =>
+        rows.map(({ title }): ImportMatch =>
+          title === "Emma"
+            ? {
+                status: "ambiguous",
+                candidates: [book(1, "match:1"), book(9, "Emma")],
+              }
+            : { status: "matched", book: book(1, "match:1") },
+        ),
+      );
+      setup();
+      await uploadCsv("title\nmatch:1\nEmma\n");
+      await userEvent.click(
+        await screen.findByRole("checkbox", { name: "match:1" }),
+      );
+      expect(
+        screen.queryByRole("button", { name: /^Import/ }),
+      ).not.toBeInTheDocument();
+
+      await userEvent.selectOptions(
+        screen.getByLabelText("Emma"),
+        "/works/OL1W",
+      );
+      const box = screen.getByRole("checkbox", { name: "match:1" });
+      expect(box).toBeChecked();
+      expect(await importButton("1 book")).toBeInTheDocument();
+      await userEvent.click(box);
+      expect(
+        screen.queryByRole("button", { name: /^Import/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 replaces a flagged match with a search result", async () => {
+      matchMock.mockResolvedValue([
+        { status: "matched", book: book(2, "Persuasion", "Jane Austen") },
+      ]);
+      setup();
+      await uploadCsv("title,author\nEmma,Jane Austen\n");
+      await screen.findByText("Check this match");
+
+      await chooseResult(
+        "Emma by Jane Austen",
+        book(5, "Emma", "Jane Austen", 1815),
+      );
+      const box = screen.getByRole("checkbox", {
+        name: "Emma by Jane Austen (1815)",
+      });
+      expect(box).toHaveFocus();
+      expect(
+        screen.queryByRole("checkbox", { name: /Persuasion/ }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText("Check this match")).not.toBeInTheDocument();
+    });
+
+    it("IMP-03-T-2 searches for an ambiguous or failed row", async () => {
+      matchMock.mockImplementation(async (rows) =>
+        rows.map(({ title }): ImportMatch =>
+          title === "pick:1" ? byTitle(rows)[0]! : { status: "failed" },
+        ),
+      );
+      setup();
+      await uploadCsv("title\npick:1\nLost Book\n");
+      await screen.findByRole("heading", { name: "Could not look up 1 book" });
+
+      await chooseResult("pick:1", book(8, "Picked"));
+      await chooseResult("Lost Book", book(9, "Found"));
+      expect(
+        screen.queryByRole("heading", { name: "Pick the right book" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("heading", { name: /Could not look up/ }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("checkbox", { name: "Picked" })).toBeChecked();
+      expect(screen.getByRole("checkbox", { name: "Found" })).toBeChecked();
+      expect(await importButton("2 books")).toBeInTheDocument();
+    });
+  });
+
+  describe("results", () => {
+    const linksIn = (name: string) =>
+      within(screen.getByRole("list", { name }))
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]);
+
+    beforeEach(() => {
+      matchMock.mockImplementation((rows) =>
+        Promise.resolve(
+          rows.map(({ title }): ImportMatch => ({
+            status: "matched",
+            book: book(title === "Dune" ? 1 : 2, title, "An Author", 1965),
+          })),
+        ),
+      );
+    });
+
+    it("IMP-03-T-3 lists the imported books", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            added: ["/works/OL1W", "/works/OL3W"],
+            alreadySaved: ["/works/OL2W"],
+          }),
+        ),
+      );
+      setup();
+      await uploadCsv(
+        "title,author,book_key\nDune,,\nEmma,,\nOwn Copy,Me,/works/OL3W\n",
+      );
+      await userEvent.click(await importButton("3 books"));
+
+      expect(
+        await screen.findByText("Imported 2 books. 1 already in your library."),
+      ).toBeInTheDocument();
+      expect(linksIn("Added")).toEqual([
+        ["Dune by An Author (1965)", "/books/works/OL1W"],
+        ["Own Copy by Me", "/books/works/OL3W"],
+      ]);
+      expect(linksIn("Already in your library")).toEqual([
+        ["Emma by An Author (1965)", "/books/works/OL2W"],
+      ]);
+    });
+
+    it("IMP-03-T-3 labels picked and chosen books", async () => {
+      matchMock.mockImplementation(async (rows) =>
+        rows.map(({ title }): ImportMatch =>
+          title === "pick:1" ? byTitle(rows)[0]! : { status: "none" },
+        ),
+      );
+      searchMock.mockResolvedValue({
+        books: [book(9, "Found", "Ann Writer", 2001)],
+        total: 1,
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          jsonResponse({
+            added: ["/works/OL2W", "/works/OL9W"],
+            alreadySaved: [],
+          }),
+        ),
+      );
+      setup();
+      await uploadCsv("title\npick:1\nLost Book\n");
+      await userEvent.selectOptions(
+        await screen.findByLabelText("pick:1"),
+        "/works/OL2W",
+      );
+      await userEvent.click(
+        screen.getByRole("button", { name: "Search for Lost Book" }),
+      );
+      const form = screen.getByRole("form", { name: "Search for Lost Book" });
+      await userEvent.click(
+        within(form).getByRole("button", { name: "Search" }),
+      );
+      await userEvent.click(
+        await within(form).findByRole("button", { name: "Choose" }),
+      );
+      await userEvent.click(await importButton("2 books"));
+
+      await screen.findByText("Imported 2 books. 0 already in your library.");
+      expect(linksIn("Added")).toEqual([
+        ["pick:1 by Emma Tennant", "/books/works/OL2W"],
+        ["Found by Ann Writer (2001)", "/books/works/OL9W"],
+      ]);
+    });
+
+    it("IMP-03-T-3 shows a long result list in part", async () => {
+      const keys = Array.from({ length: 12 }, (_, n) => `/works/OL${n + 1}W`);
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(jsonResponse({ added: keys, alreadySaved: [] })),
+      );
+      setup();
+      await uploadCsv("title\nDune\n");
+      await userEvent.click(await importButton("1 book"));
+
+      await screen.findByText("Imported 12 books. 0 already in your library.");
+      expect(linksIn("Added")).toHaveLength(10);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Show all 12" }),
+      );
+      expect(linksIn("Added")).toHaveLength(12);
+      await userEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+      expect(linksIn("Added")).toHaveLength(10);
+    });
+
+    it("IMP-03-T-3 hides an empty result list", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponse({ added: ["/works/OL1W"], alreadySaved: [] }),
+          ),
+      );
+      setup();
+      await uploadCsv("title\nDune\n");
+      await userEvent.click(await importButton("1 book"));
+
+      await screen.findByText("Imported 1 book. 0 already in your library.");
+      expect(linksIn("Added")).toHaveLength(1);
+      expect(
+        screen.queryByRole("heading", { name: "Already in your library" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

@@ -53,12 +53,14 @@ describe("api/library", () => {
   it("IMP-01-T-5 importBooks posts the keys", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ added: 2, alreadySaved: 1 }));
+      .mockResolvedValue(
+        jsonResponse({ added: ["/works/OL1W"], alreadySaved: ["/works/OL2W"] }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(importBooks(["/works/OL1W", "/works/OL2W"])).resolves.toEqual({
-      added: 2,
-      alreadySaved: 1,
+      added: ["/works/OL1W"],
+      alreadySaved: ["/works/OL2W"],
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -84,5 +86,18 @@ describe("api/library", () => {
     await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
       "Could not import these books.",
     );
+  });
+
+  it("IMP-03-T-3 importBooks rejects a response without key lists", async () => {
+    for (const body of [
+      { added: 1, alreadySaved: 0 },
+      { added: ["/works/OL1W"] },
+      { added: [1], alreadySaved: [] },
+    ]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(body)));
+      await expect(importBooks(["/works/OL1W"])).rejects.toThrow(
+        "Could not import these books.",
+      );
+    }
   });
 });

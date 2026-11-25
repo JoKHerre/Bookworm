@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import type { BookSearchResult } from "./books.ts";
 import {
   authorsMatch,
+  matchNeedsCheck,
   matchTitle,
   normalizeTitle,
   titlesMatch,
@@ -144,4 +145,41 @@ test("IMP-02-T-1 reports no match", () => {
   expect(matchTitle({ title: "Dune", author: "" }, [])).toStrictEqual({
     status: "none",
   });
+});
+
+test("IMP-03-T-1 flags a match with another title", () => {
+  const dune = book("OL1W", "Dune", ["Frank Herbert"]);
+  expect(matchNeedsCheck({ title: "The Dune", author: "" }, dune)).toBe(false);
+  expect(matchNeedsCheck({ title: "Dune: Deluxe", author: "" }, dune)).toBe(
+    false,
+  );
+  expect(
+    matchNeedsCheck(
+      { title: "Dune", author: "" },
+      book("OL2W", "Dune: The Graphic Novel", []),
+    ),
+  ).toBe(true);
+  expect(
+    matchNeedsCheck(
+      { title: "Dune: Book One", author: "" },
+      book("OL2W", "Dune: The Graphic Novel", []),
+    ),
+  ).toBe(true);
+  expect(matchNeedsCheck({ title: "Emma", author: "" }, dune)).toBe(true);
+});
+
+test("IMP-03-T-1 flags a match with another author", () => {
+  const dune = book("OL1W", "Dune", ["Frank Herbert"]);
+  expect(
+    matchNeedsCheck({ title: "Dune", author: "Herbert, Frank" }, dune),
+  ).toBe(false);
+  expect(matchNeedsCheck({ title: "Dune", author: "Jane Austen" }, dune)).toBe(
+    true,
+  );
+  expect(
+    matchNeedsCheck(
+      { title: "Dune", author: "Jane Austen" },
+      { key: "/works/OL1W", title: "Dune" },
+    ),
+  ).toBe(true);
 });
