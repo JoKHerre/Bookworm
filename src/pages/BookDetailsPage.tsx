@@ -26,6 +26,7 @@ import { useAuth } from "../auth/useAuth";
 import "./BookDetailsPage.css";
 import { summaryParagraphs } from "./bookSummary";
 import SimilarAtLibrarySection from "../components/SimilarAtLibrarySection";
+import { useHomeBranch } from "../library/useHomeBranch";
 
 function BookDetailsPage() {
   const params = useParams();
@@ -178,7 +179,30 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
   const title = book?.title ?? searchBook?.title ?? "Book details";
   const catalogRecord =
     availability?.status === "matched" ? availability.availability : null;
-  const branches = Object.entries(catalogRecord?.branches ?? {});
+  const [homeBranch] = useHomeBranch();
+  const branches = Object.entries(catalogRecord?.branches ?? {}); // full list, unfiltered
+  const homeCounts = homeBranch
+    ? catalogRecord?.branches[homeBranch]
+    : undefined;
+
+  let homeStatus = "";
+  if (homeBranch) {
+    if (availabilityError) {
+      homeStatus = `Couldn’t check at this branch.`;
+    } else if (availability === undefined) {
+      homeStatus = `Checking...`;
+    } else if (availability.status === "not_found") {
+      homeStatus = "Not found in the library catalog.";
+    } else if (availability.status === "incomplete") {
+      homeStatus = `Couldn’t finish checking.`;
+    } else if (homeCounts) {
+      homeStatus = `${homeCounts.available} of ${homeCounts.total} available`;
+    } else if (branches.length === 0) {
+      homeStatus = "No physical copies.";
+    } else {
+      homeStatus = `Not held at this branch.`;
+    }
+  }
   const catalogMetadata = [catalogRecord?.author, catalogRecord?.format]
     .filter(Boolean)
     .join(" ·  ");
@@ -313,6 +337,16 @@ function BookDetailsContent({ bookKey }: { bookKey: string }) {
               </button>
             )}
           </section>
+          {homeBranch && (
+            <section className="home-branch-status" aria-live="polite">
+              <h2>Availability at {homeBranch}</h2>
+              <p role="status">{homeStatus}</p>
+              <p className="home-branch-note">
+                For availability at all other branches, check the Library
+                Availability below.
+              </p>
+            </section>
+          )}
         </div>
       </section>
 
