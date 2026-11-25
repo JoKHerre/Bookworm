@@ -12,6 +12,14 @@ export class ApiRequestError extends Error {
   }
 }
 
+let unauthorizedListener: (() => void) | null = null;
+
+// Called when a request outside /api/auth gets a 401, meaning the session has
+// ended, so the app can show the user as logged out. Pass null to stop.
+export function onUnauthorized(listener: (() => void) | null) {
+  unauthorizedListener = listener;
+}
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -42,6 +50,9 @@ export async function apiRequest<T>(
 
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401 && !url.startsWith("/api/auth/")) {
+      unauthorizedListener?.();
+    }
     const error =
       data && typeof data === "object" && "error" in data ? data.error : null;
     throw new ApiRequestError(

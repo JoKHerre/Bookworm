@@ -40,7 +40,7 @@
   font: inherit;
   font-size: 1rem;
   font-weight: 400;
-  color: var(--olive-text-secondary);
+  color: var(--olive);
 }
 
 .import-field input::file-selector-button {
@@ -164,7 +164,7 @@
   font-weight: 400;
   color: var(--olive);
   background: var(--cream);
-  border: 1.5px solid var(--tan);
+  border: 1px solid var(--olive);
   border-radius: 8px;
 }
 
