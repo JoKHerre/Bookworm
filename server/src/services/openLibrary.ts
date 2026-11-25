@@ -140,6 +140,7 @@ function genreSubject(genre: BookGenre): string {
 
 export function searchOpenLibrary(
   query: BookSearchQuery,
+  excludedGenres: BookGenre[] = [],
 ): Promise<BookSearchResponse> {
   const constraints: string[] = [];
 
@@ -148,6 +149,9 @@ export function searchOpenLibrary(
       (genre) => `"${genreSubject(genre)}"`,
     );
     constraints.push(`subject:(${subjects.join(" OR ")})`);
+  }
+  for (const genre of new Set(excludedGenres)) {
+    constraints.push(`NOT subject:"${genreSubject(genre)}"`);
   }
   if (query.language) {
     constraints.push(`language:${languageCodes[query.language]}`);

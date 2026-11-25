@@ -3,7 +3,9 @@ import {
   CONTENT_WARNINGS,
   contentWarningId,
   contentWarningsResponse,
+  shouldExcludeForWarnings,
   type ContentWarningId,
+  type ContentWarningsResponse,
 } from "./contentWarnings.ts";
 
 const sourceUrl =
@@ -65,4 +67,54 @@ test("SRC-05-T-1 validates not_found and unavailable responses", () => {
       JSON.stringify(invalid),
     ).toBe(false);
   }
+});
+
+const warningResult: ContentWarningsResponse = {
+  status: "found",
+  warnings: ["Self-harm mentioned"],
+  categoryIds: ["self-harm"],
+  sourceUrl,
+};
+
+test("SRC-05-T-2 excludes a book when any selected warning matches", () => {
+  expect(shouldExcludeForWarnings(warningResult, ["self-harm"])).toBe(true);
+  expect(
+    shouldExcludeForWarnings(warningResult, ["pregnancy", "self-harm"]),
+  ).toBe(true);
+});
+
+test("SRC-05-T-2 keeps books without a selected warning match", () => {
+  expect(shouldExcludeForWarnings(warningResult, [])).toBe(false);
+  expect(shouldExcludeForWarnings(warningResult, ["pregnancy"])).toBe(false);
+  expect(
+    shouldExcludeForWarnings({ ...warningResult, categoryIds: [] }, [
+      "self-harm",
+    ]),
+  ).toBe(false);
+});
+
+test("SRC-05-T-2 ignores selection order and duplicates", () => {
+  expect(
+    shouldExcludeForWarnings(warningResult, ["self-harm", "pregnancy"]),
+  ).toBe(true);
+  expect(
+    shouldExcludeForWarnings(warningResult, [
+      "pregnancy",
+      "self-harm",
+      "self-harm",
+    ]),
+  ).toBe(true);
+  expect(
+    shouldExcludeForWarnings(warningResult, ["pregnancy", "pregnancy"]),
+  ).toBe(false);
+});
+
+test.each<ContentWarningsResponse>([
+  { status: "not_found", sourceUrl },
+  { status: "unavailable", sourceUrl },
+  { status: "unavailable", sourceUrl: null },
+])("SRC-05-T-2 keeps books with $status warning information", (result) => {
+  const original = { ...result };
+  expect(shouldExcludeForWarnings(result, ["self-harm"])).toBe(false);
+  expect(result).toEqual(original);
 });

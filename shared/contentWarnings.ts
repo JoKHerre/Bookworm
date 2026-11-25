@@ -75,3 +75,13 @@ export const contentWarningsResponse = z.discriminatedUnion("status", [
 ]);
 
 export type ContentWarningsResponse = z.infer<typeof contentWarningsResponse>;
+
+export function shouldExcludeForWarnings(
+  result: ContentWarningsResponse,
+  excludedIds: readonly ContentWarningId[],
+): boolean {
+  return (
+    result.status === "found" &&
+    result.categoryIds.some((id) => excludedIds.includes(id))
+  );
+}
