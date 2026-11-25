@@ -1,13 +1,26 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { after, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { and } from "drizzle-orm";
+import type { BookNote } from "../src/db/schema.ts";
 import { assertTestDatabaseUrl, createTestBookKey, eq } from "./test-utils.ts";
 
 assertTestDatabaseUrl();
 
 const [
   { db, pool },
-  { bookRatings, savedBooks, users, collections, collectionBooks },
+  {
+    bookRatings,
+    bookNotes,
+    savedBooks,
+    users,
+    sessions,
+    collections,
+    collectionBooks,
+    userGenres,
+  },
 ] = await Promise.all([
   import("../src/db/index.ts"),
   import("../src/db/schema.ts"),
@@ -895,3 +908,462 @@ test("DIS-01-T-1 user genres are unique and cascade", async () => {
   );
   assert.equal(rows.rowCount, 0);
 });
+
+// COL-08-T-1: direct database checks; no notes endpoints or UI are involved.
+async function createNoteFixture() {
+  // creates a test user and one valid note
+  const user = await createTestUser();
+  const [note] = await db
+    .insert(bookNotes)
+    .values({
+      userId: user.id,
+      bookKey: createTestBookKey(),
+      content: "A thought",
+    })
+    .returning();
+  assert.ok(note);
+  const typedNote: BookNote = note;
+  return { user, note: typedNote };
+}
+
+function getNotesForUser(userId: number) {
+  // returns all notes owned by one user
+  return db
+    .select()
+    .from(bookNotes)
+    .where(eq(bookNotes.userId, userId))
+    .orderBy(bookNotes.id);
+}
+
+test("COL-08-T-1 creates the book-notes table with constraints and index", async () => {
+  const { rows } = await pool.query<{
+    column_name: string;
+    data_type: string;
+    is_nullable: string;
+    is_identity: string;
+    identity_generation: string | null;
+    column_default: string | null;
+  }>(`SELECT column_name, data_type, is_nullable, is_identity,
+       identity_generation, column_default FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'book_notes'`);
+  assert.deepEqual(rows.map((row) => row.column_name).sort(), [
+    "book_key",
+    "content",
+    "created_at",
+    "id",
+    "reference",
+    "updated_at",
+    "user_id",
+  ]);
+  for (const row of rows) {
+    assert.equal(
+      row.is_nullable,
+      row.column_name === "reference" ? "YES" : "NO",
+    );
+    assert.equal(
+      row.data_type,
+      ["id", "user_id"].includes(row.column_name)
+        ? "integer"
+        : ["created_at", "updated_at"].includes(row.column_name)
+          ? "timestamp with time zone"
+          : "text",
+    );
+    if (row.column_name === "id") {
+      assert.equal(row.is_identity, "YES");
+      assert.equal(row.identity_generation, "ALWAYS");
+    } else if (["created_at", "updated_at"].includes(row.column_name)) {
+      assert.equal(row.column_default, "now()");
+    } else {
+      assert.equal(row.column_default, null);
+    }
+  }
+  const { rows: constraints } = await pool.query<{ definition: string }>(
+    `SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint
+     WHERE conrelid = 'book_notes'::regclass`,
+  );
+  const definitions = constraints.map((row) => row.definition);
+  assert.ok(definitions.includes("PRIMARY KEY (id)"));
+  assert.deepEqual(
+    definitions.filter((definition) => definition.startsWith("FOREIGN KEY")),
+    ["FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"],
+  );
+  for (const column of ["book_key", "content", "reference"]) {
+    assert.ok(
+      definitions.some(
+        (definition) =>
+          definition.startsWith("CHECK") && definition.includes(column),
+      ),
+    );
+  }
+  const { rows: indexes } = await pool.query<{ indexdef: string }>(
+    `SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'book_notes'`,
+  );
+  assert.ok(
+    indexes.some(({ indexdef }) =>
+      /CREATE INDEX .*\(user_id, book_key\)/.test(indexdef),
+    ),
+  );
+  assert.equal(
+    indexes.filter(({ indexdef }) => indexdef.includes("UNIQUE INDEX")).length,
+    1,
+    "Only the primary key should be unique",
+  );
+});
+
+test("COL-08-T-1 generates note identity and timestamps with a null reference", async () => {
+  const { user, note } = await createNoteFixture();
+  assert.ok(Number.isInteger(note.id) && note.id > 0);
+  assert.equal(note.reference, null);
+  assert.ok(
+    note.createdAt instanceof Date && Number.isFinite(note.createdAt.getTime()),
+  );
+  assert.ok(
+    note.updatedAt instanceof Date && Number.isFinite(note.updatedAt.getTime()),
+  );
+  assert.deepEqual(note.updatedAt, note.createdAt);
+  assert.deepEqual(await getNotesForUser(user.id), [note]);
+  for (const column of ["created_at", "updated_at"]) {
+    await assert.rejects(
+      pool.query(
+        `INSERT INTO book_notes (user_id, book_key, content, ${column}) VALUES ($1, $2, 'Text', NULL)`,
+        [user.id, note.bookKey],
+      ),
+      (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
+    );
+  }
+});
+
+test("COL-08-T-1 allows multiple notes and owners without saved books", async () => {
+  const first = await createTestUser();
+  const second = await createTestUser();
+  const bookKey = createTestBookKey();
+  assert.deepEqual(await getNotesForUser(first.id), []);
+  const notes = await db
+    .insert(bookNotes)
+    .values([
+      { userId: first.id, bookKey, content: "Same thought" },
+      { userId: first.id, bookKey, content: "Same thought" },
+      { userId: first.id, bookKey, content: "Another thought" },
+      { userId: second.id, bookKey, content: "Same thought" },
+    ])
+    .returning();
+  assert.equal(new Set(notes.map((note) => note.id)).size, 4);
+  assert.deepEqual(await getNotesForUser(first.id), notes.slice(0, 3));
+  assert.deepEqual(await getNotesForUser(second.id), notes.slice(3));
+  assert.deepEqual(await getSavedBooksForUser(first.id), []);
+  assert.deepEqual(await getSavedBooksForUser(second.id), []);
+});
+
+test("COL-08-T-1 rejects missing and malformed book keys", async () => {
+  const { user, note } = await createNoteFixture();
+  await assert.rejects(
+    pool.query(
+      "INSERT INTO book_notes (user_id, content) VALUES ($1, 'Text')",
+      [user.id],
+    ),
+    (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
+  );
+  for (const bookKey of [
+    null,
+    "",
+    " ",
+    "/books/OL123M",
+    "OL123W",
+    "/works/OLW",
+    "/works/OL123w",
+    "/works/OL-1W",
+    "/works/OL１２３W",
+    " /works/OL123W",
+    "/works/OL123W ",
+    "/works/OL123W\n",
+    "/works/OL123W/extra",
+    "/works/OL12\n3W",
+  ]) {
+    const code = bookKey === null ? NOT_NULL_VIOLATION : CHECK_VIOLATION;
+    await assert.rejects(
+      pool.query(
+        "INSERT INTO book_notes (user_id, book_key, content) VALUES ($1, $2, 'Text')",
+        [user.id, bookKey],
+      ),
+      (error) => hasPostgresErrorCode(error, code),
+    );
+    await assert.rejects(
+      pool.query("UPDATE book_notes SET book_key = $1 WHERE id = $2", [
+        bookKey,
+        note.id,
+      ]),
+      (error) => hasPostgresErrorCode(error, code),
+    );
+  }
+  assert.deepEqual(await getNotesForUser(user.id), [note]);
+});
+
+test("COL-08-T-1 preserves valid content and references at length boundaries", async () => {
+  const { user, note } = await createNoteFixture();
+  for (const content of [
+    "A",
+    "x".repeat(10000),
+    "猫".repeat(10000),
+    "😀".repeat(10000),
+    "  My thoughts — 'why?'\n\t<b>plain text</b>  ",
+  ]) {
+    const [inserted] = await db
+      .insert(bookNotes)
+      .values({ userId: user.id, bookKey: note.bookKey, content })
+      .returning();
+    assert.equal(inserted?.content, content);
+    const [updated] = await db
+      .update(bookNotes)
+      .set({ content })
+      .where(eq(bookNotes.id, note.id))
+      .returning();
+    assert.equal(updated?.content, content);
+  }
+  for (const reference of [
+    null,
+    "A",
+    "x".repeat(100),
+    "猫".repeat(100),
+    "😀".repeat(100),
+    " Page 42\nChapter 3 ",
+  ]) {
+    const [inserted] = await db
+      .insert(bookNotes)
+      .values({
+        userId: user.id,
+        bookKey: note.bookKey,
+        content: "Text",
+        reference,
+      })
+      .returning();
+    assert.equal(inserted?.reference, reference);
+    const [updated] = await db
+      .update(bookNotes)
+      .set({ reference })
+      .where(eq(bookNotes.id, note.id))
+      .returning();
+    assert.equal(updated?.reference, reference);
+  }
+});
+
+test("COL-08-T-1 rejects invalid text on inserts and updates without changing the note", async () => {
+  const { user, note } = await createNoteFixture();
+  await assert.rejects(
+    pool.query("INSERT INTO book_notes (user_id, book_key) VALUES ($1, $2)", [
+      user.id,
+      note.bookKey,
+    ]),
+    (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
+  );
+  await assert.rejects(
+    pool.query("UPDATE book_notes SET content = DEFAULT WHERE id = $1", [
+      note.id,
+    ]),
+    (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
+  );
+  for (const [column, limit] of [
+    ["content", 10000],
+    ["reference", 100],
+  ] as const) {
+    const invalid: (string | null)[] = [
+      "",
+      " ",
+      "\t",
+      "\n",
+      "\r",
+      "\f",
+      "\v",
+      " \t\n",
+      "x".repeat(limit + 1),
+      "猫".repeat(limit + 1),
+    ];
+    if (column === "content") invalid.push(null);
+    for (const value of invalid) {
+      const code = value === null ? NOT_NULL_VIOLATION : CHECK_VIOLATION;
+      const columns = column === "content" ? "content" : "content, reference";
+      const values = column === "content" ? "$3" : "'Valid content', $3";
+      await assert.rejects(
+        pool.query(
+          `INSERT INTO book_notes (user_id, book_key, ${columns}) VALUES ($1, $2, ${values})`,
+          [user.id, note.bookKey, value],
+        ),
+        (error) => hasPostgresErrorCode(error, code),
+      );
+      await assert.rejects(
+        pool.query(
+          `UPDATE book_notes SET ${column} = $1, updated_at = $2 WHERE id = $3`,
+          [value, new Date(note.updatedAt.getTime() + 1000), note.id],
+        ),
+        (error) => hasPostgresErrorCode(error, code),
+      );
+      assert.deepEqual(await getNotesForUser(user.id), [note]);
+    }
+  }
+});
+
+test("COL-08-T-1 edits text with an explicit timestamp and preserves note identity", async () => {
+  const { user, note } = await createNoteFixture();
+  const updatedAt = new Date(note.updatedAt.getTime() + 1000);
+  const [updated] = await db
+    .update(bookNotes)
+    .set({ content: "Reconsidered", reference: "Chapter 3", updatedAt })
+    .where(eq(bookNotes.id, note.id))
+    .returning();
+  assert.deepEqual(updated, {
+    ...note,
+    content: "Reconsidered",
+    reference: "Chapter 3",
+    updatedAt,
+  });
+  // Storage has no automatic timestamp trigger; the future endpoint supplies it.
+  await db
+    .update(bookNotes)
+    .set({ reference: null })
+    .where(eq(bookNotes.id, note.id));
+  assert.deepEqual(await getNotesForUser(user.id), [
+    { ...updated, reference: null },
+  ]);
+});
+
+test("COL-08-T-1 rejects missing and nonexistent owners", async () => {
+  const { user, note } = await createNoteFixture();
+  const deletedUser = await createTestUser();
+  await db.delete(users).where(eq(users.id, deletedUser.id));
+  createdUserIds.delete(deletedUser.id);
+  await assert.rejects(
+    pool.query(
+      "INSERT INTO book_notes (book_key, content) VALUES ($1, 'Text')",
+      [note.bookKey],
+    ),
+    (error) => hasPostgresErrorCode(error, NOT_NULL_VIOLATION),
+  );
+  for (const userId of [null, deletedUser.id]) {
+    const code = userId === null ? NOT_NULL_VIOLATION : FOREIGN_KEY_VIOLATION;
+    await assert.rejects(
+      pool.query(
+        "INSERT INTO book_notes (user_id, book_key, content) VALUES ($1, $2, 'Text')",
+        [userId, note.bookKey],
+      ),
+      (error) => hasPostgresErrorCode(error, code),
+    );
+    await assert.rejects(
+      pool.query("UPDATE book_notes SET user_id = $1 WHERE id = $2", [
+        userId,
+        note.id,
+      ]),
+      (error) => hasPostgresErrorCode(error, code),
+    );
+  }
+  assert.deepEqual(await getNotesForUser(user.id), [note]);
+});
+
+test("COL-08-T-1 cascades notes only for the deleted owner", async () => {
+  const first = await createNoteFixture();
+  const second = await createNoteFixture();
+  await db.insert(bookNotes).values({
+    userId: first.user.id,
+    bookKey: second.note.bookKey,
+    content: "Another note",
+  });
+  await db.delete(users).where(eq(users.id, first.user.id));
+  createdUserIds.delete(first.user.id);
+  assert.deepEqual(await getNotesForUser(first.user.id), []);
+  assert.deepEqual(await getNotesForUser(second.user.id), [second.note]);
+  assert.equal(
+    (await db.select().from(users).where(eq(users.id, second.user.id))).length,
+    1,
+  );
+});
+
+test("COL-08-T-1 deletes one note without deleting its owner or other notes", async () => {
+  const { user, note } = await createNoteFixture();
+  const [other] = await db
+    .insert(bookNotes)
+    .values({ userId: user.id, bookKey: note.bookKey, content: "Keep this" })
+    .returning();
+  await db.delete(bookNotes).where(eq(bookNotes.id, note.id));
+  assert.deepEqual(await getNotesForUser(user.id), [other]);
+  assert.equal(
+    (await db.select().from(users).where(eq(users.id, user.id))).length,
+    1,
+  );
+});
+
+test("COL-08-T-1 preserves notes when saved books or collections are deleted", async () => {
+  const fixture = await createCollectionFixture();
+  const notes = await db
+    .insert(bookNotes)
+    .values([
+      {
+        userId: fixture.user.id,
+        bookKey: fixture.firstBook.bookKey,
+        content: "Keep first",
+      },
+      {
+        userId: fixture.user.id,
+        bookKey: fixture.secondBook.bookKey,
+        content: "Keep second",
+      },
+    ])
+    .returning();
+  await db
+    .delete(collections)
+    .where(eq(collections.id, fixture.firstCollection.id));
+  assert.deepEqual(await getNotesForUser(fixture.user.id), notes);
+  await db.delete(savedBooks).where(eq(savedBooks.id, fixture.firstBook.id));
+  assert.deepEqual(await getNotesForUser(fixture.user.id), notes);
+});
+
+test(
+  "COL-08-T-1 preserves existing data across repeated schema pushes",
+  { timeout: 90000 },
+  async () => {
+    const fixture = await createCollectionFixture();
+    const userId = fixture.user.id;
+    await db.insert(sessions).values({
+      id: `notes-schema-${userId}`,
+      userId,
+      expiresAt: new Date(Date.now() + 3600000),
+    });
+    await db
+      .insert(bookRatings)
+      .values({ userId, bookKey: fixture.firstBook.bookKey, rating: 4 });
+    await db.insert(userGenres).values({ userId, genre: "Fantasy" });
+    await db.insert(bookNotes).values({
+      userId,
+      bookKey: fixture.firstBook.bookKey,
+      content: "Retain this note",
+    });
+    const snapshot = async () => ({
+      users: await db.select().from(users).where(eq(users.id, userId)),
+      sessions: await db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.userId, userId)),
+      books: await getSavedBooksForUser(userId),
+      collections: await getCollectionsForUser(userId),
+      memberships: await getMembershipsForUser(userId),
+      ratings: await db
+        .select()
+        .from(bookRatings)
+        .where(eq(bookRatings.userId, userId)),
+      genres: await db
+        .select()
+        .from(userGenres)
+        .where(eq(userGenres.userId, userId)),
+      notes: await getNotesForUser(userId),
+    });
+    const before = await snapshot();
+    const run = promisify(execFile);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      assertTestDatabaseUrl();
+      const { stdout } = await run("pnpm", ["--dir", "server", "db:push"], {
+        cwd: fileURLToPath(new URL("../../", import.meta.url)),
+        env: process.env,
+        timeout: 40000,
+      });
+      assert.match(stdout, /No changes detected|Changes applied/);
+      assert.deepEqual(await snapshot(), before);
+    }
+  },
+);
