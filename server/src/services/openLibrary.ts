@@ -112,6 +112,7 @@ async function searchOpenLibraryQuery(
   query: string,
   limit: number,
   page = 1,
+  signal?: AbortSignal,
 ): Promise<BookSearchResponse> {
   const params = new URLSearchParams({
     q: query,
@@ -123,6 +124,7 @@ async function searchOpenLibraryQuery(
   const data = await fetchOpenLibrary(
     `/search.json?${params.toString()}`,
     openLibrarySearchResponse,
+    signal,
   );
 
   return {
@@ -141,6 +143,7 @@ function genreSubject(genre: BookGenre): string {
 export function searchOpenLibrary(
   query: BookSearchQuery,
   excludedGenres: BookGenre[] = [],
+  signal?: AbortSignal,
 ): Promise<BookSearchResponse> {
   const constraints: string[] = [];
 
@@ -174,7 +177,12 @@ export function searchOpenLibrary(
   const filteredQuery = constraints.length
     ? `(${q}) AND ${constraints.join(" AND ")}`
     : q;
-  return searchOpenLibraryQuery(filteredQuery, SEARCH_PAGE_SIZE, query.page);
+  return searchOpenLibraryQuery(
+    filteredQuery,
+    SEARCH_PAGE_SIZE,
+    query.page,
+    signal,
+  );
 }
 
 const openLibraryQuerySpecialCharacters = new Set('+-&|!(){}[]^"~*?:\\/');

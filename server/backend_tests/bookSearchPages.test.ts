@@ -51,6 +51,8 @@ test("search asks Open Library for the requested page", async () => {
   assert.deepEqual((await third.json()) as BookSearchResponse, {
     books: [{ key: "/works/OL3W", title: "Page 3" }],
     total: 45,
+    hasMore: false,
+    totalIsExact: true,
   });
 
   assert.deepEqual(
@@ -76,4 +78,13 @@ test("search rejects a page out of range without calling Open Library", async ()
     });
   }
   assert.equal(upstreamRequests.length, 0);
+});
+
+test("SRC-05-T-3 stops continuation at the search page limit", async () => {
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ docs: [], numFound: 2000 }));
+  const last = await search("q=dune&page=50");
+  const lastPage = (await last.json()) as BookSearchResponse;
+  assert.equal(lastPage.hasMore, false);
+  assert.equal(lastPage.total, 2000);
 });

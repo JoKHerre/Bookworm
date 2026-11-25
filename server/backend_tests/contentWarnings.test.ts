@@ -3,11 +3,13 @@ import { readFileSync } from "node:fs";
 import { setImmediate as flush } from "node:timers/promises";
 import { after, afterEach, before, test, type TestContext } from "node:test";
 import { contentWarningsResponse } from "../../shared/contentWarnings.ts";
+import type { BookSearchResponse } from "../../shared/books.ts";
 import { createApp } from "../src/app.ts";
 import { clearOpenLibraryCache } from "../src/services/openLibrary.ts";
 import {
   clearContentWarningsCache,
   lookupContentWarnings,
+  filterSearchWarnings,
 } from "../src/services/contentWarnings.ts";
 import { startTestServer } from "./test-utils.ts";
 
@@ -441,5 +443,214 @@ test(
     await rejected;
     await aborted;
     assert.equal(countRequests(source), 1);
+  },
+);
+
+test("SRC-05-T-3 rejects invalid warning exclusions without upstream calls", async () => {
+  stubUpstream(() => assert.fail("No upstream call expected"));
+  for (const query of [
+    "q=books&excludeWarning=Unknown",
+    "q=books&excludeWarning=pregnancy&excludeWarning=Unknown",
+  ]) {
+    const response = await originalFetch(
+      `${baseUrl}/api/books/search?${query}`,
+    );
+    const body = (await response.json()) as { error: string };
+    assert.equal(response.status, 400);
+    assert.equal(typeof body.error, "string");
+  }
+  assert.equal(upstreamRequests.length, 0);
+});
+
+test("SRC-05-T-3 combines exclusions using cached search metadata", async () => {
+  const coffeeBook = {
+    key: "/works/OL1W",
+    title: book.title,
+    author_name: book.authors,
+  };
+  const gatsbyBook = {
+    key: "/works/OL2W",
+    title: "The Great Gatsby",
+    author_name: ["F Scott Fitzgerald"],
+  };
+  stubUpstream((url) => {
+    if (url.origin === openLibrary) {
+      assert.equal(url.pathname, "/search.json");
+      assert.equal(
+        url.searchParams.get("q"),
+        '(books) AND NOT subject:"horror"',
+      );
+      return json({ docs: [coffeeBook, gatsbyBook], numFound: 45 });
+    }
+    assert.equal(url.origin, source);
+    if (url.pathname === "/") {
+      return html(
+        url.searchParams.get("s") === book.title
+          ? search()
+          : search(
+              result(gatsbyBook.title, gatsbyBook.author_name[0], gatsbyPath),
+            ),
+      );
+    }
+    return html(url.pathname === coffeePath ? coffee : gatsby);
+  });
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await originalFetch(
+      `${baseUrl}/api/books/search?q=books&excludeGenre=Horror&excludeWarning=self-harm&excludeWarning=pregnancy&excludeWarning=`,
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      books: [{ ...gatsbyBook, warningStatus: "found" }],
+      total: 45,
+      hasMore: true,
+      totalIsExact: false,
+    });
+  }
+  assert.equal(upstreamRequests[0]?.origin, openLibrary);
+  assert.equal(countRequests(openLibrary), 2);
+  assert.equal(countRequests(source), 4);
+});
+
+test("SRC-05-T-3 keeps missing and unavailable warning information with its status", async () => {
+  const books = [
+    { key: "/works/OL1W", title: "No Entry", author_name: ["Author"] },
+    { key: "/works/OL2W", title: "Source Down", author_name: ["Author"] },
+    { key: "/works/OL3W", title: "Unknown Author" },
+  ];
+  stubUpstream((url) => {
+    if (url.origin === openLibrary) {
+      assert.equal(url.pathname, "/search.json");
+      return json({ docs: books, numFound: books.length });
+    }
+    assert.equal(url.origin, source);
+    return url.searchParams.get("s") === "No Entry"
+      ? html(noResults)
+      : html("Unavailable", 503);
+  });
+
+  const response = await originalFetch(
+    `${baseUrl}/api/books/search?q=books&excludeWarning=pregnancy`,
+  );
+  const body = (await response.json()) as BookSearchResponse;
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    body.books.map((book) => book.key),
+    books.map((book) => book.key),
+  );
+  assert.deepEqual(
+    body.books.map((book) => book.warningStatus),
+    ["not_found", "unavailable", "unavailable"],
+  );
+  assert.equal(body.totalIsExact, false);
+  assert.equal(countRequests(openLibrary), 1);
+  assert.equal(countRequests(source), 2);
+});
+
+test("SRC-05-T-3 preserves upstream continuation on an empty filtered page", async () => {
+  stubUpstream((url) => {
+    if (url.origin === openLibrary) {
+      assert.equal(url.pathname, "/search.json");
+      assert.equal(url.searchParams.get("page"), "2");
+      return json({
+        docs: [
+          { key: "/works/OL1W", title: book.title, author_name: book.authors },
+        ],
+        numFound: 45,
+      });
+    }
+    assert.equal(url.origin, source);
+    return html(url.pathname === "/" ? search() : coffee);
+  });
+
+  const response = await originalFetch(
+    `${baseUrl}/api/books/search?q=books&page=2&excludeWarning=pregnancy`,
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    books: [],
+    total: 45,
+    hasMore: true,
+    totalIsExact: false,
+  });
+  assert.equal(countRequests(openLibrary), 1);
+});
+
+test("SRC-05-T-3 bounds warning work without discarding unfinished books", async (t) => {
+  mockTimeouts(t);
+  let sourceSignal: AbortSignal | undefined;
+  stubUpstream((url, init) => {
+    assert.equal(url.origin, source);
+    assert.ok(init?.signal);
+    const signal = init.signal;
+    sourceSignal = signal;
+    return htmlBody(() => untilAborted(signal));
+  });
+  const books = Array.from({ length: 6 }, (_, index) => ({
+    key: `/works/OL${index}W`,
+    title: `Book ${index}`,
+    author_name: ["Author"],
+  }));
+  const lookup = filterSearchWarnings(
+    books,
+    ["pregnancy"],
+    new AbortController().signal,
+  );
+  for (let step = 0; step < 4; step++) {
+    await flush();
+    t.mock.timers.tick(5_000);
+    await flush();
+  }
+
+  const kept = await lookup;
+  assert.deepEqual(
+    kept.map((book) => book.key),
+    books.map((book) => book.key),
+  );
+  assert.ok(kept.some((book) => book.warningStatus === "unavailable"));
+  assert.ok(kept.some((book) => book.warningStatus === "not_checked"));
+  assert.equal(sourceSignal?.aborted, true);
+  assert.ok(upstreamRequests.length <= 4);
+});
+
+test(
+  "SRC-05-T-3 cancels search and warning requests on disconnect",
+  { timeout: 5_000 },
+  async () => {
+    for (const phase of ["search", "warnings"]) {
+      const reading = new Promise<AbortSignal>((resolve) => {
+        stubUpstream((url, init) => {
+          if (phase === "warnings" && url.origin === openLibrary) {
+            return json({
+              docs: [
+                {
+                  key: "/works/OL1W",
+                  title: book.title,
+                  author_name: book.authors,
+                },
+              ],
+              numFound: 1,
+            });
+          }
+          assert.ok(init?.signal);
+          resolve(init.signal);
+          return untilAborted(init.signal);
+        });
+      });
+      const caller = new AbortController();
+      const response = originalFetch(
+        `${baseUrl}/api/books/search?q=books&excludeWarning=pregnancy`,
+        { signal: caller.signal },
+      );
+      const rejected = assert.rejects(response, { name: "AbortError" });
+      const signal = await reading;
+      const aborted = new Promise<void>((resolve) =>
+        signal.addEventListener("abort", () => resolve(), { once: true }),
+      );
+      caller.abort();
+      await rejected;
+      await aborted;
+      assert.equal(upstreamRequests.length, phase === "search" ? 1 : 2);
+    }
   },
 );

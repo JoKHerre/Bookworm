@@ -290,7 +290,7 @@ describe("SearchPage", () => {
 
     it("keeps the number of pages loaded in the URL", async () => {
       vi.mocked(searchBooks)
-        .mockResolvedValueOnce({ books: [DUNE], total: 3 })
+        .mockResolvedValueOnce({ books: [DUNE], total: 3, hasMore: true })
         .mockResolvedValueOnce({ books: [EMMA], total: 3 });
       renderSearchWithUrl("/search?q=dune");
 
@@ -337,7 +337,7 @@ describe("SearchPage", () => {
 
     it("shows the next page below the first", async () => {
       vi.mocked(searchBooks)
-        .mockResolvedValueOnce({ books: [DUNE], total: 2 })
+        .mockResolvedValueOnce({ books: [DUNE], total: 2, hasMore: true })
         .mockResolvedValueOnce({ books: [DUNE, EMMA], total: 2 });
       renderSearch("/search?q=dune&language=English");
 
@@ -368,7 +368,7 @@ describe("SearchPage", () => {
 
     it("keeps the results when the next page fails", async () => {
       vi.mocked(searchBooks)
-        .mockResolvedValueOnce({ books: [DUNE], total: 2 })
+        .mockResolvedValueOnce({ books: [DUNE], total: 2, hasMore: true })
         .mockRejectedValueOnce(new Error("Unable to load books."));
       renderSearch("/search?q=dune");
 
@@ -385,9 +385,75 @@ describe("SearchPage", () => {
       ).toBeInTheDocument();
     });
 
+    it("SRC-05-T-3 continues after an empty warning-filtered page", async () => {
+      vi.mocked(searchBooks)
+        .mockResolvedValueOnce({
+          books: [],
+          total: 100,
+          hasMore: true,
+          totalIsExact: false,
+        })
+        .mockResolvedValueOnce({
+          books: [{ ...DUNE, warningStatus: "not_found" }],
+          total: 100,
+          hasMore: false,
+          totalIsExact: false,
+        });
+      renderSearchWithUrl("/search?q=dune");
+
+      await screen.findByText("No books to show from the pages checked.");
+      await userEvent.click(screen.getByRole("button", { name: "Show more" }));
+
+      expect(await screen.findByText("Dune")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Showing 1 result after warning filtering. The total after filtering is unknown.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Some books have missing or unchecked warning information.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/of 100 results/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Show more" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("SRC-05-T-3 restores filtered pages and their warning status", async () => {
+      vi.mocked(searchBooks)
+        .mockResolvedValueOnce({
+          books: [],
+          total: 100,
+          hasMore: true,
+          totalIsExact: false,
+        })
+        .mockResolvedValueOnce({
+          books: [{ ...EMMA, warningStatus: "not_checked" }],
+          total: 100,
+          hasMore: false,
+          totalIsExact: false,
+        });
+      renderSearchWithUrl("/search?q=emma&page=2");
+
+      expect(await screen.findByText("Emma")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Some books have missing or unchecked warning information.",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        vi.mocked(searchBooks).mock.calls.map((call) => call[2]?.page ?? 1),
+      ).toEqual([1, 2]);
+      expect(
+        screen.queryByRole("button", { name: "Show more" }),
+      ).not.toBeInTheDocument();
+    });
+
     it("starts over for a new search", async () => {
       vi.mocked(searchBooks)
-        .mockResolvedValueOnce({ books: [DUNE], total: 2 })
+        .mockResolvedValueOnce({ books: [DUNE], total: 2, hasMore: true })
         .mockResolvedValueOnce({ books: [EMMA], total: 2 })
         .mockResolvedValueOnce({ books: [EMMA], total: 1 });
       renderSearch("/search?q=dune");

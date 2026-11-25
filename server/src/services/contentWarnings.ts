@@ -2,9 +2,11 @@ import * as cheerio from "cheerio";
 import {
   contentWarningId,
   contentWarningsResponse,
+  shouldExcludeForWarnings,
   type ContentWarningId,
   type ContentWarningsResponse,
 } from "../../../shared/contentWarnings.ts";
+import type { BookSearchResult } from "../../../shared/books.ts";
 import { PromiseCache } from "./cache.ts";
 import { getBookDetails } from "./openLibrary.ts";
 
@@ -281,6 +283,56 @@ export async function lookupContentWarnings(
       return { status: "unavailable", sourceUrl: error.sourceUrl };
     }
     throw error;
+  }
+}
+
+export async function filterSearchWarnings(
+  books: BookSearchResult[],
+  excludedIds: readonly ContentWarningId[],
+  signal: AbortSignal,
+): Promise<BookSearchResult[]> {
+  signal.throwIfAborted();
+  if (!excludedIds.length || !books.length) return books;
+
+  const controller = new AbortController();
+  const lookupSignal = AbortSignal.any([signal, controller.signal]);
+  const timeout = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+  const results: (BookSearchResult | null)[] = books.map((book) => ({
+    ...book,
+    warningStatus: "not_checked",
+  }));
+  let next = 0;
+
+  async function worker() {
+    while (!lookupSignal.aborted) {
+      const index = next++;
+      const book = books[index];
+      if (!book) return;
+
+      try {
+        const warnings = await lookupContentWarnings(
+          { title: book.title, authors: book.author_name ?? [] },
+          lookupSignal,
+        );
+        if (lookupSignal.aborted) return;
+        results[index] = shouldExcludeForWarnings(warnings, excludedIds)
+          ? null
+          : { ...book, warningStatus: warnings.status };
+      } catch {
+        if (lookupSignal.aborted) return;
+        results[index] = { ...book, warningStatus: "unavailable" };
+      }
+    }
+  }
+
+  try {
+    await Promise.all(
+      Array.from({ length: Math.min(3, books.length) }, worker),
+    );
+    signal.throwIfAborted();
+    return results.filter((book) => book !== null);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

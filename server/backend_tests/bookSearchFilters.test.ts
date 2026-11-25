@@ -21,9 +21,9 @@ function stubOpenLibrary(respond: (url: URL) => Response | Promise<Response>) {
   upstreamRequests = [];
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
+    upstreamRequests.push(url);
     assert.equal(url.origin, "https://openlibrary.org");
     assert.equal(url.pathname, "/search.json");
-    upstreamRequests.push(url);
     return respond(url);
   };
 }
@@ -75,7 +75,12 @@ test("SRC-04-T-2 applies every supported genre", async () => {
   for (const [genre, subject] of genres) {
     const res = await get(new URLSearchParams({ q: "books", genre }));
     assert.equal(res.status, 200, genre);
-    assert.deepEqual(await res.json(), { books: [book], total: 1 });
+    assert.deepEqual(await res.json(), {
+      books: [book],
+      total: 1,
+      hasMore: false,
+      totalIsExact: true,
+    });
     assert.equal(
       upstreamRequests.at(-1)?.searchParams.get("q"),
       `(books) AND subject:("${subject}")`,
@@ -192,6 +197,8 @@ test("SRC-04-T-2 returns at most twenty filtered books with the matching total",
   assert.deepEqual(body, {
     books: books.slice(0, resultLimit),
     total: totalMatches,
+    hasMore: true,
+    totalIsExact: true,
   });
   assert.equal(
     upstreamRequests[0]?.searchParams.get("limit"),
@@ -207,7 +214,12 @@ test("SRC-04-T-2 returns an empty result without falling back to unfiltered sear
   );
 
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { books: [], total: 0 });
+  assert.deepEqual(await res.json(), {
+    books: [],
+    total: 0,
+    hasMore: false,
+    totalIsExact: true,
+  });
   assert.equal(upstreamRequests.length, 1);
   assert.equal(
     upstreamRequests[0]?.searchParams.get("q"),
@@ -302,7 +314,12 @@ test("SRC-04-T-2 preserves unfiltered search and treats empty filters as default
   ]) {
     const res = await get(query);
     assert.equal(res.status, 200, query);
-    assert.deepEqual(await res.json(), { books: [book], total: totalMatches });
+    assert.deepEqual(await res.json(), {
+      books: [book],
+      total: totalMatches,
+      hasMore: true,
+      totalIsExact: true,
+    });
     const params = upstreamRequests.at(-1)?.searchParams;
     assert.ok(params);
 
@@ -394,4 +411,88 @@ test("SRC-05-T-2 empty exclusions preserve the existing search query", async () 
     upstreamRequests.map((url) => url.searchParams.get("q")),
     ['(books) AND subject:("fantasy")', '(books) AND subject:("fantasy")'],
   );
+});
+
+test("SRC-05-T-3 applies genre exclusions with existing filters and no warning requests", async () => {
+  const book = {
+    key: "/works/OL1W",
+    title: "Matching book",
+    author_name: ["Author"],
+  };
+  stubOpenLibrary(() => openLibraryResponse([book], 45));
+  const query = new URLSearchParams({
+    q: "dune",
+    language: "English",
+    year: "1990-1999",
+    page: "3",
+  });
+  query.append("genre", "Fantasy");
+  query.append("genre", "Sci-fi");
+  for (const genre of ["Fantasy", "Horror", "Horror"]) {
+    query.append("excludeGenre", genre);
+  }
+
+  const res = await get(query);
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {
+    books: [book],
+    total: 45,
+    hasMore: false,
+    totalIsExact: true,
+  });
+  assert.equal(upstreamRequests.length, 1);
+  const request = upstreamRequests[0];
+  assert.ok(request);
+  const params = request.searchParams;
+  assert.equal(
+    params.get("q"),
+    '(dune) AND subject:("fantasy" OR "science fiction") AND NOT subject:"fantasy" AND NOT subject:"horror" AND language:eng AND first_publish_year:[1990 TO 1999]',
+  );
+  assert.equal(params.get("page"), "3");
+  assert.equal(params.get("limit"), String(resultLimit));
+});
+
+test("SRC-05-T-3 normalizes single and blank genre exclusions", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+  const cases = [
+    { query: "q=books", expected: "books" },
+    { query: "q=books&excludeGenre=", expected: "books" },
+    {
+      query: "q=books&excludeGenre=Horror",
+      expected: '(books) AND NOT subject:"horror"',
+    },
+    {
+      query: "q=books&excludeGenre=&excludeGenre=Horror",
+      expected: '(books) AND NOT subject:"horror"',
+    },
+  ];
+
+  for (const { query, expected } of cases) {
+    const res = await get(query);
+    assert.equal(res.status, 200, query);
+    assert.deepEqual(await res.json(), {
+      books: [],
+      total: 0,
+      hasMore: false,
+      totalIsExact: true,
+    });
+    assert.equal(upstreamRequests.at(-1)?.searchParams.get("q"), expected);
+  }
+  assert.equal(upstreamRequests.length, cases.length);
+});
+
+test("SRC-05-T-3 rejects invalid genre exclusions without upstream requests", async () => {
+  stubOpenLibrary(() => openLibraryResponse());
+  for (const query of [
+    "q=books&excludeGenre=Unknown",
+    "q=books&excludeGenre=Horror&excludeGenre=Unknown",
+  ]) {
+    const res = await get(query);
+    const body = (await res.json()) as ApiError;
+    assert.equal(res.status, 400, query);
+    assert.equal(typeof body.error, "string", query);
+    assert.ok(body.error.length > 0, query);
+  }
+  assert.equal(upstreamRequests.length, 0);
 });
