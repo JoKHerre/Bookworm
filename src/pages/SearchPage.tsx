@@ -96,6 +96,8 @@ function SearchPage() {
 
   const [books, setBooks] = useState<BookSearchResult[]>([]);
   const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalIsExact, setTotalIsExact] = useState(true);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -136,6 +138,11 @@ function SearchPage() {
   const visibleBooks = searched ? books : [];
   const visibleError = searched ? error : "";
   const visibleLoading = searched && loading;
+  const hasUnknownWarnings =
+    !totalIsExact &&
+    visibleBooks.some(
+      (book) => book.warningStatus && book.warningStatus !== "found",
+    );
 
   if (submittedQuery !== previousSubmittedQuery) {
     setPreviousSubmittedQuery(submittedQuery);
@@ -191,6 +198,8 @@ function SearchPage() {
         if (!signal.aborted) {
           setBooks(withoutRepeats(results.flatMap((data) => data.books)));
           setTotal(results.at(-1)?.total ?? 0);
+          setHasMore(results.at(-1)?.hasMore ?? false);
+          setTotalIsExact(results.at(-1)?.totalIsExact ?? true);
           setPage(pages);
         }
       } catch (err) {
@@ -200,6 +209,8 @@ function SearchPage() {
         );
         setBooks([]);
         setTotal(0);
+        setHasMore(false);
+        setTotalIsExact(true);
       } finally {
         if (!signal.aborted) setLoading(false);
       }
@@ -226,6 +237,8 @@ function SearchPage() {
       if (controller.signal.aborted) return;
       setBooks((current) => withoutRepeats([...current, ...data.books]));
       setTotal(data.total);
+      setHasMore(data.hasMore ?? false);
+      setTotalIsExact(data.totalIsExact ?? true);
       setPage(next);
       const params = new URLSearchParams(searchParams);
       params.set("page", String(next));
@@ -580,6 +593,7 @@ function SearchPage() {
       {!visibleLoading &&
         !visibleError &&
         searched &&
+        totalIsExact &&
         visibleBooks.length === 0 && (
           <div className="search-message" role="status">
             <p>
@@ -596,12 +610,32 @@ function SearchPage() {
           </div>
         )}
 
+      {!visibleLoading &&
+        !visibleError &&
+        searched &&
+        !totalIsExact &&
+        visibleBooks.length === 0 && (
+          <p className="search-message" role="status">
+            No books to show from the pages checked.
+          </p>
+        )}
+
       {!visibleLoading && !visibleError && visibleBooks.length > 0 && (
         <>
           <div className="search-results-toolbar">
             <p className="search-results-count">
-              Showing {visibleBooks.length} of {total}{" "}
-              {total === 1 ? "result" : "results"}
+              {totalIsExact ? (
+                <>
+                  Showing {visibleBooks.length} of {total}{" "}
+                  {total === 1 ? "result" : "results"}
+                </>
+              ) : (
+                <>
+                  Showing {visibleBooks.length}{" "}
+                  {visibleBooks.length === 1 ? "result" : "results"} after
+                  warning filtering. The total after filtering is unknown.
+                </>
+              )}
             </p>
 
             <div
@@ -683,25 +717,35 @@ function SearchPage() {
               ))}
             </section>
           )}
-
-          {visibleBooks.length < total && page < MAX_SEARCH_PAGE && (
-            <div className="search-more">
-              {moreError && (
-                <p className="search-more-error" role="alert">
-                  {moreError}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => void loadMore()}
-                disabled={loadingMore}
-              >
-                {loadingMore ? "Loading..." : "Show more"}
-              </button>
-            </div>
-          )}
         </>
       )}
+
+      {!visibleLoading && !visibleError && searched && hasUnknownWarnings && (
+        <p className="search-message" role="status">
+          Some books have missing or unchecked warning information.
+        </p>
+      )}
+
+      {!visibleLoading &&
+        !visibleError &&
+        searched &&
+        hasMore &&
+        page < MAX_SEARCH_PAGE && (
+          <div className="search-more">
+            {moreError && (
+              <p className="search-more-error" role="alert">
+                {moreError}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Loading..." : "Show more"}
+            </button>
+          </div>
+        )}
     </main>
   );
 }

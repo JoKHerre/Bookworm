@@ -49,6 +49,9 @@ export function searchBooks(
   for (const genre of filters.excludeGenre ?? []) {
     params.append("excludeGenre", genre);
   }
+  for (const warning of filters.excludeWarning ?? []) {
+    params.append("excludeWarning", warning);
+  }
   if (filters.language) params.set("language", filters.language);
   if (filters.year) params.set("year", filters.year);
   if (filters.page && filters.page > 1) {

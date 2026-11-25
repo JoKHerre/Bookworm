@@ -75,7 +75,12 @@ test("SRC-04-T-2 applies every supported genre", async () => {
   for (const [genre, subject] of genres) {
     const res = await get(new URLSearchParams({ q: "books", genre }));
     assert.equal(res.status, 200, genre);
-    assert.deepEqual(await res.json(), { books: [book], total: 1 });
+    assert.deepEqual(await res.json(), {
+      books: [book],
+      total: 1,
+      hasMore: false,
+      totalIsExact: true,
+    });
     assert.equal(
       upstreamRequests.at(-1)?.searchParams.get("q"),
       `(books) AND subject:("${subject}")`,
@@ -192,6 +197,8 @@ test("SRC-04-T-2 returns at most twenty filtered books with the matching total",
   assert.deepEqual(body, {
     books: books.slice(0, resultLimit),
     total: totalMatches,
+    hasMore: true,
+    totalIsExact: true,
   });
   assert.equal(
     upstreamRequests[0]?.searchParams.get("limit"),
@@ -207,7 +214,12 @@ test("SRC-04-T-2 returns an empty result without falling back to unfiltered sear
   );
 
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { books: [], total: 0 });
+  assert.deepEqual(await res.json(), {
+    books: [],
+    total: 0,
+    hasMore: false,
+    totalIsExact: true,
+  });
   assert.equal(upstreamRequests.length, 1);
   assert.equal(
     upstreamRequests[0]?.searchParams.get("q"),
@@ -302,7 +314,12 @@ test("SRC-04-T-2 preserves unfiltered search and treats empty filters as default
   ]) {
     const res = await get(query);
     assert.equal(res.status, 200, query);
-    assert.deepEqual(await res.json(), { books: [book], total: totalMatches });
+    assert.deepEqual(await res.json(), {
+      books: [book],
+      total: totalMatches,
+      hasMore: true,
+      totalIsExact: true,
+    });
     const params = upstreamRequests.at(-1)?.searchParams;
     assert.ok(params);
 
@@ -418,7 +435,12 @@ test("SRC-05-T-3 applies genre exclusions with existing filters and no warning r
   const res = await get(query);
 
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { books: [book], total: 45 });
+  assert.deepEqual(await res.json(), {
+    books: [book],
+    total: 45,
+    hasMore: false,
+    totalIsExact: true,
+  });
   assert.equal(upstreamRequests.length, 1);
   const request = upstreamRequests[0];
   assert.ok(request);
@@ -449,7 +471,12 @@ test("SRC-05-T-3 normalizes single and blank genre exclusions", async () => {
   for (const { query, expected } of cases) {
     const res = await get(query);
     assert.equal(res.status, 200, query);
-    assert.deepEqual(await res.json(), { books: [], total: 0 });
+    assert.deepEqual(await res.json(), {
+      books: [],
+      total: 0,
+      hasMore: false,
+      totalIsExact: true,
+    });
     assert.equal(upstreamRequests.at(-1)?.searchParams.get("q"), expected);
   }
   assert.equal(upstreamRequests.length, cases.length);

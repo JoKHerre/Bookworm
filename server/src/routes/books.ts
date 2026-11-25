@@ -5,6 +5,9 @@ import {
   bookDetailsQuery,
   bookISBNsQuery,
   bookSearchQuery,
+  contentWarningsQuery,
+  MAX_SEARCH_PAGE,
+  SEARCH_PAGE_SIZE,
   similarBooksQuery,
   type BookDetails,
   type BookISBNs,
@@ -35,11 +38,11 @@ import {
   type TitleSearchResponse,
 } from "../../../shared/titleSearch.ts";
 import { searchLibraryByTitle } from "../services/libraryCatalog.ts";
-import { getContentWarningsForWork } from "../services/contentWarnings.ts";
 import {
-  contentWarningsQuery,
-  type ContentWarningsResponse,
-} from "../../../shared/contentWarnings.ts";
+  filterSearchWarnings,
+  getContentWarningsForWork,
+} from "../services/contentWarnings.ts";
+import type { ContentWarningsResponse } from "../../../shared/contentWarnings.ts";
 
 export const booksRouter: Router = Router();
 
@@ -108,7 +111,7 @@ booksRouter.get(
   "/search",
   async (req, res: Response<BookSearchResponse | ApiError>) => {
     const query = { ...req.query };
-    for (const name of ["genre", "excludeGenre"]) {
+    for (const name of ["genre", "excludeGenre", "excludeWarning"]) {
       let values = query[name];
       if (typeof values === "string") values = [values];
       if (Array.isArray(values))
@@ -124,18 +127,42 @@ booksRouter.get(
       });
       return;
     }
+    const controller = new AbortController();
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort();
+    };
+    res.once("close", onClose);
+
     try {
       const results = await searchOpenLibrary(
         parsed.data,
         parsed.data.excludeGenre,
+        controller.signal,
       );
-      res.json(results);
+      const books = await filterSearchWarnings(
+        results.books,
+        parsed.data.excludeWarning,
+        controller.signal,
+      );
+      const page = parsed.data.page ?? 1;
+      if (!res.destroyed) {
+        res.json({
+          ...results,
+          books,
+          hasMore:
+            page < MAX_SEARCH_PAGE && page * SEARCH_PAGE_SIZE < results.total,
+          totalIsExact: parsed.data.excludeWarning.length === 0,
+        });
+      }
     } catch (error) {
+      if (controller.signal.aborted || res.destroyed) return;
       console.error("Book search error:", error);
 
       res.status(502).json({
         error: "Unable to retrieve books from Open Library",
       });
+    } finally {
+      res.off("close", onClose);
     }
   },
 );

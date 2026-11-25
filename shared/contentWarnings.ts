@@ -1,8 +1,4 @@
 import z from "zod";
-import { openLibraryWorkKey } from "./books.ts";
-
-// GET /api/books/content-warnings?key=/works/OL...W
-export const contentWarningsQuery = z.object({ key: openLibraryWorkKey });
 
 // https://triggerwarningdatabase.com/masterlist-tw/
 export const CONTENT_WARNINGS = [

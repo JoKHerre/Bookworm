@@ -1,10 +1,14 @@
 import z from "zod";
+import { contentWarningId } from "./contentWarnings.ts";
 
 export const openLibraryWorkKey = z
   .string({ error: "Invalid book key" })
   .regex(/^\/works\/OL\d+W$/, "Invalid book key");
 
-// GET /api/books/search?q=...&genre=...&excludeGenre=...&language=...&year=...
+// GET /api/books/content-warnings?key=/works/OL...W
+export const contentWarningsQuery = z.object({ key: openLibraryWorkKey });
+
+// GET /api/books/search?q=...&genre=...&excludeGenre=...&excludeWarning=...&language=...&year=...
 
 export const BOOK_GENRES = [
   "Fantasy",
@@ -47,6 +51,7 @@ export const bookSearchQuery = z.object({
     .min(1, "Please enter a book title or author"),
   genre: z.array(z.enum(BOOK_GENRES)).default([]),
   excludeGenre: z.array(z.enum(BOOK_GENRES)).default([]),
+  excludeWarning: z.array(contentWarningId).default([]),
   language: z.enum(["", ...BOOK_LANGUAGES]).default(""),
   year: z.enum(["", ...PUBLICATION_YEAR_RANGES]).default(""),
   page: z.coerce
@@ -117,6 +122,9 @@ export const bookSearchResult = z.object({
   cover_i: z.number().optional(),
   // only requested when matching imported books
   edition_count: z.number().optional(),
+  warningStatus: z
+    .enum(["found", "not_found", "unavailable", "not_checked"])
+    .optional(),
 });
 
 export type BookSearchResult = z.infer<typeof bookSearchResult>;
@@ -124,6 +132,8 @@ export type BookSearchResult = z.infer<typeof bookSearchResult>;
 export const bookSearchResponse = z.object({
   books: z.array(bookSearchResult),
   total: z.number(),
+  hasMore: z.boolean().optional(),
+  totalIsExact: z.boolean().optional(),
 });
 
 export type BookSearchResponse = z.infer<typeof bookSearchResponse>;
