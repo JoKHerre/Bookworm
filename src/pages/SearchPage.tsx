@@ -9,6 +9,7 @@ import {
   type BookSearchQuery,
   type BookSearchResult,
 } from "../../shared/books";
+import { CONTENT_WARNINGS } from "../../shared/contentWarnings";
 import { getBookSuggestions, searchBooks } from "../api/books";
 import BookCard from "../components/BookCard";
 import SearchStart from "../components/SearchStart";
@@ -21,6 +22,16 @@ const SUGGESTION_DELAY_MS = 250;
 
 const RECENT_SEARCHES_KEY = "bookworm:recent-searches";
 const RECENT_SEARCHES_LIMIT = 6;
+const genreOptions = BOOK_GENRES.map((genre) => ({ id: genre, label: genre }));
+const SEARCH_FILTERS = [
+  { name: "genre", label: "Genres", options: genreOptions },
+  { name: "excludeGenre", label: "Exclude genres", options: genreOptions },
+  {
+    name: "excludeWarning",
+    label: "Exclude content warnings",
+    options: CONTENT_WARNINGS,
+  },
+] as const;
 
 // Recent searches are a per-browser convenience; without storage there are none.
 function readRecentSearches(): string[] {
@@ -39,14 +50,20 @@ function readRecentSearches(): string[] {
 }
 
 type ViewMode = "grid" | "list";
-type Filters = Pick<BookSearchQuery, "genre" | "language" | "year">;
+type Filters = Omit<BookSearchQuery, "q" | "page">;
 
 // Filters live in the URL beside q, so a refresh or Back keeps them.
 // Values the filters don't offer are ignored.
 function filtersFromParams(params: URLSearchParams): Filters {
   const genres = params.getAll("genre");
+  const excludedGenres = params.getAll("excludeGenre");
+  const excludedWarnings = params.getAll("excludeWarning");
   return {
     genre: BOOK_GENRES.filter((genre) => genres.includes(genre)),
+    excludeGenre: BOOK_GENRES.filter((genre) => excludedGenres.includes(genre)),
+    excludeWarning: CONTENT_WARNINGS.filter((warning) =>
+      excludedWarnings.includes(warning.id),
+    ).map((warning) => warning.id),
     language:
       BOOK_LANGUAGES.find((value) => value === params.get("language")) ?? "",
     year:
@@ -78,12 +95,14 @@ function yearLabel(range: (typeof PUBLICATION_YEAR_RANGES)[number]) {
   return range === "before-1900" ? "Before 1900" : range;
 }
 
-function paramsFor(q: string, { genre, language, year }: Filters) {
+function paramsFor(q: string, filters: Filters) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
-  for (const value of genre) params.append("genre", value);
-  if (language) params.set("language", language);
-  if (year) params.set("year", year);
+  for (const { name } of SEARCH_FILTERS) {
+    for (const value of filters[name]) params.append(name, value);
+  }
+  if (filters.language) params.set("language", filters.language);
+  if (filters.year) params.set("year", filters.year);
   return params;
 }
 
@@ -116,14 +135,11 @@ function SearchPage() {
     () => filtersFromParams(new URLSearchParams(searchString)),
     [searchString],
   );
-  const {
-    genre: selectedGenres,
-    language,
-    year: publicationYearRange,
-  } = filters;
-  const hasActiveFilters =
-    selectedGenres.length > 0 || language !== "" || publicationYearRange !== "";
-  const genreFilterRef = useRef<HTMLDetailsElement>(null);
+  const { language, year: publicationYearRange } = filters;
+  const hasActiveFilters = Object.values(filters).some(
+    (value) => value.length > 0,
+  );
+  const filtersRef = useRef<HTMLElement>(null);
   const [query, setQuery] = useState(submittedQuery);
   const [previousSubmittedQuery, setPreviousSubmittedQuery] =
     useState(submittedQuery);
@@ -153,13 +169,11 @@ function SearchPage() {
 
   useEffect(() => {
     function handleClickOutside(event: PointerEvent) {
-      const dropdown = genreFilterRef.current;
-      if (
-        dropdown?.open &&
-        event.target instanceof Node &&
-        !dropdown.contains(event.target)
-      ) {
-        dropdown.open = false;
+      const dropdowns = filtersRef.current?.querySelectorAll("details");
+      const target = event.target;
+      if (!dropdowns || !(target instanceof Node)) return;
+      for (const dropdown of dropdowns) {
+        if (!dropdown.contains(target)) dropdown.open = false;
       }
     }
 
@@ -380,7 +394,7 @@ function SearchPage() {
   }
 
   function resetFilters() {
-    updateFilters({ genre: [], language: "", year: "" });
+    setSearchParams({ q: submittedQuery }, { replace: true });
   }
 
   return (
@@ -450,28 +464,37 @@ function SearchPage() {
       </section>
 
       {searched && (
-        <section className="search-filters" aria-label="Filter search results">
-          <details className="genre-filter" ref={genreFilterRef}>
-            <summary>Genres</summary>
-            <div className="genre-filter-options">
-              {BOOK_GENRES.map((genre) => (
-                <label key={genre}>
-                  <input
-                    type="checkbox"
-                    checked={selectedGenres.includes(genre)}
-                    onChange={(event) =>
-                      updateFilters({
-                        genre: event.target.checked
-                          ? [...selectedGenres, genre]
-                          : selectedGenres.filter((value) => value !== genre),
-                      })
-                    }
-                  />
-                  {genre}
-                </label>
-              ))}
-            </div>
-          </details>
+        <section
+          className="search-filters"
+          aria-label="Filter search results"
+          ref={filtersRef}
+        >
+          {SEARCH_FILTERS.map(({ name, label, options }) => (
+            <details className="genre-filter" key={name}>
+              <summary>{label}</summary>
+              <div className="genre-filter-options">
+                {options.map(({ id, label }) => (
+                  <label key={id}>
+                    <input
+                      type="checkbox"
+                      aria-label={
+                        name === "genre" ? undefined : `Exclude ${label}`
+                      }
+                      checked={filters[name].some((value) => value === id)}
+                      onChange={(event) =>
+                        updateFilters({
+                          [name]: event.target.checked
+                            ? [...filters[name], id]
+                            : filters[name].filter((value) => value !== id),
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </details>
+          ))}
 
           <label className="search-filter">
             Language
@@ -511,21 +534,30 @@ function SearchPage() {
 
       {searched && hasActiveFilters && (
         <ul className="search-filter-chips" aria-label="Active filters">
-          {selectedGenres.map((genre) => (
-            <li key={genre}>
-              <button
-                type="button"
-                aria-label={`Remove ${genre} filter`}
-                onClick={() =>
-                  updateFilters({
-                    genre: selectedGenres.filter((value) => value !== genre),
-                  })
-                }
-              >
-                {genre} <span aria-hidden="true">×</span>
-              </button>
-            </li>
-          ))}
+          {SEARCH_FILTERS.flatMap(({ name, options }) =>
+            options
+              .filter(({ id }) => filters[name].some((value) => value === id))
+              .map(({ id, label }) => (
+                <li key={`${name}:${id}`}>
+                  <button
+                    type="button"
+                    aria-label={
+                      name === "genre"
+                        ? `Remove ${label} filter`
+                        : `Remove ${label} exclusion`
+                    }
+                    onClick={() =>
+                      updateFilters({
+                        [name]: filters[name].filter((value) => value !== id),
+                      })
+                    }
+                  >
+                    {name !== "genre" && "Exclude "}
+                    {label} <span aria-hidden="true">x</span>
+                  </button>
+                </li>
+              )),
+          )}
           {language && (
             <li>
               <button
@@ -633,7 +665,7 @@ function SearchPage() {
                 <>
                   Showing {visibleBooks.length}{" "}
                   {visibleBooks.length === 1 ? "result" : "results"} after
-                  warning filtering. The total after filtering is unknown.
+                  warning filtering.
                 </>
               )}
             </p>
