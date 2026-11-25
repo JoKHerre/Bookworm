@@ -30,3 +30,11 @@ Connect the existing search page to task 3's exclusion API.
 2. Removing a chip keeps the other filters; Clear all clears every filter. Filter changes restart pagination.
 3. Valid exclusions survive reload, Back, new queries, and Show more; unsupported URL values are ignored.
 4. Existing search behavior, count messaging, unknown warning information, and empty-page continuation remain correct.
+
+## Tests
+
+| Test name                                                                     | Setup                                                                                | Asserts                                                                                  | Criterion |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | --------- |
+| SRC-05-T-4 selects and clears genre exclusions while preserving other filters | Existing filters and a later page; select two exclusions, remove one, then clear all | Exclusions reach search; other filters stay; pagination resets; controls and chips clear | 1, 2, 4   |
+| SRC-05-T-4 restores valid genre exclusions from the URL                       | Included and excluded genres, repeated values, and an unsupported value              | Valid exclusions restored once; included and excluded chips remain distinct              | 1, 3      |
+| SRC-05-T-4 retains genre exclusions through pagination, new queries, and Back | Load another page, submit a different query, then go Back                            | Exclusions retained; previous query and loaded pages restored                            | 3, 4      |

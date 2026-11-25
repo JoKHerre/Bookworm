@@ -6,7 +6,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Route, Routes, useLocation } from "react-router";
+import { Route, Routes, useLocation, useNavigate } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookSearchResult } from "../../shared/books";
 import { getBookDetails, getBookSuggestions, searchBooks } from "../api/books";
@@ -117,6 +117,7 @@ describe("SearchPage", () => {
     expect(screen.getByText("Showing 2 of 2 results")).toBeInTheDocument();
     expect(searchBooks).toHaveBeenCalledWith("dune", expect.anything(), {
       genre: [],
+      excludeGenre: [],
       language: "",
       year: "",
     });
@@ -150,6 +151,7 @@ describe("SearchPage", () => {
     await waitFor(() =>
       expect(searchBooks).toHaveBeenLastCalledWith("zzzz", expect.anything(), {
         genre: [],
+        excludeGenre: [],
         language: "",
         year: "",
       }),
@@ -179,6 +181,7 @@ describe("SearchPage", () => {
     await waitFor(() =>
       expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
         genre: ["Fantasy"],
+        excludeGenre: [],
         language: "French",
         year: "2010-2019",
       }),
@@ -202,6 +205,7 @@ describe("SearchPage", () => {
     await waitFor(() =>
       expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
         genre: ["Fantasy"],
+        excludeGenre: [],
         language: "",
         year: "2010-2019",
       }),
@@ -211,6 +215,7 @@ describe("SearchPage", () => {
     await waitFor(() =>
       expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
         genre: [],
+        excludeGenre: [],
         language: "",
         year: "",
       }),
@@ -228,12 +233,141 @@ describe("SearchPage", () => {
 
     expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
       genre: ["Fantasy"],
+      excludeGenre: [],
       language: "French",
       year: "",
     });
     expect(screen.getByRole("checkbox", { name: "Fantasy" })).toBeChecked();
     expect(screen.getByLabelText("Language")).toHaveValue("French");
     expect(screen.getByLabelText("Publication year")).toHaveValue("");
+  });
+
+  it("SRC-05-T-4 selects and clears genre exclusions while preserving other filters", async () => {
+    renderSearch(
+      "/search?q=dune&genre=Fantasy&language=French&year=2010-2019&page=2",
+    );
+    await screen.findByText("Showing 2 of 2 results");
+
+    await userEvent.click(screen.getByText("Exclude genres"));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Exclude Horror" }),
+    );
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: "Exclude Non-fiction" }),
+    );
+    await waitFor(() =>
+      expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+        genre: ["Fantasy"],
+        excludeGenre: ["Horror", "Non-fiction"],
+        language: "French",
+        year: "2010-2019",
+      }),
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove Horror exclusion" }),
+    );
+    await waitFor(() =>
+      expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+        genre: ["Fantasy"],
+        excludeGenre: ["Non-fiction"],
+        language: "French",
+        year: "2010-2019",
+      }),
+    );
+    expect(
+      screen.getByText("Exclude genres").closest("details"),
+    ).not.toHaveAttribute("open");
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() =>
+      expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+        genre: [],
+        excludeGenre: [],
+        language: "",
+        year: "",
+      }),
+    );
+    expect(screen.getByLabelText("Exclude Non-fiction")).not.toBeChecked();
+  });
+
+  it("SRC-05-T-4 restores valid genre exclusions from the URL", async () => {
+    renderSearch(
+      "/search?q=dune&genre=Horror&excludeGenre=Horror&excludeGenre=Non-fiction&excludeGenre=Unknown&excludeGenre=Horror",
+    );
+    await screen.findByText("Showing 2 of 2 results");
+
+    expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+      genre: ["Horror"],
+      excludeGenre: ["Horror", "Non-fiction"],
+      language: "",
+      year: "",
+    });
+    expect(screen.getByLabelText("Exclude Horror")).toBeChecked();
+    expect(screen.getByLabelText("Exclude Non-fiction")).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Remove Horror filter" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove Horror exclusion" }),
+    ).toBeInTheDocument();
+  });
+
+  it("SRC-05-T-4 retains genre exclusions through pagination, new queries, and Back", async () => {
+    function SearchWithBack() {
+      const navigate = useNavigate();
+      return (
+        <>
+          <SearchPage />
+          <button type="button" onClick={() => void navigate(-1)}>
+            Back
+          </button>
+        </>
+      );
+    }
+    vi.mocked(searchBooks).mockImplementation((_q, _signal, filters) =>
+      Promise.resolve(
+        filters?.page === 2
+          ? { books: [EMMA], total: 2, hasMore: false }
+          : { books: [DUNE], total: 2, hasMore: true },
+      ),
+    );
+    renderWithProviders(<SearchWithBack />, {
+      route: "/search?q=dune&excludeGenre=Horror",
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Show more" }),
+    );
+    expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+      genre: [],
+      excludeGenre: ["Horror"],
+      language: "",
+      year: "",
+      page: 2,
+    });
+
+    await userEvent.clear(searchBox());
+    await submitSearch("emma");
+    await waitFor(() =>
+      expect(searchBooks).toHaveBeenLastCalledWith("emma", expect.anything(), {
+        genre: [],
+        excludeGenre: ["Horror"],
+        language: "",
+        year: "",
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText("Showing 2 of 2 results");
+    expect(searchBox()).toHaveValue("dune");
+    expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
+      genre: [],
+      excludeGenre: ["Horror"],
+      language: "",
+      year: "",
+      page: 2,
+    });
   });
 
   it("TST-01-T-1 search page switches between list and grid", async () => {
@@ -323,11 +457,13 @@ describe("SearchPage", () => {
       ).toBeInTheDocument();
       expect(searchBooks).toHaveBeenCalledWith("dune", expect.anything(), {
         genre: [],
+        excludeGenre: [],
         language: "",
         year: "",
       });
       expect(searchBooks).toHaveBeenCalledWith("dune", expect.anything(), {
         genre: [],
+        excludeGenre: [],
         language: "",
         year: "",
         page: 2,
@@ -351,6 +487,7 @@ describe("SearchPage", () => {
       ).toBeInTheDocument();
       expect(searchBooks).toHaveBeenLastCalledWith("dune", expect.anything(), {
         genre: [],
+        excludeGenre: [],
         language: "English",
         year: "",
         page: 2,
@@ -470,6 +607,7 @@ describe("SearchPage", () => {
       ).toBeInTheDocument();
       expect(searchBooks).toHaveBeenLastCalledWith("emma", expect.anything(), {
         genre: [],
+        excludeGenre: [],
         language: "",
         year: "",
       });
