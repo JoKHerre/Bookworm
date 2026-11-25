@@ -107,11 +107,16 @@ booksRouter.get(
 booksRouter.get(
   "/search",
   async (req, res: Response<BookSearchResponse | ApiError>) => {
-    let genre = req.query.genre;
-    if (typeof genre === "string") genre = [genre];
-    if (Array.isArray(genre)) genre = genre.filter((value) => value !== "");
+    const query = { ...req.query };
+    for (const name of ["genre", "excludeGenre"]) {
+      let values = query[name];
+      if (typeof values === "string") values = [values];
+      if (Array.isArray(values))
+        values = values.filter((value) => value !== "");
+      query[name] = values;
+    }
 
-    const parsed = bookSearchQuery.safeParse({ ...req.query, genre });
+    const parsed = bookSearchQuery.safeParse(query);
 
     if (!parsed.success) {
       res.status(400).json({
@@ -120,7 +125,10 @@ booksRouter.get(
       return;
     }
     try {
-      const results = await searchOpenLibrary(parsed.data);
+      const results = await searchOpenLibrary(
+        parsed.data,
+        parsed.data.excludeGenre,
+      );
       res.json(results);
     } catch (error) {
       console.error("Book search error:", error);

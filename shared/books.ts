@@ -4,7 +4,7 @@ export const openLibraryWorkKey = z
   .string({ error: "Invalid book key" })
   .regex(/^\/works\/OL\d+W$/, "Invalid book key");
 
-// GET /api/books/search?q=...&genre=...&language=...&year=...
+// GET /api/books/search?q=...&genre=...&excludeGenre=...&language=...&year=...
 
 export const BOOK_GENRES = [
   "Fantasy",
@@ -46,6 +46,7 @@ export const bookSearchQuery = z.object({
     .trim()
     .min(1, "Please enter a book title or author"),
   genre: z.array(z.enum(BOOK_GENRES)).default([]),
+  excludeGenre: z.array(z.enum(BOOK_GENRES)).default([]),
   language: z.enum(["", ...BOOK_LANGUAGES]).default(""),
   year: z.enum(["", ...PUBLICATION_YEAR_RANGES]).default(""),
   page: z.coerce

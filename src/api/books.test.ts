@@ -46,6 +46,49 @@ describe("api/books", () => {
     expect(pages).toEqual([null, "3"]);
   });
 
+  it("SRC-05-T-3 serializes genre exclusions alongside existing search options", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ books: [], total: 0 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchBooks("dune", signal, {
+      genre: ["Fantasy", "Sci-fi"],
+      excludeGenre: ["Horror", "Non-fiction"],
+      language: "English",
+      year: "1990-1999",
+      page: 3,
+    });
+
+    const url = new URL(
+      fetchMock.mock.calls[0]?.[0] as string,
+      "http://localhost",
+    );
+    expect(url.searchParams.getAll("genre")).toEqual(["Fantasy", "Sci-fi"]);
+    expect(url.searchParams.getAll("excludeGenre")).toEqual([
+      "Horror",
+      "Non-fiction",
+    ]);
+    expect(url.searchParams.get("language")).toBe("English");
+    expect(url.searchParams.get("year")).toBe("1990-1999");
+    expect(url.searchParams.get("page")).toBe("3");
+  });
+
+  it("SRC-05-T-3 omits empty genre exclusions from requests", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ books: [], total: 0 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await searchBooks("dune", signal);
+    await searchBooks("dune", signal, { excludeGenre: [] });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/books/search?q=dune", {
+      signal,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/books/search?q=dune", {
+      signal,
+    });
+  });
+
   it("TST-01-T-1 books api maps failures", async () => {
     vi.stubGlobal(
       "fetch",

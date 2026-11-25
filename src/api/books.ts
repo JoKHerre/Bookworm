@@ -46,6 +46,9 @@ export function searchBooks(
 ) {
   const params = new URLSearchParams({ q: query });
   for (const genre of filters.genre ?? []) params.append("genre", genre);
+  for (const genre of filters.excludeGenre ?? []) {
+    params.append("excludeGenre", genre);
+  }
   if (filters.language) params.set("language", filters.language);
   if (filters.year) params.set("year", filters.year);
   if (filters.page && filters.page > 1) {

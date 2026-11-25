@@ -39,7 +39,7 @@ function readRecentSearches(): string[] {
 }
 
 type ViewMode = "grid" | "list";
-type Filters = Omit<BookSearchQuery, "q" | "page">;
+type Filters = Pick<BookSearchQuery, "genre" | "language" | "year">;
 
 // Filters live in the URL beside q, so a refresh or Back keeps them.
 // Values the filters don't offer are ignored.
