@@ -935,7 +935,6 @@ function getNotesForUser(userId: number) {
     .orderBy(bookNotes.id);
 }
 
-// Acceptance criterion 1.
 test("COL-08-T-1 creates the book-notes table with constraints and index", async () => {
   const { rows } = await pool.query<{
     column_name: string;
@@ -1011,7 +1010,6 @@ test("COL-08-T-1 creates the book-notes table with constraints and index", async
   );
 });
 
-// Acceptance criteria 2 and 6.
 test("COL-08-T-1 generates note identity and timestamps with a null reference", async () => {
   const { user, note } = await createNoteFixture();
   assert.ok(Number.isInteger(note.id) && note.id > 0);
@@ -1035,7 +1033,6 @@ test("COL-08-T-1 generates note identity and timestamps with a null reference", 
   }
 });
 
-// Acceptance criteria 3 and 4.
 test("COL-08-T-1 allows multiple notes and owners without saved books", async () => {
   const first = await createTestUser();
   const second = await createTestUser();
@@ -1057,7 +1054,6 @@ test("COL-08-T-1 allows multiple notes and owners without saved books", async ()
   assert.deepEqual(await getSavedBooksForUser(second.id), []);
 });
 
-// Acceptance criterion 4; check updates as well as inserts.
 test("COL-08-T-1 rejects missing and malformed book keys", async () => {
   const { user, note } = await createNoteFixture();
   await assert.rejects(
@@ -1102,7 +1098,6 @@ test("COL-08-T-1 rejects missing and malformed book keys", async () => {
   assert.deepEqual(await getNotesForUser(user.id), [note]);
 });
 
-// Acceptance criteria 5 and 6; Unicode boundaries distinguish characters from bytes.
 test("COL-08-T-1 preserves valid content and references at length boundaries", async () => {
   const { user, note } = await createNoteFixture();
   for (const content of [
@@ -1151,7 +1146,6 @@ test("COL-08-T-1 preserves valid content and references at length boundaries", a
   }
 });
 
-// Acceptance criteria 5, 6 and 7.
 test("COL-08-T-1 rejects invalid text on inserts and updates without changing the note", async () => {
   const { user, note } = await createNoteFixture();
   await assert.rejects(
@@ -1207,7 +1201,6 @@ test("COL-08-T-1 rejects invalid text on inserts and updates without changing th
   }
 });
 
-// Acceptance criterion 7.
 test("COL-08-T-1 edits text with an explicit timestamp and preserves note identity", async () => {
   const { user, note } = await createNoteFixture();
   const updatedAt = new Date(note.updatedAt.getTime() + 1000);
@@ -1232,7 +1225,6 @@ test("COL-08-T-1 edits text with an explicit timestamp and preserves note identi
   ]);
 });
 
-// Acceptance criterion 8.
 test("COL-08-T-1 rejects missing and nonexistent owners", async () => {
   const { user, note } = await createNoteFixture();
   const deletedUser = await createTestUser();
@@ -1283,7 +1275,6 @@ test("COL-08-T-1 cascades notes only for the deleted owner", async () => {
   );
 });
 
-// Acceptance criterion 9.
 test("COL-08-T-1 deletes one note without deleting its owner or other notes", async () => {
   const { user, note } = await createNoteFixture();
   const [other] = await db
@@ -1323,7 +1314,6 @@ test("COL-08-T-1 preserves notes when saved books or collections are deleted", a
   assert.deepEqual(await getNotesForUser(fixture.user.id), notes);
 });
 
-// Acceptance criterion 10: exercise the real workflow with data already present.
 test(
   "COL-08-T-1 preserves existing data across repeated schema pushes",
   { timeout: 90000 },
