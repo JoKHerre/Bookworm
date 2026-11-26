@@ -31,3 +31,6 @@ result
 
 # Secrets
 .env
+
+# Vercel project metadata and local build output
+.vercel
